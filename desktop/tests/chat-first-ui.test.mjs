@@ -1,4 +1,9 @@
-import { renderConfiguredChatShell as renderChatFirstShell } from './helpers/enabled-model-catalog.mjs';
+import vm from 'node:vm';
+import { MODEL_SERVICE_PREVIEW_SETTINGS } from '../src/android-settings-shell.mjs';
+import { generationRefreshInterval } from '../src/generation-continuity.mjs';
+import { renderSafeMarkdown } from '../src/safe-markdown.mjs';
+import { icon as sharedIcon, icons as sharedIcons } from '../src/icon-source.mjs';
+import { attachmentPreviewKey } from '../src/attachment-preview-key.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -12,7 +17,7 @@ import {
   messagePlainText,
   transcriptLocalDateKey,
   pinnedConversations,
-
+  renderChatFirstShell,
   resolveAssistantMessageMenuAnchor,
   resolveConversationMenuAnchor,
   resolveConversation,
@@ -33,6 +38,11 @@ const [source, shell, css, build, temporaryPermission, capability, tauriConfig, 
   readFile(resolve(root, 'src/desktop-attachment-preview-owner.mjs'), 'utf8'),
 ]);
 const icons = await readFile(resolve(root, 'src/icon-source.mjs'), 'utf8');
+const modelControllerSource=await readFile(resolve(root,'src/model-settings-controller.mjs'),'utf8');
+const enabledModelSettings=MODEL_SERVICE_PREVIEW_SETTINGS.map(item=>({...item,enabled:true,credentialStored:true}));
+// Frozen current catalog expectations, reviewed against pinned Mac protocol and Windows RelayCore labels.
+const currentModelLabels=[['CLAUDE_OPUS_5_5', 'Claude Opus 5.5'], ['CLAUDE_SONNET_5_5', 'Claude Sonnet 5.5'], ['CLAUDE_HAIKU_5_5', 'Claude Haiku 5.5'], ['GPT_6_1_SOL', 'GPT-6.1 Sol'], ['GPT_6_LUNA', 'GPT-6 Luna'], ['GEMINI_4_ARGON', 'Gemini 4 Argon'], ['MUSE_WONDER', 'Muse Wonder'], ['GEMINI_3_8_FLASH', 'Gemini 3.8 Flash'], ['DEEPSEEK_V4_PRO', 'DeepSeek V4 Pro'], ['DEEPSEEK_V4_FLASH', 'DeepSeek V4.1 Flash'], ['GLM_5_3', 'GLM-5.3'], ['GLM_5_3_FLASH', 'GLM-5.3 Flash'], ['QWEN_3_7_PLUS', 'Qwen3.7-Plus'], ['QWEN_3_8_MAX', 'Qwen3.8-Max'], ['QWEN_3_6_FLASH', 'Qwen3.6 Flash'], ['RELAYCORE_OPUS_5_5', 'Opus 5.5 · Kiro正价'], ['RELAYCORE_SONNET_5_5', 'Sonnet 5.5 · Kiro正价'], ['RELAYCORE_GPT_6_1_SOL', 'GPT-6.1 Sol · Pro3'], ['RELAYCORE_GPT_6_ASTRA', 'GPT-6 Astra · Pro3'], ['RELAYCORE_GEMINI_3_8_FLASH', 'Gemini 3.8 Flash'], ['RELAYCORE_GEMINI_3_1_PRO', 'Gemini 3.1 Pro']];
+
 
 const fixture = {
   summary: { id: 'workspace-one' },
@@ -83,7 +93,9 @@ test('sidebar distinguishes pinned and recent conversations while keeping them i
 });
 
 test('pinned conversations share the single sidebar scroll flow above the bottom actions', () => {
-  for (const token of ['.chat-sidebar-scroll { display: flex;', 'overflow-y: auto;', 'padding-bottom: 126px;', 'scrollbar-gutter: stable;', '@media (min-width: 901px)', 'margin-inline-end: -12px;', 'padding-inline-end: 12px;', '.chat-history { flex: 0 0 auto;', '.chat-sidebar-footer { position: absolute;', 'pointer-events: none;', '.chat-sidebar-footer button { pointer-events: auto;']) assert.ok(css.includes(token), token);
+  for (const token of ['.chat-sidebar-scroll { display: flex;', 'overflow-y: auto;', 'scrollbar-gutter: stable;', '@media (min-width: 901px)', 'margin-inline-end: -12px;', 'padding-inline-end: 12px;', '.chat-history { flex: 0 0 auto;', '.chat-sidebar-footer { position: absolute;', 'pointer-events: none;', '.chat-sidebar-footer button { pointer-events: auto;']) assert.ok(css.includes(token), token);
+  const bottomPadding = css.match(/\.chat-sidebar-scroll \{[^}]*padding-bottom:\s*(\d+)px;/)?.[1];
+  assert.ok(Number(bottomPadding) >= 68, 'retain at least the original footer clearance; native overlap is checked separately');
   for (const forbidden of ['.chat-pinned {', 'max-height: 156px', '置顶</p>', '最近</p>']) assert.ok(!css.includes(forbidden));
 });
 
@@ -176,7 +188,7 @@ test('local backup and restore use the native owner, strict preflight, replaceme
 test('P6 v2 picker preserves the content-free native rejection instead of replacing it with a generic success-like status', () => {
   const picker = source.slice(source.indexOf('async function pickV2WorkspaceExchange'), source.indexOf('async function pickNanfengKnowledgeExport'));
   assert.ok(picker.includes("extensions: ['nfai-exchange', 'zip']"));
-  assert.ok(picker.includes('state.status = state.error;'));
+  assert.ok(picker.includes('owner.status = owner.error;'));
   assert.ok(!picker.includes("state.status = '未创建可见工作区或导入记录。'"));
 });
 
@@ -184,7 +196,7 @@ test('P6 v2 re-export owner remains private while the latest Android settings su
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'data', status: '', error: '', connection: {}, v2CommittedExchanges: [{ workspaceId: 'workspace-v2-safe', rootCounts: { projects: 1 }, assetCount: 0 }] });
   assert.ok(!rendered.includes('reexport-v2-workspace-exchange'));
   const reexport = source.slice(source.indexOf('async function reexportV2WorkspaceExchange'), source.indexOf('async function pickNanfengKnowledgeExport'));
-  for (const token of ["dialogInvoke('save'", 'reexport_desktop_workspace_exchange_v2_selected', "extensions: ['nfai-exchange']", 'state.status = state.error']) assert.ok(reexport.includes(token));
+  for (const token of ["dialogInvoke('save'", 'reexport_desktop_workspace_exchange_v2_selected', "extensions: ['nfai-exchange']", 'owner.status = owner.error']) assert.ok(reexport.includes(token));
   for (const forbidden of ['Composer', 'show-chat', 'start-export']) assert.ok(!reexport.includes(forbidden));
 });
 
@@ -197,17 +209,16 @@ test('P6-K exposes current ZIP imports and keeps recovery controls inside ZIP im
   assert.match(temporaryPermission, /identifier = "allow-p6k-zip-import"[\s\S]*commands\.allow = \[[^\]]*"link_p6k_zip_manual_asset"/);
 });
 
-test('settings primary menu is the latest Android hierarchy and contains no retired desktop registry', () => {
+test('settings primary menu keeps the Android hierarchy and the current Windows feature review', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, pane: 'settings', settingsSection: 'personalization', status: '', error: '', connection: {} });
-  const labels = ['个性化', '模型与联网', '提醒', '对话管理', '外观', '字体大小', '主题色', 'Google 账号与同步', '导入与导出', '本机数据', '关于'];
+  const labels = ['个性化', '模型与联网', '提醒', '对话管理', '外观', '字体大小', '主题色', 'Google 账号与同步', '导入与导出', '本机数据', '关于', '工作区', '项目与知识', '开发与诊断', '功能审阅'];
   labels.forEach(label => assert.ok(rendered.includes(label)));
-  for (const retired of ['搜索设置', '功能审阅', 'AI 模型服务', '基础</p>', '高级', '开发与诊断', 'data-page="development"']) assert.ok(!rendered.includes(retired));
+  for (const retired of ['搜索设置', 'AI 模型服务', '基础</p>']) assert.ok(!rendered.includes(retired));
 });
 
-test('retained workspace settings route returns to chat settings without work navigation', () => {
+test('current workspace settings route preserves existing project and knowledge owners', () => {
   const control = renderChatFirstShell({ data: fixture, native: true, pane: 'settings', settingsSection: 'workspace', status: '', error: '', connection: {} });
-  for (const token of ['项目与知识', 'data-action="show-projects"', 'data-action="show-knowledge"', '管理 Projects', '管理知识库']) assert.ok(!control.includes(token));
-  assert.ok(control.includes('个性化'));
+  for (const token of ['项目与知识', 'data-action="show-projects"', 'data-action="show-knowledge"', '管理 Projects', '管理知识库']) assert.ok(control.includes(token));
   for (const forbidden of ['chat-composer', 'data-action="save-local-message"']) assert.ok(!control.includes(forbidden));
 });
 
@@ -274,11 +285,15 @@ test('FB-P6-028 desktop conversation rows release the date column before reservi
   assert.ok(!css.includes('.chat-history-select { display: block !important; min-width: 0; flex: 1 1 auto; overflow: hidden; padding: 7px !important; font-size: 14px'));
 });
 
-test('sidebar keeps compact conversation rows while exposing the full title on the control', () => {
+test('sidebar conversation titles keep the current single-line ellipsis contract', () => {
   const titleLine = css.slice(css.indexOf('.chat-history-select .chat-history-title-line'), css.indexOf('.chat-history-conversation-icon'));
-  assert.match(css, /\.chat-history-select \{[^}]*white-space: nowrap;/);
+  const sidebarSelect = css.match(/^\.chat-history-select \{[^}]*\}/m)?.[0];
+  assert.ok(sidebarSelect, 'check the sidebar row, not the unrelated work-thread card override');
+  assert.match(sidebarSelect, /white-space: nowrap;/);
+  assert.match(titleLine, /overflow: hidden;/);
+  assert.match(titleLine, /white-space: nowrap;/);
   assert.match(titleLine, /text-overflow: ellipsis;/);
-  assert.match(shell, /title="\$\{escapeHtml\(item\.title \|\| '未命名会话'\)\}/);
+  assert.doesNotMatch(titleLine, /overflow-wrap: anywhere;/);
 });
 
 test('FB-P6-026 keeps divider diagnostics acceptance-only while exposing pointer, keyboard and reset owners', () => {
@@ -302,7 +317,7 @@ test('desktop supplements hover actions with the same compact context-menu forma
 });
 
 test('desktop composer gives draft images the same in-composer thumbnail treatment as Android', () => {
-  const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', composerAttachments: [{ id: 'image-1', displayName: '示例图片.png', mimeType: 'image/png', sha256: 'a'.repeat(64) }], imageThumbnails: { 'image-1': { dataUrl: 'data:image/png;base64,AA==' } }, chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'chat', status: '', error: '', connection: {} });
+  const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', composerAttachments: [{ id: 'image-1', displayName: '示例图片.png', mimeType: 'image/png', sha256: 'a'.repeat(64) }], imageThumbnails: { [attachmentPreviewKey(fixture.summary.id, 'image-1')]: { dataUrl: 'data:image/png;base64,AA==' } }, chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'chat', status: '', error: '', connection: {} });
   for (const token of ['chat-composer-image-preview', 'chat-composer-image-open', 'data-action="open-image-preview"', 'data-attachment-id="image-1"', 'data-image-thumbnail="image-1"', 'aria-label="预览图片：示例图片.png"', '示例图片.png 草稿缩略图', 'remove-composer-attachment']) assert.ok(rendered.includes(token), token);
   for (const token of ['.chat-composer-image-preview', '.chat-composer-image-open', 'width: 62px', 'object-fit: cover', '.chat-composer-image-name']) assert.ok(css.includes(token), token);
 });
@@ -343,17 +358,9 @@ test('conversation context menu uses the standard compact text and icon density'
   assert.ok(menu.indexOf("item('context-menu-rename'") < menu.indexOf("item('context-menu-share'"));
 });
 
-test('conversation titles edit in place in sidebar and main header', () => {
-  const options = { data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'chat', status: '', error: '', connection: {} };
-  const sidebar = renderChatFirstShell({ ...options, inlineRename: { id: 'new', revision: 2, workspaceId: null, surface: 'sidebar', draft: '<新标题>' } });
-  assert.match(sidebar, /class="chat-history-row selected\s+renaming"/);
-  assert.match(sidebar, /class="chat-history-select chat-history-edit"/);
-  assert.match(sidebar, /data-inline-conversation-rename aria-label="编辑会话标题" maxlength="120" value="&lt;新标题&gt;"/);
-  const header = renderChatFirstShell({ ...options, inlineRename: { id: 'new', revision: 2, workspaceId: null, surface: 'header', draft: '改名中' } });
-  assert.match(header, /<div class="chat-title"><input class="chat-inline-title-input" data-inline-conversation-rename/);
-  assert.match(header, /value="改名中"/);
-  for (const token of ["event.detail < 2", "app.addEventListener('dblclick'", 'input.select()', "event.key === 'Enter'", "event.key === 'Escape'", "'update', { title }"]) assert.ok(source.includes(token), token);
-  assert.ok(!source.includes("kind === 'conversation-rename'"));
+test('FB-P6-067 desktop rename dialog keeps the field and actions without a redundant heading', () => {
+  for (const token of ["state.dialog?.kind === 'conversation-rename'", '会话标题<input id="conversation-rename"', 'save-conversation-rename', 'data-action="close-dialog">取消']) assert.ok(source.includes(token));
+  assert.ok(!source.includes("kind === 'conversation-rename') return `<div class=\"scrim\"><section class=\"dialog\" role=\"dialog\" aria-modal=\"true\"><h2>重命名会话</h2>"));
 });
 
 test('FB-P6-024 gives only user messages an orange bounded bubble while assistant stays open', () => {
@@ -442,20 +449,21 @@ test('dual-path status remains separate and consumes the native capability snaps
   const blocked = deriveDesktopDualPathState({ connection: { providerConfiguration: 'NOT_CONFIGURED', syncCapability: 'ENCRYPTED_SYNC_NOT_CONFIGURED' } });
   assert.equal(blocked.local.label, '本地可用');
   assert.equal(blocked.provider.label, '联网未配置');
-  assert.equal(blocked.sync.label, '加密同步未配置');
+  assert.equal(blocked.sync.label, '云端同步未配置');
   const configured = deriveDesktopDualPathState({ connection: { providerConfiguration: 'READY_FOR_GUARD', syncCapability: 'ENCRYPTED_SYNC_READY' } });
   assert.equal(configured.provider.label, '已配置，仍需逐次确认');
   assert.equal(configured.sync.label, '配置已发现，等待已验证账号');
 });
 
 test('startup caption uses the persisted provider projections instead of the isolated dual-path contract', () => {
-  assert.match(source, /function modelServiceConfigurationStatus/);
-  assert.match(source, /credentialStored/);
-  assert.match(source, /联网模型已配置：\$\{configured\.length\} 个服务商已启用且凭据已保存/);
-  assert.match(source, /正在读取联网模型配置/);
-  assert.match(source, /state\.status = modelServiceConfigurationStatus\(state\.modelServiceSettings\)/);
-  assert.match(source, /实际模型设置会按服务商和凭据存在性另行读取/);
-  assert.ok(!source.includes("status: native ? '本地工作区已就绪；联网模型尚未配置。'"));
+ const a=source.indexOf('function modelServiceConfigurationStatus('),b=source.indexOf('function resetModelServiceDraft(',a);
+ const status=vm.runInNewContext('('+source.slice(a,b).trim()+')');
+ assert.match(status([]),/尚未启用联网模型/);
+ assert.match(status([{enabled:false,credentialStored:true}]),/尚未启用联网模型/);
+ assert.match(status([{enabled:true,credentialStored:false}]),/已有 1 个联网服务商启用，尚未检测到已保存凭据/);
+ assert.match(status([{enabled:true,credentialStored:true},{enabled:false,credentialStored:true}]),/联网模型已配置：1 个服务商已启用且凭据已保存/);
+ assert.ok(source.includes('updateStatus: owner => { owner.status = modelServiceConfigurationStatus(owner.modelServiceSettings); }'));
+ assert.ok(!source.includes("status: native ? '本地工作区已就绪；联网模型尚未配置。'"));
 });
 
 test('default desktop shell is chat-first and local save uses the existing typed Rust mutation', () => {
@@ -465,11 +473,12 @@ test('default desktop shell is chat-first and local save uses the existing typed
 });
 
 test('rendered first screen follows the lightweight sidebar, single canvas and fixed composer contract', () => {
-  const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', profileOpen: false, pane: 'chat', status: '本地就绪', error: '', connection: {} });
+  const html = renderChatFirstShell({ data: fixture, native: true, runtimeInfo: { platform: 'windows' }, selectedConversationId: null, composerDraft: '', profileOpen: false, pane: 'chat', status: '本地就绪', error: '', connection: {} });
   for (const token of ['chat-sidebar', '新对话', 'chat-main', 'chat-empty-canvas', 'chat-composer', '对话']) assert.ok(html.includes(token));
+  assert.doesNotMatch(html, /data-action="show-work"/);
   assert.ok(!html.includes('今天想一起做什么？'));
-  for (const token of ['title="选择模型 · 等待可用模型"', 'aria-label="发送消息"', 'title="发送消息"']) assert.ok(html.includes(token));
-  assert.ok(!html.match(/data-action="toggle-p6g-model-picker"[^>]*disabled/));
+  for (const token of ['title="选择模型 · 配置模型"', 'aria-label="发送消息"', 'title="发送消息"']) assert.ok(html.includes(token));
+  assert.doesNotMatch(html,/data-action="toggle-p6g-model-picker"[^>]*disabled/);
   assert.ok(!html.includes('open-compare-confirmation'));
   for (const removed of ['发送时自动保存到当前工作区', '不调用模型', '配置模型后可生成回答']) assert.ok(!html.includes(removed));
   assert.ok(!html.includes('>发送</button>'));
@@ -497,54 +506,54 @@ test('FB-P6-071 removes the redundant Desktop sidebar brand subtitle', () => {
 });
 
 test('P6-G composer mirrors the Android Auto Daily Deep hierarchy while preserving the selected model fact', () => {
-  const selection = { catalog: { snapshot: { candidates: [{ providerFamily: 'ANTHROPIC', modelId: 'anthropic.fixture', displayName: 'Anthropic fixture', available: true, tiers: ['DEEP'] }] } }, conversationOverride: { revision: 2, modelId: 'anthropic.fixture' }, lastRoute: { reason: 'MANUAL_OVERRIDE', displayName: 'Anthropic fixture' } };
-  const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'ordinary', composerDraft: '', profileOpen: false, pane: 'chat', status: '', error: '', connection: {}, p6gSelection: selection, p6gModelPickerOpen: true });
-  for (const token of ['选择模型 · Anthropic fixture', 'composer-model-sheet', 'composer-model-sheet-scrim', 'select-p6g-auto', 'select-p6g-tier', '日常问答与轻量任务', '复杂推理与专业分析', 'Anthropic fixture']) assert.ok(html.includes(token));
-  for (const forbidden of ['p6g-conversation-model', '当前会话模型', 'MANUAL_OVERRIDE', '最近路由']) assert.ok(!html.includes(forbidden));
-  assert.ok(!html.includes('temporary-model-override'));
+ const selection={conversationOverride:{revision:2,modelId:'CLAUDE_OPUS_5_5'},lastRoute:{reason:'MANUAL_OVERRIDE',displayName:'Claude Opus 5.5'}};
+ const before=JSON.stringify(selection);
+ const html=renderChatFirstShell({data:fixture,native:true,selectedConversationId:'new',pane:'chat',status:'',error:'',connection:{},modelServiceSettings:enabledModelSettings,p6gSelection:selection,p6gModelPickerOpen:true});
+ for(const token of ['选择模型 · Claude Opus 5.5','composer-model-sheet','composer-model-sheet-scrim','select-p6g-auto','select-p6g-tier','日常问答与轻量任务','复杂推理与专业分析','RelayCore'])assert.ok(html.includes(token),token);
+ for(const forbidden of ['p6g-conversation-model','当前会话模型','MANUAL_OVERRIDE','最近路由','temporary-model-override'])assert.ok(!html.includes(forbidden),forbidden);
+ assert.equal(JSON.stringify(selection),before,'rendering cannot rewrite persisted selection or route');
 });
 
-test('Composer trigger keeps the full catalog model name while the picker uses that same source of truth', () => {
+test('unconfigured composer offers setup while preserving previous route metadata', () => {
   const selection = { catalog: { snapshot: { candidates: [{ providerId: 'deepseek', modelId: 'deepseek-flash', displayName: 'DeepSeek V4.1 Flash', available: true, tiers: ['FAST'] }] } }, conversationOverride: { revision: 1, modelId: null }, lastRoute: { displayName: 'DeepSeek V4.1 Flash' } };
-  const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, modelServiceSettings: [{providerId:'DEEPSEEK',enabled:true,credentialStored:true,presets:[{id:'DEEPSEEK_V4_FLASH',displayName:'DeepSeek V4.1 Flash',chatSelectable:true}]}], p6gModelPickerOpen: true, p6gSelection: selection });
-  assert.match(html, /aria-label="选择模型：DeepSeek V4.1 Flash"/);
-  assert.match(html, /Auto · DeepSeek V4.1 Flash/);
+  const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true, p6gSelection: selection });
+  assert.match(html, /aria-label="选择模型：配置模型"/);
+  assert.match(html, /配置模型服务/);
+  assert.equal(selection.lastRoute.displayName, 'DeepSeek V4.1 Flash');
+  const configured = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', connection: {}, p6gModelPickerOpen: true, p6gSelection: selection, modelServiceSettings: enabledModelSettings });
+  assert.match(configured, /上次：DeepSeek V4.1 Flash · 发送时确定模型/);
+  const fresh = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true, p6gSelection: { ...selection, lastRoute: null } });
+  assert.match(fresh, /请先配置并启用模型服务/);
+  assert.doesNotMatch(fresh, /上次：DeepSeek V4.1 Flash/);
 });
 
-test('Desktop composer preserves every supported catalog label without compact-name substitution', () => {
-  const catalogNames = ['Claude Fable 5.1', 'Claude Haiku 4.5', 'GPT-6 Astra', 'Gemini 3.8 Flash', 'Qwen3.7-Plus', 'DeepSeek V4.1 Flash', 'GLM-5.3 Flash'];
-  for (const [index, displayName] of catalogNames.entries()) {
-    const modelId = `fixture-${index}`;
-    const selection = { catalog: { snapshot: { candidates: [{ providerId: 'fixture', modelId, displayName, available: true, tiers: ['FAST'] }] } }, conversationOverride: { revision: 1, modelId }, lastRoute: { displayName } };
-    const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gSelection: selection });
-    assert.ok(html.includes(`aria-label="选择模型：${displayName}"`), displayName);
-  }
+test('Desktop composer preserves ordinary catalog labels and uses Mac RelayCore model plus multiplier labels', () => {
+ assert.equal(currentModelLabels.length,21);
+ const relayLabels={RELAYCORE_OPUS_5_5:'Opus 5.5 · 0.35×',RELAYCORE_SONNET_5_5:'Sonnet 5.5 · 0.35×',RELAYCORE_GPT_6_1_SOL:'GPT-6.1 Sol · 0.25×',RELAYCORE_GPT_6_ASTRA:'6 Astra · 0.25×',RELAYCORE_GEMINI_3_8_FLASH:'Gemini 3.8 Flash · 0.28×',RELAYCORE_GEMINI_3_1_PRO:'Gemini 3.1 Pro · 0.28×'};
+ for(const [modelId,displayName] of currentModelLabels){
+  const selection={conversationOverride:{revision:1,modelId},lastRoute:{displayName}};
+  const html=renderChatFirstShell({data:fixture,native:true,selectedConversationId:'new',pane:'chat',status:'',error:'',connection:{},modelServiceSettings:enabledModelSettings,p6gCatalog:{snapshot:{candidates:[{providerId:'QWEN',modelId:'QWEN_3_6_FLASH',displayName:'Qwen3.6 Flash',available:true,tiers:['FAST']}]}},p6gSelection:selection});
+  assert.ok(html.includes(`aria-label="选择模型：${relayLabels[modelId] || displayName}"`),displayName);assert.equal(selection.conversationOverride.modelId,modelId);
+ }
 });
 
 test('empty new-chat canvas keeps the Android Auto Daily Deep picker available before a conversation exists', () => {
-  assert.ok(source.includes('pendingNewConversationModelId: newConversationModelId()'));
-  const root = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true });
-  for (const token of ['title="选择模型 · 等待可用模型"', 'Auto · 等待可用模型', 'select-p6g-auto', 'select-p6g-tier', '日常', '深度']) assert.ok(root.includes(token), token);
-  assert.ok(!root.match(/data-action="toggle-p6g-model-picker"[^>]*disabled/));
-
-  const daily = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true, p6gSelection: { pickerTier: 'DAILY' } });
-  for (const token of ['DeepSeek V4.1 Flash', 'Claude Sonnet 5.5', 'Claude Haiku 5.5', 'GPT-6 Luna', 'GLM-5.3 Flash', 'Qwen3.7-Plus', 'Gemini 3.8 Flash']) assert.ok(daily.includes(token), token);
-  for (const token of ['选择具体模型', 'OpenRouter · 未联网', '智谱 · 未联网', '千问 · 未联网']) assert.ok(daily.includes(token), token);
-  for (const removed of ['高效处理日常工作。', '适合快速问答与高频文本任务。', '能力与成本更均衡。', '智谱官方直连的快速文本任务。', '日常问答与轻量多媒体任务。', '快速处理文字、图片和文件任务。', '<small>OPENROUTER</small>', '<small>DEEPSEEK</small>', '<small>ZHIPU</small>', '<small>QWEN</small>', '本地确定性 fixture']) assert.ok(!daily.includes(removed), removed);
-  assert.ok(css.includes('.composer-model-sheet-header > strong {'));
-  assert.ok(css.includes('.composer-model-sheet-card small {'));
+ const render=extra=>renderChatFirstShell({data:fixture,native:true,selectedConversationId:null,pane:'chat',status:'',error:'',connection:{},modelServiceSettings:enabledModelSettings,p6gModelPickerOpen:true,...extra});
+ const root=render({});for(const token of ['发送时确定模型','select-p6g-auto','select-p6g-tier','日常','深度','RelayCore'])assert.ok(root.includes(token),token);
+ assert.doesNotMatch(root,/data-action="toggle-p6g-model-picker"[^>]*disabled/);
+ const saved=render({p6gGlobalDefault:{modelId:'QWEN_3_7_PLUS'}});assert.match(saved,/aria-label="选择模型：Qwen3.7-Plus"/);
+ const pending=render({p6gGlobalDefault:{modelId:'QWEN_3_7_PLUS'},pendingNewConversationModelId:'GEMINI_4_ARGON'});assert.match(pending,/aria-label="选择模型：Gemini 4 Argon"/);
+ const automatic=render({p6gGlobalDefault:{modelId:'QWEN_3_7_PLUS'},pendingNewConversationModelId:null});assert.doesNotMatch(automatic,/aria-label="选择模型：Qwen3.7-Plus"/);assert.match(automatic,/data-action="select-p6g-auto"[^>]*aria-selected="true"/);
 });
 
 test('P6-G Daily and Deep groups open a complete manual candidate list instead of silently picking the first model', () => {
-  const selection = { catalog: { snapshot: { candidates: [
-    { providerId: 'deepseek', modelId: 'deepseek-flash', displayName: 'DeepSeek V4.1 Flash', available: true, tiers: ['FAST', 'BALANCED'] },
-    { providerId: 'openrouter', modelId: 'gpt-5.6-terra', displayName: 'GPT-5.6 Terra', available: true, tiers: ['BALANCED'] },
-    { providerId: 'openrouter', modelId: 'gpt-5.6-sol', displayName: 'GPT-5.6 Sol', available: true, tiers: ['DEEP'] },
-  ] } }, conversationOverride: { revision: 1, modelId: null }, lastRoute: { displayName: 'DeepSeek V4.1 Flash' }, pickerTier: 'DAILY' };
-  const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true, p6gSelection: selection });
-  for (const token of ['p6g-picker-back', 'DeepSeek V4.1 Flash', 'GPT-6 Luna', 'select-p6g-model', 'data-model-id="DEEPSEEK_V4_FLASH"']) assert.ok(html.includes(token), token);
-  assert.ok(!html.includes('data-model-id="gpt-5.6-sol"'));
-  for (const token of ["state.p6gSelection = { ...(state.p6gSelection || {}), pickerTier:", "action === 'p6g-picker-back'", 'updateP6GConversationOverride(target.dataset.modelId']) assert.ok(source.includes(token), token);
+ const render=tier=>renderChatFirstShell({data:fixture,native:true,selectedConversationId:'new',pane:'chat',status:'',error:'',connection:{},modelServiceSettings:enabledModelSettings,p6gModelPickerOpen:true,p6gSelection:{conversationOverride:{revision:1,modelId:null},pickerTier:tier}});
+ const daily=render('DAILY'),deep=render('DEEP'),relay=render('RELAYCORE');
+ const dailyIds=['CLAUDE_SONNET_5_5','CLAUDE_HAIKU_5_5','DEEPSEEK_V4_FLASH','GPT_6_LUNA','GLM_5_3_FLASH','QWEN_3_7_PLUS','GEMINI_3_8_FLASH'];
+ for(const id of dailyIds)assert.ok(daily.includes(`data-model-id="${id}"`),id);
+ for(const id of ['CLAUDE_OPUS_5_5','GPT_6_1_SOL','DEEPSEEK_V4_PRO','MUSE_WONDER','GEMINI_4_ARGON','GLM_5_3','QWEN_3_8_MAX'])assert.ok(deep.includes(`data-model-id="${id}"`),id);
+ for(const [id] of currentModelLabels.filter(([id])=>id.startsWith('RELAYCORE_')))assert.ok(relay.includes(`data-model-id="${id}"`),id);
+ for(const html of [daily,deep,relay]){assert.ok(html.includes('p6g-picker-back'));assert.doesNotMatch(html,/data-action="select-p6g-model"[^>]*aria-selected="true"/);assert.doesNotMatch(html,/data-model-id="(?:CLAUDE_FABLE_5_1|GPT_5_6_TERRA)"/);}
 });
 
 test('Compare execution is absent while historical native Compare branches remain readable', async () => {
@@ -564,7 +573,8 @@ test('FB-P6-040 keeps the full Desktop model label immediately left of send with
   assert.ok(actions.includes('<div class="chat-composer-primary-actions">'));
   assert.ok(actions.indexOf('p6g-model-trigger') < actions.indexOf('chat-send'));
   for (const token of ['.chat-composer-primary-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }', 'min-width: 176px', 'max-width: 224px', 'width: 40px', 'min-height: 40px', 'width: calc(100% - 8px)', 'height: 32px', 'border-radius: 999px', 'background: #f1f3f1', 'border: 1px solid transparent', 'opacity: 0', 'opacity: 1', 'scale(.96)', 'font-size: 12px', '.p6g-model-trigger:focus-visible::before']) assert.ok(css.includes(token));
-  assert.ok(shell.includes('p6g-model-trigger" data-action="toggle-p6g-model-picker" data-overlay-trigger aria-label="选择模型：${escapeHtml(p6gLabel)}" title="选择模型 · ${escapeHtml(p6gLabel)}" aria-expanded="${p6gModelPickerOpen}" ${data && p6gCandidates.length ? \'\' : \'disabled\'}><span'));
+  assert.match(html, /data-action="toggle-p6g-model-picker"[^>]*aria-expanded="false"/);
+  assert.doesNotMatch(html, /data-action="toggle-p6g-model-picker"[^>]*disabled/);
 });
 
 test('FB-P6-056 keeps Desktop composer menus minimal, button-anchored and visually truthful', () => {
@@ -583,7 +593,7 @@ test('composer tone picker exposes default before the five explicit Android styl
   }
   assert.equal((html.match(/data-action="select-conversation-tone"/g) || []).length, 6);
   assert.ok(html.includes('data-tone="default"'));
-  for (const token of ["action === 'open-composer-tone-picker'", "action === 'select-conversation-tone'", "action === 'toggle-conversation-web-search'", "invoke('set_desktop_conversation_preferences'", 'state.composerAddPage =']) assert.ok(source.includes(token), token);
+  for (const token of ["action === 'open-composer-tone-picker'", "action === 'select-conversation-tone'", "action === 'toggle-conversation-web-search'", "invokeConversationChoiceOwner('set_desktop_conversation_preferences'", 'state.composerAddPage =']) assert.ok(source.includes(token), token);
 });
 
 test('FB-P6-052 makes the conversation and work switch a single segmented pill', () => {
@@ -598,14 +608,16 @@ test('latest model settings shows the Android provider order without exposing th
   assert.ok(!html.includes('install-p6g-local-fixture'));
   for (const removed of ["async function installP6GLocalFixture", "upsert_desktop_p6g_catalog_candidate", "providerFamily: 'LOCAL'", "knownCostMicros: 0", "action === 'install-p6g-local-fixture'"]) assert.ok(!source.includes(removed), removed);
   for (const forbidden of ['endpoint:', 'requestBody:']) assert.ok(!source.includes(forbidden));
-  for (const token of ['read_desktop_model_service_settings', 'save_desktop_model_service_settings', 'reveal_desktop_model_service_credential', 'test_desktop_model_service_connection']) assert.ok(source.includes(token));
+  for (const token of ['read_desktop_model_service_settings', 'save_desktop_model_service_settings', 'delete_desktop_model_service_credential', 'reveal_desktop_model_service_credential', 'test_desktop_model_service_connection']) assert.ok((source+modelControllerSource).includes(token),token);
 });
 
-test('model configuration uses the compact two-column provider browser', () => {
-  const html = renderChatFirstShell({ data: fixture, native: true, pane: 'settings', settingsSection: 'model-configuration', status: '', error: '', connection: {}, p6gCatalog: { snapshot: { candidates: [{ modelId: 'safe-model' }] } } });
-  for (const token of ['model-settings-browser', 'model-settings-platform-rail', 'role="radiogroup"', 'OpenRouter', 'DeepSeek', '智谱', 'Qwen', 'GPT-6 Luna', '测试连接', 'API Key', '显示 API Key', '保存']) assert.ok(html.includes(token));
-  for (const forbidden of ['Grok 4.1', 'Grok 4.5', 'Grok 4.6', 'Authorization', 'save-api-key', '检查钥匙串']) assert.ok(!html.includes(forbidden));
-  assert.match(css, /\.android-settings-segments > button \{[^}]*display: flex;[^}]*align-items: center;[^}]*justify-content: center;[^}]*text-align: center;/s);
+test('model configuration exposes the reviewed platform tabs and current OpenRouter models', () => {
+ const html=renderChatFirstShell({data:fixture,native:true,pane:'settings',settingsSection:'model-configuration',status:'',error:'',connection:{}});
+ const tabs=[...html.matchAll(/<button[^>]*data-action="select-model-service-provider"[^>]*data-provider-id="([^"]+)"[^>]*>/g)];
+ assert.deepEqual(tabs.map(item=>item[1]),['OPENROUTER','RELAYCORE_CLAUDE','DEEPSEEK','ZHIPU','QWEN']);
+ for(const [i,tab] of tabs.entries()){assert.match(tab[0],/role="tab"/);assert.ok(tab[0].includes(`aria-selected="${i===0}"`));}
+ for(const token of ['OpenRouter','RelayCore','DeepSeek','智谱','Qwen','Claude Opus 5.5','测试连接','API Key','显示 API Key','保存'])assert.ok(html.includes(token),token);
+ for(const forbidden of ['GPT-5.6 Terra','Grok 4.1','Grok 4.5','Grok 4.6','Authorization','save-api-key','检查钥匙串'])assert.ok(!html.includes(forbidden),forbidden);
 });
 
 test('C15 work management modules use a dedicated workspace shell without borrowing chat navigation', () => {
@@ -659,7 +671,7 @@ test('conversation title click restores its saved waterline or opens at latest, 
   const selector = rendered.lastIndexOf('data-action="select-chat"', title);
   assert.ok(selector >= 0 && selector < title, 'drawer title must be inside the real conversation selector');
   for (const token of [
-    'if (!state.chatScrollPositions.has(target.dataset.id)) state.pendingChatScrollToLatestId = target.dataset.id',
+    'if (!owner.chatScrollPositions.has(conversationId)) owner.pendingChatScrollToLatestId = conversationId',
     'state.chatScrollPositions.set(conversationId, scroll.scrollTop)',
     "scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' })",
     'scroll.scrollTop = state.chatScrollPositions.get(conversation.id) || 0',
@@ -672,7 +684,7 @@ test('chat-first work mode directly imports a selected typed exchange after stri
 });
 
 test('ordinary send durably submits one native streaming attempt and retains the draft only on pre-submit rejection', () => {
-  for (const token of ['function sendLocalMessage', "invoke('submit_desktop_ordinary_chat'", 'egressAuthorization', "disclosureVersion: (directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(", 'sentDraft', 'sentAttachments', '正在等待模型回复', "result.state === 'UNKNOWN'", '未自动重发']) assert.ok(source.includes(token), token);
+  for (const token of ['function sendLocalMessage', "invokeForAuthorizedDataAreaOperation(tauriBridge, 'submit_desktop_ordinary_chat'", 'egressAuthorization', "disclosureVersion: 'normal-chat-egress-v2'", 'sentDraft', 'sentAttachments', '正在等待模型回复', "result.state === 'UNKNOWN'", '未自动重发']) assert.ok(source.includes(token), token);
   const ordinarySend = source.slice(source.indexOf('async function sendLocalMessage()'), source.indexOf('saveLocalMessage = sendLocalMessage'));
   assert.ok(!ordinarySend.includes('localStorage'), 'ordinary send must clear only the native draft transaction');
   for (const token of ['发送即授权给', '按量计费', 'chat-composer-egress-disclosure']) assert.ok(!`${shell}\n${css}`.includes(token), token);
@@ -687,19 +699,25 @@ test('ordinary Composer recovery is owned by native SQLite and cleared only by t
 });
 
 test('FB-P6-068 Desktop composer send restores the transcript directly to its newest message only once', () => {
-  for (const token of ['pendingChatSendScrollToLatestId', 'pendingChatSubmission', 'createChatSubmissionId', 'clientSubmissionId', 'claimSubmittedChatRoute({ workspaceId, conversationId: result.conversationId, clientSubmissionId })', 'const restoreSubmittedLatest = state.pendingChatSendScrollToLatestId === conversation.id', 'scroll.scrollTop = scroll.scrollHeight', 'state.pendingChatSendScrollToLatestId = null']) assert.ok(source.includes(token));
+  for (const token of ['pendingChatSendScrollToLatestId', 'pendingChatSubmission', 'createChatSubmissionId', 'clientSubmissionId', 'claimSubmittedChatRoute({ workspaceId, conversationId: result.conversationId, clientSubmissionId }, owner)', 'const restoreSubmittedLatest = state.pendingChatSendScrollToLatestId === conversation.id', 'scroll.scrollTop = scroll.scrollHeight', 'state.pendingChatSendScrollToLatestId = null']) assert.ok(source.includes(token));
   assert.ok(!source.includes('if (state.selectedConversationId === payload.conversationId) state.pendingChatSendScrollToLatestId = payload.conversationId || null;'));
   assert.ok(!source.includes("if (restoreSubmittedLatest) {\n      scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' })"));
 });
 
 test('model credential drafts are erased whenever the configuration editor is no longer visible', () => {
-  for (const token of ['function clearModelCredentialDraftOutsideEditor', "state.modelCredentialDraft = '';", 'clearModelCredentialDraftOutsideEditor(true)', 'function renderUnified() {\n  clearModelCredentialDraftOutsideEditor();']) assert.ok(source.includes(token), token);
+  for (const token of ['function clearModelCredentialDraftOutsideEditor', "state.modelCredentialDraft = '';", 'clearModelCredentialDraftOutsideEditor(true)']) assert.ok(source.includes(token), token);
+  assert.match(source, /function renderUnified\(\) \{[\s\S]*?const runtimeRefresh = arguments\[0\]\?\.runtimeRefresh === true;\r?\n  clearModelCredentialDraftOutsideEditor\(\);/);
 });
 
 test('ordinary assistant messages expose persisted running stop failure unknown retry and provider cost facts', () => {
   const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'runtime', title: '流式', revision: 2, messages: [{ id: 'assistant-runtime', role: 'assistant', delivery: 'UNKNOWN', attemptId: 'attempt-runtime', source: 'PROVIDER', modelSnapshot: { displayName: 'GPT-5.6 Terra' }, chargeMicros: 8, currencyCode: 'USD', blocks: [{ kind: 'TEXT', text: '已保留增量' }] }] }] } }, native: true, selectedConversationId: 'runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
   for (const token of ['chat-runtime-state unknown', '连接结果未知', 'retry-ordinary-chat', 'attempt-runtime', '从断点继续', '5.6 Terra', '¥0.0001']) assert.ok(rendered.includes(token), token);
-  for (const token of ["action === 'stop-ordinary-chat'", "invoke('cancel_desktop_ordinary_chat'", "action === 'retry-ordinary-chat'", "invoke('retry_desktop_ordinary_chat'"]) assert.ok(source.includes(token), token);
+  const imported={id:'money',role:'assistant',delivery:'COMPLETE',chargeMicros:8,modelSnapshot:{displayName:'GPT-5.6 Terra'},blocks:[{kind:'TEXT',text:'合成历史回答'}]};
+  const renderMoney=message=>renderChatFirstShell({data:{...fixture,exchange:{conversations:[{id:'money-c',title:'合成',messages:[message]}]}},native:true,selectedConversationId:'money-c',pane:'chat',status:'',error:'',connection:{}});
+  const before=JSON.stringify(imported);assert.match(renderMoney(imported),/>金额未知<\/span>/,'missing frozen currency remains unknown, not free');assert.doesNotMatch(renderMoney(imported),/>¥0\.0000<\/span>/);assert.equal(JSON.stringify(imported),before);
+  assert.match(renderMoney({...imported,currencyCode:'CNY'}),/>¥0\.0000<\/span>/,'known tiny CNY uses the approved four-decimal footer without mutating accounting');
+
+  for (const token of ["action === 'stop-ordinary-chat'", "'cancel_desktop_ordinary_chat'", "action === 'retry-ordinary-chat'", "invokeForAuthorizedDataAreaOperation(tauriBridge, 'retry_desktop_ordinary_chat'"]) assert.ok(source.includes(token), token);
   for (const token of ['allow-desktop-ordinary-chat', 'submit_desktop_ordinary_chat', 'retry_desktop_ordinary_chat', 'cancel_desktop_ordinary_chat', 'read_latest_desktop_ordinary_chat_attempt']) assert.ok(`${temporaryPermission}\n${capability}`.includes(token), token);
 });
 
@@ -717,6 +735,11 @@ test('failed ordinary replies remain as an actionable answer-incomplete card aft
   const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'failed-runtime', title: '联网失败', revision: 2, messages: [{ id: 'assistant-failed', role: 'assistant', delivery: 'FAILED', attemptId: 'attempt-failed', source: 'PROVIDER', safeErrorCode: 'PROVIDER_NOT_ENABLED', blocks: [{ kind: 'TEXT', text: '' }] }] }] } }, native: true, selectedConversationId: 'failed-runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
   for (const token of ['chat-runtime-state failed', '回答未完成', '本次实际接收服务商未启用', '重新生成', 'attempt-failed']) assert.ok(rendered.includes(token), token);
   assert.ok(!rendered.includes('>PROVIDER_NOT_ENABLED<'));
+  const changed = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'settings-race', title: '设置变化', revision: 2, messages: [{ id: 'assistant-settings-race', role: 'assistant', delivery: 'FAILED', attemptId: 'attempt-settings-race', source: 'PROVIDER', safeErrorCode: 'MODEL_SETTINGS_CHANGED', blocks: [{ kind: 'TEXT', text: '' }] }] }] } }, native: true, selectedConversationId: 'settings-race', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
+  assert.ok(changed.includes('模型设置已变化，本次未形成完整回答'));
+  assert.ok(changed.includes('核对模型与调用记录后手动重试'));
+  assert.ok(!changed.includes('未向服务商发送'), 'a generic persisted failure must not invent zero prior network calls');
+  assert.ok(!changed.includes('>MODEL_SETTINGS_CHANGED<'));
 });
 
 test('usage ledger does not mislabel absent provider usage as a missing price table', () => {
@@ -744,6 +767,19 @@ test('partial ordinary replies continue from the durable answer instead of repla
   ] }] } }, native: true, selectedConversationId: 'continued-runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
   for (const token of ['此处内容已保留，后续回答见下方', '正在从断点继续生成', '已保留前段内容，仅生成缺失部分。']) assert.ok(rendered.includes(token), token);
   for (const token of ['generationRefreshInterval', 'queueOrdinaryChatRuntimeRefresh', 'ordinaryChatRuntimeRefreshInFlight']) assert.ok(source.includes(token), token);
+  assert.equal(generationRefreshInterval({},false),80);assert.equal(generationRefreshInterval({pdfPreview:{}},false),500);assert.equal(generationRefreshInterval({},true),1000);
+
+});
+
+test('a saved partial answer does not claim its continuation is still running after completion', () => {
+  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'continued-complete', title: '续写完成', revision: 4, messages: [
+    { id: 'user', role: 'user', blocks: [{ kind: 'TEXT', text: '请完整说明' }] },
+    { id: 'partial', parentId: 'user', role: 'assistant', delivery: 'UNKNOWN', attemptId: 'attempt-partial', continuationState: 'CONTINUED', blocks: [{ kind: 'TEXT', text: '已保存的前半段。' }] },
+    { id: 'continuation', parentId: 'partial', continuationOf: 'partial', role: 'assistant', delivery: 'COMPLETE', attemptId: 'attempt-continuation', blocks: [{ kind: 'TEXT', text: '后半段已完成。' }] },
+  ] }] } }, native: true, selectedConversationId: 'continued-complete', pane: 'chat', connection: {} });
+  assert.match(rendered, /此处内容已保留，后续回答见下方/);
+  assert.doesNotMatch(rendered, /此处已保存内容；正在从断点继续/);
+  assert.match(rendered, /后半段已完成。/);
 });
 
 test('temporary chat uses the isolated owner and the Ghost directly toggles back to NORMAL', () => {
@@ -766,6 +802,7 @@ test('temporary chat uses the isolated owner and the Ghost directly toggles back
 
 test('Composer accepts pasted and dropped concrete files through private attachment commands', () => {
   for (const token of ['pastedComposerFiles', 'clipboardFileBase64', 'importPastedComposerClipboardFiles', 'PREFERRED_CLIPBOARD_IMAGE_TYPES', 'navigator.clipboard?.read', 'importComposerClipboardFiles', "import_desktop_conversation_clipboard_attachment", "import_desktop_temporary_clipboard_attachment", "app.addEventListener('paste'", "app.addEventListener('dragover'", "app.addEventListener('drop'", 'event.preventDefault()', 'Web 预览不能私有复制粘贴附件']) assert.ok(source.includes(token), token);
+  for (const token of ["navigator.userAgentData?.platform || navigator.platform", "/^mac/i.test(clipboardPlatform)", 'Promise.race([', '剪贴板读取超时']) assert.ok(source.includes(token), token);
   for (const token of ['allow-import-desktop-conversation-attachment', 'import_desktop_conversation_clipboard_attachment', 'allow-desktop-temporary-conversation', 'import_desktop_temporary_clipboard_attachment']) assert.ok(`${temporaryPermission}\n${capability}`.includes(token), token);
   assert.ok(css.includes('.chat-composer.composer-file-drop-active'));
   assert.ok(shell.includes('可直接粘贴或拖入图片、PDF、视频和文件'));
@@ -821,7 +858,7 @@ test('P6-F2-A renders a local-only history overlay, shared result panel and stab
   for (const token of ['最近搜索', 'clear-search-history', '全屏搜索', 'open-search-result', 'read_desktop_local_search_history', 'clear_desktop_local_search_history', 'query_desktop_local_index', 'searchHistoryOpen']) assert.ok(`${html}\n${source}`.includes(token));
   assert.match(source, /document\.querySelector\('#full-search-input, #chat-search'\)/);
   assert.match(source, /state\.searchHistory = \[\]; state\.searchHistoryHighlighted = null; focusSearchAfterHistoryClear\(\);/);
-  assert.equal(conversationLocalDate({ updatedAt: '2026-08-14T01:02:00Z' }, new Date('2026-08-14T02:00:00Z')).length > 0, true);
+  assert.equal(conversationLocalDate({ updatedAt: '2026-08-14T01:02:00Z' }, new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC' })), '2026/08/14');
   for (const forbidden of ['content://', 'storageKey']) assert.ok(!html.includes(forbidden));
 });
 
@@ -830,7 +867,7 @@ test('P6-F2-B renders a lazy local image thumbnail and keeps original reads behi
     summary: { id: 'workspace-image' },
     exchange: { conversations: [{ id: 'conversation-image', title: '图片会话', archived: false, messages: [{ id: 'message-image', role: 'user', createdAt: '2026-08-14T00:00:00Z', blocks: [{ kind: 'ASSET_REF', asset: { id: 'attachment-image', mimeType: 'image/png', displayName: 'local.png', byteCount: 68, sha256: 'a'.repeat(64) } }] }] }] },
   };
-  const html = renderChatFirstShell({ data: imageFixture, native: true, selectedConversationId: 'conversation-image', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {}, imageThumbnails: { 'attachment-image': { dataUrl: 'data:image/png;base64,AA==' } } });
+  const html = renderChatFirstShell({ data: imageFixture, native: true, selectedConversationId: 'conversation-image', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {}, imageThumbnails: { [attachmentPreviewKey(imageFixture.summary.id, 'attachment-image')]: { dataUrl: 'data:image/png;base64,AA==' } } });
   for (const token of ['data-action="open-image-preview"', 'data-image-thumbnail="attachment-image"', 'data-attachment-id="attachment-image"', 'data:image/png;base64,AA==']) assert.ok(html.includes(token));
   for (const token of ['read_desktop_image_preview', 'fullSize: false', 'fullSize: true', 'allow-read-desktop-image-preview', 'state.imagePreview', 'closeTopOverlay', 'data-image-preview-viewport', 'image-preview-previous', 'image-preview-next']) assert.ok(`${source}\n${temporaryPermission}\n${capability}`.includes(token));
   assert.ok(!source.includes('缩放和滚动只改变当前视口'));
@@ -880,12 +917,12 @@ test('FB-P6-181 gives main-chat attachments the same real-content previews as th
     status: '',
     error: '',
     connection: {},
-    imageThumbnails: { 'image-real': { dataUrl: 'data:image/png;base64,IMAGE' } },
-    videoThumbnails: { 'video-real': { dataUrl: 'data:image/png;base64,VIDEO' } },
+    imageThumbnails: { [attachmentPreviewKey(data.summary.id, 'image-real')]: { dataUrl: 'data:image/png;base64,IMAGE' } },
+    videoThumbnails: { [attachmentPreviewKey(data.summary.id, 'video-real')]: { dataUrl: 'data:image/png;base64,VIDEO' } },
     searchAttachmentPreviews: {
-      'pdf-real': { dataUrl: 'data:image/png;base64,PDF' },
-      'text-real': { text: '# 本机 Markdown\n正文预览' },
-      'audio-real': { durationMillis: 92_000 },
+      [attachmentPreviewKey(data.summary.id, 'pdf-real')]: { dataUrl: 'data:image/png;base64,PDF' },
+      [attachmentPreviewKey(data.summary.id, 'text-real')]: { text: '# 本机 Markdown\n正文预览' },
+      [attachmentPreviewKey(data.summary.id, 'audio-real')]: { durationMillis: 92_000 },
     },
   });
   for (const token of [
@@ -905,15 +942,46 @@ test('FB-P6-181 gives main-chat attachments the same real-content previews as th
   assert.match(appSource, /read_desktop_search_attachment_preview/);
 });
 
+test('chat transcript cache and composer previews keep the workspace owner when IDs collide', () => {
+  const asset = { id: 'shared', displayName: 'scope.txt', mimeType: 'text/plain', byteCount: 12 };
+  const conversation = { id: 'shared-conversation', title: 'Scope', messages: [{ id: 'shared-message', role: 'user', blocks: [{ kind: 'ASSET_REF', asset }] }] };
+  const previews = {
+    [attachmentPreviewKey('a', 'shared')]: { text: 'ONLY A PREVIEW' },
+    [attachmentPreviewKey('b', 'shared')]: { text: 'ONLY B PREVIEW' },
+  };
+  const render = workspaceId => renderChatFirstShell({
+    data: { summary: { id: workspaceId }, exchange: { conversations: [conversation] } },
+    selectedConversationId: conversation.id, pane: 'chat', native: true,
+    composerDraft: '', composerAttachments: [asset], searchAttachmentPreviews: previews,
+  });
+  const first = render('a'), second = render('b');
+  assert.match(first, /ONLY A PREVIEW/); assert.doesNotMatch(first, /ONLY B PREVIEW/);
+  assert.match(second, /ONLY B PREVIEW/); assert.doesNotMatch(second, /ONLY A PREVIEW/);
+  assert.match(second, /data-chat-attachment-preview="shared" data-thumbnail-workspace-id="b"/);
+});
+
 test('FB-P6-032 places message actions before metadata in DOM and keyboard order', () => {
-  const actionStart = shell.indexOf('<div class="chat-message-actions">');
-  const metadataStart = shell.indexOf('<p class="chat-message-metadata">');
-  assert.ok(actionStart >= 0 && metadataStart > actionStart);
-  const actions = shell.slice(actionStart, metadataStart);
-  assert.ok(actions.indexOf('copy-message') < actions.indexOf('share-message'));
-  assert.ok(actions.indexOf('share-message') < actions.indexOf('open-assistant-message-menu'));
-  const toolsCss = css.slice(css.indexOf('.chat-message-tools'), css.indexOf('.chat-scroll-to-latest'));
-  assert.ok(!toolsCss.includes('order:'));
+ const data={...fixture,exchange:{...fixture.exchange,conversations:[{id:'actions-order',title:'合成',revision:1,messages:[{id:'a',role:'assistant',delivery:'COMPLETE',modelSnapshot:{displayName:'GPT-6.1 Sol'},blocks:[{kind:'TEXT',text:'合成回答'}]}]}]}};
+ const html=renderChatFirstShell({data,native:true,pane:'chat',selectedConversationId:'actions-order',status:'',error:'',connection:{}});
+ const start=html.indexOf('class="chat-message-actions"'),metadata=html.indexOf('class="chat-message-metadata"');assert.ok(start>=0&&metadata>start);
+ const actions=html.slice(start,metadata);assert.ok(actions.indexOf('data-action="copy-message"')>=0);assert.ok(actions.indexOf('data-action="copy-message"')<actions.indexOf('data-action="share-message"'));assert.ok(actions.indexOf('data-action="share-message"')<actions.indexOf('data-action="open-assistant-message-menu"'));
+ assert.match(html.slice(metadata),/tabindex="0"/);const toolsCss=css.slice(css.indexOf('.chat-message-tools'),css.indexOf('.chat-scroll-to-latest'));assert.ok(!toolsCss.includes('order:'));
+});
+
+test('USER footer puts its timestamp before copy and keeps the Windows cross-area menu', () => {
+  const conversation = { id: 'footer-order', title: '消息底栏', messages: [
+    { id: 'user-footer', role: 'user', createdAt: '2026-09-24T08:00:00Z', blocks: [{ kind: 'TEXT', text: '用户内容' }] },
+    { id: 'assistant-footer', role: 'assistant', createdAt: '2026-09-24T08:01:00Z', blocks: [{ kind: 'TEXT', text: '回答内容' }] },
+  ] };
+  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [conversation] } }, native: true, selectedConversationId: conversation.id, pane: 'chat', connection: {} });
+  const user = rendered.match(/<article class="chat-message user[^]*?data-message-id="user-footer"[^]*?<\/article>/)?.[0] || '';
+  const assistant = rendered.match(/<article class="chat-message assistant[^]*?data-message-id="assistant-footer"[^]*?<\/article>/)?.[0] || '';
+  assert.ok(user.indexOf('chat-message-metadata') < user.indexOf('data-action="copy-message"'));
+  assert.ok(user.indexOf('data-action="copy-message"') < user.indexOf('data-action="open-assistant-message-menu"'));
+  assert.doesNotMatch(user, /data-action="share-message"/);
+  assert.ok(assistant.indexOf('data-action="copy-message"') < assistant.indexOf('data-action="share-message"'));
+  assert.ok(assistant.indexOf('data-action="share-message"') < assistant.indexOf('data-action="open-assistant-message-menu"'));
+  assert.ok(assistant.indexOf('data-action="open-assistant-message-menu"') < assistant.indexOf('chat-message-metadata'));
 });
 
 test('Desktop shares assistant replies through the same Markdown save path as Android', () => {
@@ -923,7 +991,7 @@ test('Desktop shares assistant replies through the same Markdown save path as An
   assert.match(source, /if \(!native && typeof navigator\.share === 'function'\) await navigator\.share\(\{ text: payload \}\);/);
 });
 
-test('inline Markdown code uses the shared half-strength neutral emphasis surface', () => {
+test('inline Markdown code uses the latest Desktop neutral reading surface', () => {
   assert.match(css, /--markdown-inline-code-surface: #f7f8f8;/);
   assert.match(css, /\.chat-markdown-body code \{[^}]*background: var\(--markdown-inline-code-surface\);/s);
   assert.match(css, /:root\[data-appearance-mode="dark"\] \{[^}]*--markdown-inline-code-surface: #242925;/s);
@@ -931,7 +999,7 @@ test('inline Markdown code uses the shared half-strength neutral emphasis surfac
 });
 
 test('Markdown code blocks stay one type step smaller than assistant body text', () => {
-  assert.match(css, /\.chat-message-body \{[^}]*font-size: 15px;/s);
+  assert.match(css, /\.chat-message-body \{[^}]*font-size: calc\(15px \* var\(--app-font-scale, 1\)\);/s);
   assert.match(css, /\.chat-markdown-code \{[^}]*font-size: 13px;[^}]*line-height: 1\.6;/s);
 });
 
@@ -942,17 +1010,13 @@ test('assistant footer retains an unknown amount for unpriced replies in every d
   }
 });
 
-test('assistant footer keeps Android’s time, short model, and RMB amount on one line', () => {
-  assert.match(shell, /messageFooterCostLabel\(message, \{ maximumFractionDigits: 4, trimTrailingZeros: false \}\)/);
-  assert.match(shell, /<strong>\$\{escapeHtml\(metadata\.model\)\}<\/strong>/);
-  assert.match(shell, /chat-message-metadata-separator/);
-  assert.doesNotMatch(shell, /chat-message-cost/);
-  assert.match(css, /\.chat-message-metadata \{[^}]*white-space: nowrap;[^}]*overflow: visible;/s);
-  assert.match(css, /@container \(max-width: 470px\)[\s\S]*chat-message-metadata-cost[\s\S]*grid-row: 2;/);
-  assert.match(shell, /chat-message-action-more/);
-  assert.match(css, /\.chat-message-tools \{[^}]*gap: 12px;[^}]*min-height: 32px;[^}]*margin-top: 10px;/s);
-  assert.match(css, /\.chat-message-metadata \{[^}]*font-size: 12px;[^}]*line-height: 1\.5;/s);
-  assert.match(css, /\.chat-message-action-more svg \{[^}]*width: 18px;[^}]*height: 18px;[^}]*fill: currentColor;[^}]*stroke: none;/s);
+test('assistant footer preserves its time model and RMB projection in a keyboard reachable footer', () => {
+ const message={id:'footer',role:'assistant',createdAt:'2026-10-16T08:00:00Z',modelSnapshot:{displayName:'GPT-6.1 Sol'},chargeMicros:1000000,currencyCode:'CNY',blocks:[{kind:'TEXT',text:'合成回答'}]};
+ const before=JSON.stringify(message),meta=transcriptMetadata(message);
+ const data={...fixture,exchange:{...fixture.exchange,conversations:[{id:'footer-c',title:'合成',messages:[message]}]}};
+ const html=renderChatFirstShell({data,native:true,selectedConversationId:'footer-c',pane:'chat',status:'',error:'',connection:{}});
+ const footer=html.match(/<p class="chat-message-metadata"[^>]*>[\s\S]*?<\/p>/)?.[0];assert.ok(footer);for(const text of [meta.timestamp,'GPT-6.1 Sol','¥1.0000'])assert.ok(footer.includes(text),text);assert.match(footer,/tabindex="0"/);assert.match(footer,/chat-message-metadata-separator/);assert.equal(JSON.stringify(message),before);
+ assert.match(css,/\.chat-message-metadata \{[^}]*white-space: nowrap;[^}]*overflow: visible;/s);assert.match(css,/@container \(max-width: 470px\)[\s\S]*chat-message-metadata-cost[\s\S]*grid-row: 2;/);assert.match(html,/chat-message-action-more/);
 });
 
 test('Desktop keeps the header capsule geometry and full-width conversation edge fades', () => {
@@ -984,12 +1048,13 @@ test('source dialog uses the Android source list with no explanatory copy and an
   assert.ok(source.includes("invoke('open_desktop_source_link'"));
 });
 
-test('assistant more menu is a compact trigger-owned popup that keeps answer information and branching', async () => {
-  for (const token of ['open-assistant-message-menu', "openTransientOverlay('assistant-message-menu'", 'resolveAssistantMessageMenuAnchor', 'show-assistant-answer-information', '本次回答信息', '创建分支', '未记录（旧回答）']) assert.ok((source + await readFile(resolve(import.meta.dirname, '../src/answer-information.mjs'), 'utf8')).includes(token), token);
+test('assistant more menu is a compact trigger-owned popup that keeps answer information and branching', () => {
+  for (const token of ['open-assistant-message-menu', "openTransientOverlay('assistant-message-menu'", 'resolveAssistantMessageMenuAnchor', 'show-assistant-answer-information', '创建分支', 'renderAnswerInformation(state.dialog.record)']) assert.ok(source.includes(token), token);
   assert.match(source, /branch: 'M5 4v4c0 1\.1\.9 2 2 2h12/);
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', pane: 'chat', connection: {}, assistantMessageMenu: { messageId: 'assistant-one' } });
   assert.match(rendered, /<div class="assistant-message-menu" role="menu" aria-label="更多操作"/);
   assert.match(rendered, /data-action="branch-from-message" data-message-id="assistant-one"/);
+  assert.match(rendered, /data-action="show-conversation-branches" data-message-id="assistant-one"/);
   assert.match(css, /\.assistant-message-menu \{[^}]*width: min\(208px, calc\(100vw - 16px\)\)[^}]*border-radius: 18px/s);
   assert.match(css, /\.assistant-message-menu > button \{[^}]*min-height: 48px[^}]*gap: 12px/s);
   assert.ok(!source.includes("kind: 'assistant-message-actions'"));
@@ -999,6 +1064,49 @@ test('assistant more menu is a compact trigger-owned popup that keeps answer inf
   assert.ok(!source.includes("action === 'message-provenance'"));
   assert.ok(!css.includes('.chat-provenance-badge'));
   assert.ok(!source.includes("action === 'export-assistant-markdown'"));
+});
+
+test('a running assistant reply waits for a cost before showing an unknown amount', () => {
+  const message = { id: 'answer', role: 'assistant', delivery: 'PARTIAL', runtimeState: 'RUNNING', blocks: [{ kind: 'TEXT', text: '正在回答' }] };
+  const data = { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'running-cost', title: '费用', revision: 1, messages: [message] }] } };
+  const rendered = renderChatFirstShell({ data, native: true, selectedConversationId: 'running-cost', pane: 'chat', connection: {} });
+  assert.match(rendered, /正在生成回复/);
+  assert.doesNotMatch(rendered, /chat-message-metadata-cost">金额未知<\/span>/);
+  assert.match(renderChatFirstShell({ data: { ...data, exchange: { ...data.exchange, conversations: [{ ...data.exchange.conversations[0], messages: [{ ...message, delivery: 'COMPLETE', runtimeState: 'COMPLETED' }] }] } }, native: true, selectedConversationId: 'running-cost', pane: 'chat', connection: {} }), /chat-message-metadata-cost">金额未知<\/span>/);
+});
+
+test('cross-area text reference is reachable for selected user and assistant messages without sending', () => {
+  const areaFixture = {
+    ...fixture,
+    dataArea: 'CHAT',
+    exchange: { conversations: [{ id: 'reference-source', title: '来源会话', revision: 4, messages: [
+      { id: 'chosen-user', role: 'user', delivery: 'COMPLETE', blocks: [{ kind: 'TEXT', text: '所选用户文字' }] },
+      { id: 'chosen-assistant', role: 'assistant', delivery: 'COMPLETE', blocks: [{ kind: 'TEXT', text: '所选回答文字' }] },
+    ] }] },
+  };
+  const renderArea = (data, menu) => renderChatFirstShell({
+    data, native: true, selectedConversationId: 'reference-source', pane: data.dataArea === 'WORK' ? 'work' : 'chat',
+    connection: {}, assistantMessageMenu: menu,
+  });
+  const userHtml = renderArea(areaFixture, { messageId: 'chosen-user', role: 'user' });
+  const menu = userHtml.match(/<div class="assistant-message-menu"[^>]*>(.*?)<\/div>/s)?.[1] || '';
+  assert.match(userHtml, /data-action="open-assistant-message-menu" data-message-id="chosen-user"/);
+  assert.match(menu, /data-action="reference-message-to-other-area" data-message-id="chosen-user"/);
+  assert.match(menu, /引用文字到工作区/);
+  assert.match(menu, /分支历史/);
+  assert.doesNotMatch(menu, /编辑消息/);
+  const editableUserHtml = renderArea(areaFixture, { messageId: 'chosen-user', role: 'user', editable: true });
+  assert.match(editableUserHtml, /data-action="edit-conversation-user-message" data-message-id="chosen-user"/);
+  const unansweredUserHtml = renderArea(areaFixture, { messageId: 'chosen-user', role: 'user', editable: true, canGenerateAnswer: true });
+  assert.match(unansweredUserHtml, /data-action="generate-answer-for-saved-user" data-message-id="chosen-user"/);
+  assert.doesNotMatch(menu, /本次回答信息|创建分支/);
+  const assistantHtml = renderArea({ ...areaFixture, dataArea: 'WORK' }, { messageId: 'chosen-assistant', role: 'assistant' });
+  assert.match(assistantHtml, /data-action="reference-message-to-other-area" data-message-id="chosen-assistant"/);
+  assert.match(assistantHtml, /引用文字到对话区/);
+  assert.match(source, /expectedConversationRevision: Number\(conversation\.revision\)/);
+  assert.match(source, /await loadOrdinaryComposerDraft\(\)/);
+  assert.match(temporaryPermission, /allow-desktop-manual-area-reference[\s\S]*reference_desktop_message_to_other_area/);
+  assert.match(capability, /allow-desktop-manual-area-reference/);
 });
 
 test('P6-F2-C opens only workspace-owned PDFs as inert page pixels in the app reader with durable page navigation', () => {
@@ -1021,15 +1129,18 @@ test('model picker remains dismissible without darkening its chat background', (
 test('P6-F2-D keeps MP4 preview local, auto-playing and attachment-ID scoped', async () => {
   for (const token of ['read_desktop_video_preview', 'save_desktop_video_preview_position', 'openVideoPreview', 'closeVideoPreview', 'data-video-preview', 'video.play()', 'positionMillis', 'lastPlaybackPositionMillis', 'mediaUrl']) assert.ok(source.includes(token), token);
   assert.match(source, /timeupdate[\s\S]+lastPlaybackPositionMillis/);
-  assert.match(source, /if \(state\.videoPreview\) \{ void closeVideoPreview\(\); return; \}/);
-  assert.match(source, /event\.key === 'Escape' && state\.videoPreview[\s\S]+closeVideoPreview\(\)/);
-  assert.match(source, /invoke\('save_desktop_video_preview_position'[\s\S]+positionMillis/);
+  // Escape/outside cancellation for active and pending players is executed in video-resume-owner.test.mjs.
+
+  assert.match(source, /videoResumeWrite[\s\S]+invokePreviewOwner\(owner, 'save_desktop_video_preview_position'/);
+  assert.match(source, /owner\.videoPreview = null;[\s\S]*video\.pause\(\);[\s\S]*video\.removeAttribute\('src'\);[\s\S]*video\.load\(\);[\s\S]*render\(\)/);
   assert.match(tauriConfig, /media-src 'self' data: blob: nfai-media:/);
   const videoDialog = source.slice(source.indexOf('function videoPreviewDialog()'), source.indexOf('function audioPreviewDialog()'));
   assert.match(videoDialog, /video-preview-stage[\s\S]*<video class="video-preview-frame" autoplay playsinline preload="auto"[\s\S]*video-preview-controls/);
+  assert.match(videoDialog, /video-preview-error" role="alert"/);
+  assert.match(videoDialog, /data-video-preview-duration-note[\s\S]*preview\.durationMillis \? formatDuration\(preview\.durationMillis\) : '--:--'/);
   assert.doesNotMatch(videoDialog, /<video[^>]+controls/);
   assert.doesNotMatch(videoDialog, /start-video-preview|开始本地播放|本地视频播放控制|本地视频预览|<h2>/);
-  assert.match(videoDialog, /\$\{escape\(preview\.displayName\)\} · \$\{bytes\(preview\.byteCount\)\} · \$\{formatDuration\(preview\.durationMillis\)\}/);
+  assert.match(videoDialog, /\$\{escape\(preview\.displayName\)\} · \$\{bytes\(preview\.byteCount\)\} · <span data-video-preview-duration-note>/);
   assert.doesNotMatch(videoDialog, /仅在明确点击后播放|仅从本机私有副本播放|不会自动播放、上传或外发|不会外发/);
   assert.doesNotMatch(source, /function localVideoBlobUrl|data:video\/mp4;base64|Uint8Array\.from\(raw/);
   for (const token of ['video/mp4', 'open-video-preview', '播放视频']) assert.ok(`${shell}\n${previewOwner}`.includes(token), token);
@@ -1063,29 +1174,35 @@ test('FB-P6-180 keeps media on one dark canvas while text uses a white reading s
     '.text-preview-overlay .file-preview-action',
   ]) assert.ok(previewCss.includes(token), token);
   assert.match(source, /<video class="video-preview-frame"[\s\S]*data-video-preview/);
+  assert.match(source, /video\.addEventListener\('error', handleVideoError, \{ once: true \}\)/);
+  assert.match(source, /if \(video\.error\) handleVideoError\(\)/);
+  assert.match(source, /owner\.videoPreview = \{ \.\.\.preview, mediaUrl: '', error: '当前系统无法解码此视频。' \}/);
+  assert.match(source, /if \(durationNote\) durationNote\.textContent = formatDuration\(durationMillis\)/);
   for (const token of ['previewProgressRange', 'previewVolumeControl', 'data-video-preview-volume', 'data-audio-preview-volume', 'toggle-video-volume', 'toggle-audio-volume']) assert.ok(source.includes(token), token);
   for (const token of ['.preview-progress-range::-webkit-slider-runnable-track', '.preview-progress-range::-webkit-slider-thumb', 'linear-gradient(to right, #fff 0 var(--preview-progress)', '.preview-volume-popover', '.audio-preview-progress-row']) assert.ok(previewCss.includes(token), token);
   assert.match(source, /data-image-preview-content/);
 });
 
 test('P6-F2-E keeps audio closeable without replaying its byte payload and text bounded/inert behind attachment-ID owners', async () => {
-  for (const token of ['read_desktop_audio_preview', 'save_desktop_audio_preview_position', 'openAudioPreview', 'closeAudioPreview', 'data-audio-preview', 'mediaUrl', '当前系统无法解码此音频。', 'lastPlaybackPositionMillis', 'read_desktop_text_preview', 'openTextPreview', 'local-text-preview', 'copy-text-preview', 'save-preview-attachment', 'share-preview-attachment', "invoke('export_desktop_attachment_to_selected_path'"]) assert.ok(source.includes(token), token);
+  for (const token of ['read_desktop_audio_preview', 'save_desktop_audio_preview_position', 'openAudioPreview', 'closeAudioPreview', 'data-audio-preview', 'mediaUrl', '当前系统无法解码此音频。', 'lastPlaybackPositionMillis', 'read_desktop_text_preview', 'openTextPreview', 'local-text-preview', 'copy-text-preview', 'save-preview-attachment', 'share-preview-attachment', "invokePreviewOwner(owner, 'export_desktop_attachment_to_selected_path'"]) assert.ok(source.includes(token), token);
   assert.ok(!source.includes('start-audio-preview'));
   const audioDialog = source.slice(source.indexOf('function audioPreviewDialog()'), source.indexOf('function textPreviewDialog()'));
   assert.match(audioDialog, /audio-preview-overlay[\s\S]*audio-preview-dialog[\s\S]*audio-preview-header/);
   assert.match(audioDialog, /<audio autoplay preload="auto"[\s\S]*audio-preview-toggle/);
+  assert.match(audioDialog, /audio-preview-error" role="alert"/);
+  assert.match(audioDialog, /const identity = preview\.attachmentId && preview\.displayName/);
   assert.doesNotMatch(audioDialog, /<audio[^>]+controls/);
   assert.doesNotMatch(audioDialog, /pdf-preview-note|开始本地播放|仅在明确点击后播放|仅从本机私有副本播放|本地音频播放|<h2>/);
   const textDialog = source.slice(source.indexOf('function textPreviewDialog()'), source.indexOf('function previewBoundaryDialog()'));
   assert.doesNotMatch(textDialog, /本地安全文本预览|本机私有副本|不会执行内容|不会渲染 HTML、执行链接、脚本或 Markdown 指令|<h2>/);
-  for (const token of ['text-preview-overlay', 'text-preview-surface', 'text-preview-header', 'text-preview-facts', 'local-text-preview', "text-preview-menu-items"]) assert.ok(textDialog.includes(token), token);
+  for (const token of ['text-preview-overlay', 'text-preview-surface', 'text-preview-header', 'text-preview-facts', 'local-text-preview', 'text-preview-menu-item']) assert.ok(textDialog.includes(token), token);
   const actions = source.slice(source.indexOf('function previewTopActions('), source.indexOf('function imagePreviewDialog()'));
   assert.match(actions, /class="file-preview-top-actions \$\{copy \? 'text-preview-actions' : 'media-preview-actions'\}"[\s\S]+data-action="save-preview-attachment"[\s\S]+data-action="share-preview-attachment"[\s\S]+data-action="copy-text-preview"[\s\S]+data-action="\$\{closeAction\}"/);
   assert.match(actions, /data-action="save-preview-attachment"[^>]+aria-label="下载文件"[^>]*>[\s\S]*?icon\(icons\.download/);
   assert.match(actions, /data-action="share-preview-attachment"[^>]+aria-label="分享文件"[^>]*>[\s\S]*?<span>分享<\/span>/);
   assert.match(actions, /data-action="copy-text-preview" data-copy-action[^>]+aria-label="复制文本"[^>]*>[\s\S]*?icon\(icons\.copy/);
   const previewCss = await readFile(resolve(root, 'src/image-preview.css'), 'utf8');
-  for (const token of ['.file-preview-top-actions', '.file-preview-action', '.audio-preview-overlay', 'background: var(--attachment-media-canvas);', '.text-preview-overlay', 'background: #fff', 'border-radius: 999px']) assert.ok(previewCss.includes(token), token);
+  for (const token of ['.file-preview-top-actions', '.file-preview-action', '.audio-preview-overlay', '.attachment-preview-overlay.audio-preview-overlay .image-preview-dialog .audio-preview-error', 'background: var(--accent-orange-soft);', 'color: #74401f;', 'background: var(--attachment-media-canvas);', '.text-preview-overlay', 'background: #fff', 'border-radius: 999px']) assert.ok(previewCss.includes(token), token);
   for (const dialog of [
     source.slice(source.indexOf('function imagePreviewDialog()'), source.indexOf('function pdfPreviewDialog()')),
     source.slice(source.indexOf('function pdfPreviewDialog()'), source.indexOf('function videoPreviewDialog()')),
@@ -1133,35 +1250,17 @@ test('header conversation menu ignores sidebar bounds and aligns to its trigger'
   assert.deepEqual(resolveConversationMenuAnchor({ left: 280, right: 318, top: 600, bottom: 638 }, { ...options, viewportWidth: 320 }), { x: 122, y: 214 });
 });
 
-
-test('historical missing search evidence explains the failure and never offers continuation', () => {
-  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'missing-sources', title: '搜索核验', messages: [
-    { id: 'user', role: 'user', blocks: [{kind:'TEXT',text:'问题'}] },
-    { id: 'answer', role: 'assistant', delivery:'FAILED', safeErrorCode:'WEB_SEARCH_NO_SOURCES', attemptId:'attempt', blocks:[{kind:'TEXT',text:'原回答正文保留'}] }
-  ] }] } }, native: true, selectedConversationId:'missing-sources', composerDraft:'', chatSearch:'', profileOpen:false, sidebarOpen:false, pane:'chat', status:'', error:'', connection:{} });
-  assert.match(rendered, /原回答正文保留/);
-  assert.match(rendered, /联网搜索未完成/);
-  assert.match(rendered, /重新生成/);
-  assert.doesNotMatch(rendered, /从断点继续|回答未完成|请检查模型与网络设置/);
-});
-
-
-test('cancelled native reply keeps the explicit checkpoint recovery action', () => {
-  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'cancelled-runtime', title: '停止后恢复', revision: 2, messages: [{ id: 'cancelled-answer', role: 'assistant', delivery: 'CANCELLED', attemptId: 'cancelled-attempt', source: 'PROVIDER', blocks: [{ kind: 'TEXT', text: '保留的断点内容' }] }] }] } }, native: true, selectedConversationId: 'cancelled-runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
-  assert.ok(rendered.includes('已停止，已生成内容已保留'));
-  assert.ok(rendered.includes('data-action="retry-ordinary-chat"'));
-  assert.ok(rendered.includes('从断点继续'));
-});
-
-
-test('assistant footer keeps known Luna USD and RC CNY charges visible, with unknown calls separate', () => {
-  const calls=[{callId:'luna',requestedModelId:'openai/gpt-6-luna',chargeMicros:100000,currencyCode:'USD',costSource:'PROVIDER_RESPONSE',status:'SUCCEEDED'},
-    {callId:'answer',requestedModelId:'claude-sonnet-5-5',chargeMicros:500000,currencyCode:'CNY',costSource:'LOCAL_ESTIMATE',status:'SUCCEEDED'}];
-  for (const unknown of [false,true]) {
-    const message={id:'mixed-fee-answer',role:'assistant',delivery:unknown?'FAILED':'COMPLETE',blocks:[{kind:'TEXT',text:'回答'}],accountingCalls:unknown?[...calls,{callId:'uncertain',requestedModelId:'openai/gpt-6-luna',status:'UNKNOWN'}]:calls};
-    const saved=JSON.stringify(message);
-    const html=renderChatFirstShell({data:{...fixture,exchange:{...fixture.exchange,conversations:[{id:'fee',title:'费用',revision:1,messages:[message]}]}},native:true,selectedConversationId:'fee',pane:'chat',connection:{}});
-    assert.match(html,unknown?/chat-message-metadata-cost">¥1\.1720 \+ 未知<\/span>/:/chat-message-metadata-cost">¥1\.1720<\/span>/);
-    assert.equal(JSON.stringify(message),saved);
+test('missing public search evidence keeps saved text but offers regeneration instead of continuation', () => {
+  for (const code of ['WEB_SEARCH_NO_SOURCES', 'WEB_SEARCH_NO_VERIFIED_SOURCES']) {
+    const conversation = { id: `missing-${code}`, title: '来源核验', messages: [
+      { id: 'question', role: 'user', blocks: [{ kind: 'TEXT', text: '问题' }] },
+      { id: 'answer', role: 'assistant', delivery: 'FAILED', safeErrorCode: code, attemptId: 'attempt', blocks: [{ kind: 'TEXT', text: '保留的原回答' }] },
+    ] };
+    const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [conversation] } }, native: true, selectedConversationId: conversation.id, pane: 'chat', connection: {} });
+    const failure = rendered.match(/<div class="chat-runtime-state failed"[\s\S]*?<\/div>/)?.[0] || '';
+    assert.match(rendered, /保留的原回答/);
+    assert.match(failure, /<strong>联网搜索未完成<\/strong>/);
+    assert.match(failure, />重新生成<\/button>/);
+    assert.doesNotMatch(failure, /回答未完成|从断点继续/);
   }
 });

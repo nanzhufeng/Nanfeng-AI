@@ -1,0 +1,114 @@
+{
+  "format": "nfai.openrouter-registry",
+  "version": 1,
+  "verifiedAtMs": 1,
+  "catalog": {
+    "catalogVersion": "497978d816953f0c",
+    "catalogSha256": "497978d816953f0c03ad6ddf185ef725788d622aef1c0fc4d2d1b7c8d2ade3c0",
+    "sourceEtag": null,
+    "models": [
+      {
+        "id": "anthropic/claude-opus-5",
+        "displayName": "anthropic/claude-opus-5",
+        "contextWindowTokens": 8192,
+        "maxOutputTokens": null,
+        "inputModalities": [
+          "text"
+        ],
+        "outputModalities": [
+          "text"
+        ],
+        "supportedParameters": [],
+        "inputMicrosPerToken": null,
+        "outputMicrosPerToken": null,
+        "cachedInputMicrosPerToken": null
+      },
+      {
+        "id": "google/gemini-3.8-flash",
+        "displayName": "google/gemini-3.8-flash",
+        "contextWindowTokens": 8192,
+        "maxOutputTokens": null,
+        "inputModalities": [
+          "text"
+        ],
+        "outputModalities": [
+          "text"
+        ],
+        "supportedParameters": [],
+        "inputMicrosPerToken": null,
+        "outputMicrosPerToken": null,
+        "cachedInputMicrosPerToken": null
+      },
+      {
+        "id": "google/gemini-4-argon",
+        "displayName": "google/gemini-4-argon",
+        "contextWindowTokens": 1048576,
+        "maxOutputTokens": 65536,
+        "inputModalities": [
+          "text"
+        ],
+        "outputModalities": [
+          "text"
+        ],
+        "supportedParameters": [],
+        "inputMicrosPerToken": 2,
+        "outputMicrosPerToken": 10,
+        "cachedInputMicrosPerToken": null
+      },
+      {
+        "id": "openai/gpt-5.6-sol",
+        "displayName": "openai/gpt-5.6-sol",
+        "contextWindowTokens": 8192,
+        "maxOutputTokens": null,
+        "inputModalities": [
+          "text"
+        ],
+        "outputModalities": [
+          "text"
+        ],
+        "supportedParameters": [],
+        "inputMicrosPerToken": null,
+        "outputMicrosPerToken": null,
+        "cachedInputMicrosPerToken": null
+      },
+      {
+        "id": "openai/gpt-5.6-terra",
+        "displayName": "openai/gpt-5.6-terra",
+        "contextWindowTokens": 8192,
+        "maxOutputTokens": null,
+        "inputModalities": [
+          "text"
+        ],
+        "outputModalities": [
+          "text"
+        ],
+        "supportedParameters": [],
+        "inputMicrosPerToken": null,
+        "outputMicrosPerToken": null,
+        "cachedInputMicrosPerToken": null
+      }
+    ],
+    "presetMappings": [
+      {
+        "presetId": "CLAUDE_OPUS_5",
+        "modelId": "anthropic/claude-opus-5"
+      },
+      {
+        "presetId": "GPT_5_6_SOL",
+        "modelId": "openai/gpt-5.6-sol"
+      },
+      {
+        "presetId": "GPT_5_6_TERRA",
+        "modelId": "openai/gpt-5.6-terra"
+      },
+      {
+        "presetId": "GEMINI_3_8_FLASH",
+        "modelId": "google/gemini-3.8-flash"
+      },
+      {
+        "presetId": "GEMINI_4_ARGON",
+        "modelId": "google/gemini-4-argon"
+      }
+    ]
+  }
+}

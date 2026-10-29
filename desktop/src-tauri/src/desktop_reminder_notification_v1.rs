@@ -1,4 +1,4 @@
-//! Content-safe Desktop reminder notification routing and the macOS native click bridge.
+//! Content-safe Desktop reminder notification routing and native click bridges.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, VecDeque};
@@ -24,11 +24,15 @@ pub struct ReminderNotificationTarget {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReminderNotificationAction {
     pub click_id: String,
+    #[serde(default = "default_chat_area")]
+    pub data_area: String,
     pub route: String,
     pub plan_id: String,
     pub workspace_id: String,
     pub conversation_id: String,
 }
+
+fn default_chat_area() -> String { "CHAT".into() }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -55,11 +59,12 @@ struct ActionQueue {
 
 impl ActionQueue {
     fn record(&mut self, action: ReminderNotificationAction) -> bool {
-        if self.handled_index.contains(&action.click_id) {
+        let identity = format!("{}:{}", action.data_area, action.click_id);
+        if self.handled_index.contains(&identity) {
             return false;
         }
-        self.handled_index.insert(action.click_id.clone());
-        self.handled.push_back(action.click_id.clone());
+        self.handled_index.insert(identity.clone());
+        self.handled.push_back(identity);
         while self.handled.len() > MAX_HANDLED_CLICK_IDS {
             if let Some(expired) = self.handled.pop_front() {
                 self.handled_index.remove(&expired);
@@ -72,16 +77,25 @@ impl ActionQueue {
         true
     }
 
-    fn take(&mut self, click_id: &str) -> Option<ReminderNotificationAction> {
+    fn take(&mut self, click_id: &str, data_area: &str) -> Option<ReminderNotificationAction> {
         let index = self
             .pending
             .iter()
-            .position(|item| item.click_id == click_id)?;
+            .position(|item| item.click_id == click_id && item.data_area == data_area)?;
         self.pending.remove(index)
     }
 
-    fn drain(&mut self) -> Vec<ReminderNotificationAction> {
-        self.pending.drain(..).collect()
+    fn drain(&mut self, data_area: &str) -> Vec<ReminderNotificationAction> {
+        let mut selected = Vec::new();
+        self.pending.retain(|item| {
+            if item.data_area == data_area {
+                selected.push(item.clone());
+                false
+            } else {
+                true
+            }
+        });
+        selected
     }
 }
 
@@ -95,7 +109,7 @@ impl Default for BridgeRuntimeStatus {
     fn default() -> Self {
         Self {
             initialized: false,
-            safe_code: if cfg!(target_os = "macos") {
+            safe_code: if cfg!(any(target_os = "macos", windows)) {
                 "NOT_INITIALIZED".into()
             } else {
                 "UNSUPPORTED_PLATFORM".into()
@@ -106,6 +120,8 @@ impl Default for BridgeRuntimeStatus {
 
 static ACTION_QUEUE: OnceLock<Mutex<ActionQueue>> = OnceLock::new();
 static BRIDGE_STATUS: OnceLock<Mutex<BridgeRuntimeStatus>> = OnceLock::new();
+#[cfg(windows)]
+static WINDOWS_ACTIVATIONS: OnceLock<Mutex<VecDeque<(String, String)>>> = OnceLock::new();
 
 fn queue() -> &'static Mutex<ActionQueue> {
     ACTION_QUEUE.get_or_init(|| Mutex::new(ActionQueue::default()))
@@ -132,6 +148,7 @@ pub fn validate_target(target: &ReminderNotificationTarget) -> bool {
 
 fn validate_action(action: &ReminderNotificationAction) -> bool {
     safe_opaque_id(&action.click_id)
+        && matches!(action.data_area.as_str(), "CHAT" | "WORK")
         && validate_target(&ReminderNotificationTarget {
             route: action.route.clone(),
             plan_id: action.plan_id.clone(),
@@ -144,7 +161,7 @@ pub fn status() -> ReminderNotificationBridgeStatus {
     let status = runtime_status().lock().ok();
     let pending_action_count = queue().lock().map(|queue| queue.pending.len()).unwrap_or(0);
     ReminderNotificationBridgeStatus {
-        supported: cfg!(target_os = "macos"),
+        supported: cfg!(any(target_os = "macos", windows)),
         initialized: status.as_ref().is_some_and(|value| value.initialized),
         safe_code: status
             .as_ref()
@@ -161,6 +178,7 @@ fn update_status(initialized: bool, safe_code: &str) {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn record_action(action: ReminderNotificationAction) -> bool {
     if !validate_action(&action) {
         return false;
@@ -168,18 +186,239 @@ fn record_action(action: ReminderNotificationAction) -> bool {
     queue().lock().is_ok_and(|mut queue| queue.record(action))
 }
 
-pub fn take_action(click_id: &str) -> Option<ReminderNotificationAction> {
+pub fn take_action(click_id: &str, data_area: &str) -> Option<ReminderNotificationAction> {
     if !safe_opaque_id(click_id) {
         return None;
     }
-    queue().lock().ok()?.take(click_id)
+    queue().lock().ok()?.take(click_id, data_area)
 }
 
-pub fn drain_actions() -> Vec<ReminderNotificationAction> {
+pub fn drain_actions(data_area: &str) -> Vec<ReminderNotificationAction> {
     queue()
         .lock()
-        .map(|mut queue| queue.drain())
+        .map(|mut queue| queue.drain(data_area))
         .unwrap_or_default()
+}
+
+#[cfg(windows)]
+fn windows_activations() -> &'static Mutex<VecDeque<(String, String)>> {
+    WINDOWS_ACTIVATIONS.get_or_init(|| Mutex::new(VecDeque::new()))
+}
+
+#[cfg(windows)]
+fn activation_scheme(app_id: &str) -> Option<&'static str> {
+    match app_id {
+        "com.nanzhufeng.ai.desktop" => Some("nanfeng-ai-reminder"),
+        "com.nanzhufeng.ai.desktop.windowsacceptance" =>
+            Some("nanfeng-ai-windows-acceptance-reminder"),
+        _ => None,
+    }
+}
+
+#[cfg(windows)]
+pub fn windows_activation_url(app_id: &str, data_area: &str, run_id: &str) -> Option<String> {
+    if !matches!(data_area, "CHAT" | "WORK") || !safe_opaque_id(run_id) || run_id.len() > 200 {
+        return None;
+    }
+    Some(format!("{}://open/{data_area}/{run_id}", activation_scheme(app_id)?))
+}
+
+#[cfg(windows)]
+pub fn parse_windows_activation_args(args: &[String], app_id: &str) -> Option<(String, String)> {
+    let url = match args {
+        [_, url] => url,
+        [_, isolated, visible, url]
+            if app_id == "com.nanzhufeng.ai.desktop.windowsacceptance"
+                && isolated == "--windows-isolated-normal-startup"
+                && visible == "--windows-acceptance-visible" => url,
+        _ => return None,
+    };
+    let prefix = format!("{}://open/", activation_scheme(app_id)?);
+    let (area, run_id) = url.strip_prefix(&prefix)?.split_once('/')?;
+    if !matches!(area, "CHAT" | "WORK") || !safe_opaque_id(run_id) || run_id.len() > 200 {
+        return None;
+    }
+    Some((area.to_owned(), run_id.to_owned()))
+}
+
+#[cfg(windows)]
+pub fn record_windows_activation(app: &tauri::AppHandle, args: &[String]) -> bool {
+    use tauri::Emitter;
+    let Some((area, run_id)) = parse_windows_activation_args(args, &app.config().identifier) else {
+        return false;
+    };
+    let Ok(mut pending) = windows_activations().lock() else { return false };
+    if !pending.iter().any(|item| item.0 == area && item.1 == run_id) {
+        pending.push_back((area.clone(), run_id.clone()));
+        while pending.len() > MAX_PENDING_ACTIONS {
+            pending.pop_front();
+        }
+    }
+    drop(pending);
+    let _ = app.emit(ACTION_EVENT_NAME, serde_json::json!({"clickId":run_id,"dataArea":area}));
+    true
+}
+
+#[cfg(windows)]
+pub fn pending_windows_activation_area() -> Option<String> {
+    windows_activations().lock().ok()?.front().map(|item| item.0.clone())
+}
+
+#[cfg(windows)]
+pub fn take_windows_activation(run_id: &str, data_area: &str) -> bool {
+    let Ok(mut pending) = windows_activations().lock() else { return false };
+    let Some(index) = pending.iter().position(|item| item.0 == data_area && item.1 == run_id) else {
+        return false;
+    };
+    pending.remove(index);
+    true
+}
+
+#[cfg(windows)]
+pub fn drain_windows_activations(data_area: &str) -> Vec<String> {
+    let Ok(mut pending) = windows_activations().lock() else { return Vec::new() };
+    let mut selected = Vec::new();
+    pending.retain(|item| {
+        if item.0 == data_area {
+            selected.push(item.1.clone());
+            false
+        } else { true }
+    });
+    selected
+}
+
+#[cfg(windows)]
+mod windows_bridge {
+    use super::*;
+    use windows::core::HSTRING;
+    use windows::Data::Xml::Dom::XmlDocument;
+    use windows::UI::Notifications::{NotificationSetting, ToastNotification, ToastNotificationManager};
+    use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
+    use windows::Win32::System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED, RO_INIT_SINGLETHREADED};
+
+    // Scope only the successful initialization performed by this call.
+    struct WinRtApartment(std::marker::PhantomData<std::rc::Rc<()>>);
+    impl Drop for WinRtApartment {
+        fn drop(&mut self) { unsafe { RoUninitialize() }; }
+    }
+    fn initialize_apartment() -> windows::core::Result<WinRtApartment> {
+        match unsafe { RoInitialize(RO_INIT_MULTITHREADED) } {
+            Ok(()) => {},
+            Err(error) if error.code() == RPC_E_CHANGED_MODE => {
+                // A UI caller may already own a classic STA. Initialize WinRT with
+                // that compatible model instead of treating the caller as unavailable.
+                unsafe { RoInitialize(RO_INIT_SINGLETHREADED) }?;
+            },
+            Err(error) => return Err(error),
+        }
+        // Both S_OK and S_FALSE count as one successful call to balance on this thread.
+        Ok(WinRtApartment(std::marker::PhantomData))
+    }
+
+    #[cfg(test)]
+    mod apartment_tests {
+        use super::*;
+        use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED};
+        struct ExistingCom;
+        impl Drop for ExistingCom { fn drop(&mut self) { unsafe { CoUninitialize() }; } }
+        #[test]
+        fn sta_caller_can_initialize_and_retains_its_com_apartment() {
+            std::thread::spawn(|| {
+                unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.ok().unwrap();
+                let _existing = ExistingCom;
+                assert_eq!(unsafe { RoInitialize(RO_INIT_MULTITHREADED) }.unwrap_err().code(), RPC_E_CHANGED_MODE);
+                let apartment = initialize_apartment().expect("STA caller must reach notification APIs");
+                drop(apartment);
+                assert_eq!(unsafe { RoInitialize(RO_INIT_MULTITHREADED) }.unwrap_err().code(), RPC_E_CHANGED_MODE,
+                    "Notification scope must not uninitialize the caller's STA");
+            }).join().unwrap();
+        }
+        #[test]
+        fn mta_caller_keeps_its_existing_com_apartment_after_nested_scopes() {
+            std::thread::spawn(|| {
+                unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.ok().unwrap();
+                let _existing = ExistingCom;
+                let first = initialize_apartment().unwrap();
+                let second = initialize_apartment().unwrap();
+                drop(second); drop(first);
+                assert_eq!(unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }, RPC_E_CHANGED_MODE,
+                    "Each successful WinRT scope must release only its own initialization count");
+            }).join().unwrap();
+        }
+        #[test]
+        fn fresh_thread_can_reinitialize_sta_after_the_winrt_scope_ends() {
+            std::thread::spawn(|| {
+                drop(initialize_apartment().unwrap());
+                unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.ok().unwrap();
+                let _existing = ExistingCom;
+            }).join().unwrap();
+        }
+    }
+
+    static APP_ID: OnceLock<String> = OnceLock::new();
+
+    pub fn install(app: &tauri::AppHandle) -> Result<(), &'static str> {
+        APP_ID.set(app.config().identifier.clone()).map_err(|_| "BRIDGE_ALREADY_INSTALLED")?;
+        update_status(true, "HOT_CLICK_READY");
+        Ok(())
+    }
+
+    pub fn permission_state() -> Result<String, &'static str> {
+        let _apartment = initialize_apartment().map_err(|_| "PERMISSION_APARTMENT_UNAVAILABLE")?;
+        let app_id = APP_ID.get().ok_or("BRIDGE_NOT_INITIALIZED")?;
+        let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(app_id))
+            .map_err(|_| "PERMISSION_NOTIFIER_UNAVAILABLE")?;
+        let setting = notifier.Setting().map_err(|_| "PERMISSION_READ_UNKNOWN")?;
+        Ok(if setting == NotificationSetting::Enabled { "granted" } else { "denied" }.into())
+    }
+
+    pub fn send(
+        _app: &tauri::AppHandle,
+        run_id: &str,
+        title: &str,
+        body: &str,
+        target: &ReminderNotificationTarget,
+        data_area: &str,
+    ) -> NotificationSendOutcome {
+        if !matches!(data_area, "CHAT" | "WORK")
+            || !safe_opaque_id(run_id)
+            || title.trim().is_empty()
+            || title.len() > 160
+            || body != SAFE_BODY
+            || !validate_target(target)
+        {
+            return NotificationSendOutcome::Failed;
+        }
+        let permission = permission_state();
+        if matches!(permission.as_deref(), Ok("denied")) {
+            return NotificationSendOutcome::Failed;
+        }
+        let Some(app_id) = APP_ID.get() else { return NotificationSendOutcome::Failed };
+        let Some(launch) = windows_activation_url(app_id, data_area, run_id) else {
+            return NotificationSendOutcome::Failed;
+        };
+        let Ok(_apartment) = initialize_apartment() else { return NotificationSendOutcome::Failed };
+        let xml = format!(
+            "<toast activationType=\"protocol\" launch=\"{launch}\"><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{}</text></binding></visual></toast>",
+            quick_xml::escape::escape(title), quick_xml::escape::escape(body),
+        );
+        let delivered = (|| -> windows::core::Result<()> {
+            let document = XmlDocument::new()?;
+            document.LoadXml(&HSTRING::from(xml))?;
+            let toast = ToastNotification::CreateToastNotification(&document)?;
+            toast.SetTag(&HSTRING::from(run_id))?;
+            toast.SetGroup(&HSTRING::from("nanfeng-reminders-v1"))?;
+            let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(app_id))?;
+            notifier.Show(&toast)
+        })();
+        if delivered.is_err() { return NotificationSendOutcome::Failed; }
+        if permission.is_err() {
+            NotificationSendOutcome::Unknown
+        } else {
+            NotificationSendOutcome::Sent
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -328,6 +567,7 @@ mod macos {
         let user_info = request.content().userInfo();
         let action = ReminderNotificationAction {
             click_id: request.identifier().to_string(),
+            data_area: default_chat_area(),
             route: modern_dictionary_string(&user_info, "route")?,
             plan_id: modern_dictionary_string(&user_info, "planId")?,
             workspace_id: modern_dictionary_string(&user_info, "workspaceId")?,
@@ -354,6 +594,7 @@ mod macos {
         let user_info = notification.userInfo()?;
         let action = ReminderNotificationAction {
             click_id,
+            data_area: default_chat_area(),
             route: dictionary_string(&user_info, "route")?,
             plan_id: dictionary_string(&user_info, "planId")?,
             workspace_id: dictionary_string(&user_info, "workspaceId")?,
@@ -565,7 +806,11 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), &'static str> {
     {
         macos::install(app)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows_bridge::install(app)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = app;
         update_status(false, "UNSUPPORTED_PLATFORM");
@@ -578,7 +823,11 @@ pub fn permission_state() -> Result<String, &'static str> {
     {
         macos::permission_state()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows_bridge::permission_state()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         Ok("unavailable".into())
     }
@@ -589,7 +838,11 @@ pub fn request_permission() -> Result<String, &'static str> {
     {
         macos::request_permission()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows_bridge::permission_state()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         Ok("unavailable".into())
     }
@@ -601,14 +854,20 @@ pub fn send(
     title: &str,
     body: &str,
     target: &ReminderNotificationTarget,
+    data_area: &str,
 ) -> NotificationSendOutcome {
     #[cfg(target_os = "macos")]
     {
-        let _ = app;
+        let _ = (app, data_area);
         macos::send(run_id, title, body, target)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
     {
+        windows_bridge::send(app, run_id, title, body, target, data_area)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        let _ = data_area;
         use tauri_plugin_notification::NotificationExt;
         if !safe_opaque_id(run_id) || body != SAFE_BODY || !validate_target(target) {
             return NotificationSendOutcome::Failed;
@@ -627,6 +886,7 @@ mod tests {
     fn action(click_id: &str) -> ReminderNotificationAction {
         ReminderNotificationAction {
             click_id: click_id.into(),
+            data_area: "CHAT".into(),
             route: ROUTE.into(),
             plan_id: "plan-safe".into(),
             workspace_id: "workspace-safe".into(),
@@ -658,7 +918,42 @@ mod tests {
         assert!(queue.record(action("run-1")));
         assert!(queue.record(action("run-2")));
         assert!(!queue.record(action("run-1")));
-        assert_eq!(queue.take("run-2").unwrap().click_id, "run-2");
-        assert_eq!(queue.drain(), vec![action("run-1")]);
+        assert_eq!(queue.take("run-2", "CHAT").unwrap().click_id, "run-2");
+        assert_eq!(queue.drain("CHAT"), vec![action("run-1")]);
+    }
+
+    #[test]
+    fn notification_actions_keep_their_data_area_until_that_area_consumes_them() {
+        let mut queue = ActionQueue::default();
+        let mut work = action("work-run");
+        work.data_area = "WORK".into();
+        assert!(queue.record(work.clone()));
+        assert!(queue.take("work-run", "CHAT").is_none());
+        assert!(queue.drain("CHAT").is_empty());
+        assert_eq!(queue.drain("WORK"), vec![work]);
+        assert!(queue.record(action("shared-id")));
+        let mut work_same_id = action("shared-id");
+        work_same_id.data_area = "WORK".into();
+        assert!(queue.record(work_same_id));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_activation_accepts_only_its_exact_opaque_run_and_area() {
+        let app_id = "com.nanzhufeng.ai.desktop.windowsacceptance";
+        let url = windows_activation_url(app_id, "WORK", "reminder-run-1").unwrap();
+        let args = vec!["app.exe".into(), url.clone()];
+        assert_eq!(parse_windows_activation_args(&args, app_id), Some(("WORK".into(), "reminder-run-1".into())));
+        for bad in [
+            url.replace("/WORK/", "/OTHER/"),
+            url.replace("reminder-run-1", "../private"),
+            format!("{url}?path=private"),
+            url.replace("windows-acceptance-reminder", "reminder"),
+        ] {
+            assert!(parse_windows_activation_args(&["app.exe".into(), bad], app_id).is_none());
+        }
+        assert!(parse_windows_activation_args(&["app.exe".into(), url, "extra".into()], app_id).is_none());
+        assert_eq!(parse_windows_activation_args(&["app.exe".into(), "--windows-isolated-normal-startup".into(), "--windows-acceptance-visible".into(), windows_activation_url(app_id, "CHAT", "run-2").unwrap()], app_id), Some(("CHAT".into(), "run-2".into())));
+        assert!(windows_activation_url(app_id, "CHAT", "run/other").is_none());
     }
 }

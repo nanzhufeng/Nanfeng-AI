@@ -33,16 +33,42 @@ const CSS_VARIABLES = Object.freeze({
   placeholder: '--input-placeholder-text', border: '--neutral-border', divider: '--subtle-divider',
 });
 
+const CONTROL_SURFACES = Object.freeze({
+  light: Object.freeze({ selected: '#e8e8e8', hover: '#efefef', pressed: '#d4d4d4', focus: '#dddddd' }),
+  dark: Object.freeze({ selected: '#505050', hover: '#575757', pressed: '#616161', focus: '#656565' }),
+});
+
+function readableControlAccent(accent, backgrounds, dark) {
+  const rgb = value => value.slice(1).match(/../g).map(channel => parseInt(channel, 16));
+  const luminance = channels => channels.map(channel => {
+    const value = channel / 255;
+    return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+  }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+  const original = rgb(accent);
+  const surfaces = Object.values(backgrounds).map(color => luminance(rgb(color)));
+  for (let step = 0; step <= 100; step++) {
+    const channels = original.map(channel => Math.round(channel + ((dark ? 255 : 0) - channel) * step / 100));
+    const text = luminance(channels);
+    if (surfaces.every(surface => (Math.max(text, surface) + .05) / (Math.min(text, surface) + .05) >= 4.55)) {
+      return `#${channels.map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
+    }
+  }
+  return dark ? '#ffffff' : '#000000';
+}
+
 export function desktopThemeProjection(value = {}, prefersDark = false) {
   const projection = appearanceProjection(value, prefersDark);
   const resolvedMode = projection.dark ? 'dark' : 'light';
   const darkAccent = DARK_ACCENT_SURFACES[projection.appearance.themeColor] || DARK_ACCENT_SURFACES.orange;
+  const controls = CONTROL_SURFACES[resolvedMode];
   return {
     ...projection,
     resolvedMode,
     surfaces: SURFACES[resolvedMode],
     accentSoft: projection.dark ? darkAccent.soft : projection.theme.soft,
     userBubble: projection.dark ? darkAccent.bubble : projection.theme.bubble,
+    controls,
+    controlAccentText: readableControlAccent(projection.theme.accent, controls, projection.dark),
   };
 }
 
@@ -60,6 +86,8 @@ export function applyDesktopThemeToRoot(root, value = {}, prefersDark = false) {
   root.style.setProperty('--accent-orange-soft', projection.accentSoft);
   root.style.setProperty('--accent-subtle-border', projection.theme.border);
   root.style.setProperty('--user-message-bubble', projection.userBubble);
+  root.style.setProperty('--control-accent-text', projection.controlAccentText);
+  for (const [state, surface] of Object.entries(projection.controls)) root.style.setProperty(`--control-${state}-surface`, surface);
   for (const [key, cssName] of Object.entries(CSS_VARIABLES)) root.style.setProperty(cssName, projection.surfaces[key]);
   root.style.setProperty('--chat-text', projection.surfaces.body);
   root.style.setProperty('--chat-muted', projection.surfaces.secondary);

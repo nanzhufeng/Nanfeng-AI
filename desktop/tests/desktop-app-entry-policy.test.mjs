@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {APP_ENTRY_RETENTION_MS, DesktopAppEntry, retainedEntry} from '../src/desktop-app-entry.mjs';
+import {hasRunningGeneration} from '../src/generation-continuity.mjs';
 const start=1_800_000_000_000;
 const record={workspaceId:'workspace',conversationId:'last-exit',backgroundAt:start};
+test('preparation before a submission or first delta retains the generating route',()=>{
+  assert.equal(hasRunningGeneration({ordinarySendPreparing:true}),true);
+});
+test('a generation starting while hidden retains its route',()=>{
+  let now=start; const e=new DesktopAppEntry({setItem(){},getItem(){return null;}},()=>now);
+  e.leave('CHAT','workspace','last-exit');now+=APP_ENTRY_RETENTION_MS;
+  assert.equal(e.enter(true),false);
+});
 test('short exit and 15 minute boundary match Android entry policy',()=>{
   assert.deepEqual(retainedEntry(record,start+899999),{workspaceId:'workspace',conversationId:'last-exit'});
   assert.equal(retainedEntry(record,start+APP_ENTRY_RETENTION_MS),null);

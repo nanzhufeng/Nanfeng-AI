@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "version": "1.0.32",
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "nanfeng-ai-reminder"
+        ]
+      }
+    }
+  },
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data:; media-src 'self' data: blob: nfai-media: http://nfai-media.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'"
+    },
+    "windows": [
+      {
+        "label": "main",
+        "dragDropEnabled": false,
+        "title": "南枫 AI",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 780,
+        "minHeight": 560
+      }
+    ]
+  },
+  "bundle": {
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "resources/media-tools/windows-x86_64": "media-tools/windows-x86_64"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "SimpChinese"
+        ],
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      }
+    }
+  },
+  "productName": "南枫 AI"
+}

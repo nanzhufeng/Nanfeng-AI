@@ -7,6 +7,20 @@ import { cnyCostLabel, projectedMessageCost } from '../src/desktop-cost-estimato
 
 const chatShellCss = await readFile(new URL('../src/chat-shell.css', import.meta.url), 'utf8');
 
+test('Chinese punctuation opens emphasis and literal HTML retains authored underscores', () => {
+  const html = renderSafeMarkdown('中文、*斜体*、_强调_。\n\n<script data-name="__literal">window.__literal=true</script>');
+  assert.match(html, /、<em>斜体<\/em>、<em>强调<\/em>。/);
+  assert.match(html, /&lt;script data-name=&quot;__literal&quot;&gt;window.__literal=true&lt;\/script&gt;/);
+  assert.doesNotMatch(html, /<script/);
+});
+
+test('short and long pipe rows stay in the existing table with empty cells padded', () => {
+  const html = renderSafeMarkdown('| 名称 | 数值 |\n| --- | --- |\n| Unicode | 南枫😀 |\n| 短行 |\n| 长行 | 两列 | 第三列 |');
+  assert.equal((html.match(/<table>/g) || []).length, 1);
+  assert.match(html, /<tr><td>短行<\/td><td><\/td><td><\/td><\/tr>/);
+  assert.match(html, /<tr><td>长行<\/td><td>两列<\/td><td>第三列<\/td><\/tr>/);
+});
+
 test('assistant Markdown preserves structure while escaping executable HTML', () => {
   const html = renderSafeMarkdown(`# 标题\n\n- 第一项\n- **第二项**\n\n> 引用\n\n| 项目 | 状态 |\n| --- | --- |\n| 搜索 | 完成 |\n\n\`inline\`\n\n\`\`\`js\nalert('<x>')\n\`\`\`\n\n<script>alert(1)</script>\n\n[官网](https://example.com) [危险](javascript:alert(1))`);
   for (const token of ['<h2>标题</h2>', 'chat-markdown-list chat-markdown-unordered', '<strong>第二项</strong>', '<blockquote>', '<table>', '<code>inline</code>', 'chat-markdown-code', 'https://example.com/']) assert.match(html, new RegExp(token));
@@ -46,6 +60,13 @@ test('imported source links use the Android compact source shortcut rather than 
   assert.match(html, /csindex\.com\.cn/);
   assert.doesNotMatch(html, /chat-markdown-link/);
   assert.doesNotMatch(html, />中证指数有限公司</);
+});
+
+test('escaped provider source titles display plainly while keeping only the verified destination', () => {
+  const html = renderSafeMarkdown('来源：\n- [Official\\](https://attacker.example)\\[Fake \\<script\\>](https://example.test/ab)');
+  assert.match(html, /href&quot;:&quot;https:\/\/example\.test\/ab&quot;/);
+  assert.doesNotMatch(html, /href&quot;:&quot;https:\/\/attacker\.example/);
+  assert.match(html, /<span>Official\]\(https:\/\/attacker\.example\)\[Fake &lt;script&gt;<\/span>/);
 });
 
 test('source website glyphs retain the Android-colored circular surface and visible globe stroke', () => {

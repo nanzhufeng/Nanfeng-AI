@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
+
+const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
 import { hasExplicitReminderIntent } from '../src/chat-shell.mjs';
 import { renderAndroidSettingsShell } from '../src/android-settings-shell.mjs';
 import { reminderNotificationAction, reminderNotificationExtra } from '../src/reminder-notification-routing.mjs';
@@ -35,14 +39,83 @@ test('reminder settings retain notification controls without duplicate plan mana
   assert.doesNotMatch(html, /退出后后台唤醒：/);
 });
 
+test('reminder settings disclose when background scheduling was requested but registration failed', () => {
+  const base = { page: 'reminders', native: true,
+    capabilities: { monitorNotifications: true, reminderSuggestions: true, unreadIndicators: true } };
+  const failed = renderAndroidSettingsShell({ ...base,
+    backgroundRuntime: { desiredEnabled: true, installed: false, safeCode: 'INSTALL_FAILED' } });
+  assert.match(failed, /系统后台任务未注册/);
+  assert.match(failed, /关闭应用后提醒不会按计划执行/);
+  const installed = renderAndroidSettingsShell({ ...base,
+    backgroundRuntime: { desiredEnabled: true, installed: true, safeCode: 'INSTALLED' } });
+  assert.match(installed, /系统后台任务已注册/);
+  assert.doesNotMatch(installed, /系统后台任务未注册/);
+});
+
+test('confirming a reminder reports persistence separately from background registration', async () => {
+  const source = (await readFile(resolve(desktopRoot, 'src/app.mjs'), 'utf8')).replaceAll('\r\n', '\n');
+  const start = source.indexOf("app.addEventListener('click', event => {\n  const target = event.target.closest?.('[data-action]');\n  const action = target?.dataset.action;\n  const actions = ['generate-reminder-draft'");
+  assert.ok(start >= 0);
+  const end = source.indexOf('}, true);', start) + '}, true);'.length;
+  assert.ok(end > start);
+  for (const installed of [false, true]) {
+    let handler;
+    let resolveRendered;
+    const rendered = new Promise(resolveRender => { resolveRendered = resolveRender; });
+    const state = { reminderEditor: { item: { draftId: 'draft-1' } }, reminders: {}, status: '', error: '',
+      backgroundRuntime: { desiredEnabled: true, installed, safeCode: installed ? 'INSTALLED' : 'INSTALL_FAILED' } };
+    vm.runInNewContext(source.slice(start, end), {
+      app: { addEventListener(_type, callback) { handler = callback; } },
+      state, native: true, render() { resolveRendered(); },
+      reminderFormValues: () => ({ title: '合成提醒', scheduleKind: 'ONCE' }),
+      invoke: async () => ({ drafts: [], plans: [{ planId: 'plan-1' }] }),
+      loadDesktopBackgroundRuntime: async () => state.backgroundRuntime,
+    });
+    handler({ target: { closest: () => ({ dataset: { action: 'confirm-reminder-draft' } }) },
+      preventDefault() {}, stopImmediatePropagation() {} });
+    await rendered;
+    assert.match(state.status, /提醒计划已确认并持久化/);
+    assert.match(state.status, installed ? /系统后台任务已注册/ : /系统后台任务未注册；关闭应用后不会按计划执行/);
+    assert.equal(state.error, '');
+  }
+});
+
+test('late reminder result after area switch cannot write an error into the new area', async () => {
+  const source = (await readFile(resolve(desktopRoot, 'src/app.mjs'), 'utf8')).replaceAll('\r\n', '\n');
+  const start = source.indexOf("app.addEventListener('click', event => {\n  const target = event.target.closest?.('[data-action]');\n  const action = target?.dataset.action;\n  const actions = ['generate-reminder-draft'");
+  assert.ok(start >= 0);
+  const end = source.indexOf('}, true);', start) + '}, true);'.length;
+  let handler;
+  let rejectRead;
+  let renderCount = 0;
+  const chat = { dataArea: 'CHAT', current: { summary: { id: 'chat-workspace' } }, reminders: { drafts: [], plans: [] }, status: '', error: '' };
+  const work = { dataArea: 'WORK', reminders: { drafts: [], plans: [] }, status: '', error: '' };
+  const context = vm.createContext({
+    app: { addEventListener(_type, callback) { handler = callback; } },
+    state: chat, native: true, c09ReminderPreview: false, desktopEntryRouteGeneration: 0, cloudOpenAreaGeneration: 0,
+    render() { renderCount += 1; },
+    invoke: () => new Promise((_resolve, reject) => { rejectRead = reject; }),
+  });
+  vm.runInContext(source.slice(start, end), context);
+  handler({ target: { closest: () => ({ dataset: { action: 'create-manual-reminder-draft' } }) },
+    preventDefault() {}, stopImmediatePropagation() {} });
+  assert.equal(typeof rejectRead, 'function');
+  context.state = work;
+  rejectRead(Object.assign(new Error('原数据区的操作结果已留在原区'), { code: 'STALE_DATA_AREA' }));
+  await new Promise(resolveTick => setImmediate(resolveTick));
+  assert.equal(work.error, '');
+  assert.equal(chat.error, '');
+  assert.equal(renderCount, 0);
+});
+
 test('desktop reminder bridge keeps explicit confirmation, narrow notification permissions and safe click routing', async () => {
-  const appSource = await readFile(resolve('src/app.mjs'), 'utf8');
-  const buildSource = await readFile(resolve('scripts/build.mjs'), 'utf8');
-  const capability = await readFile(resolve('src-tauri/capabilities/default.json'), 'utf8');
-  const rust = await readFile(resolve('src-tauri/src/desktop_reminders_v1.rs'), 'utf8');
-  const nativeBridge = await readFile(resolve('src-tauri/src/desktop_reminder_notification_v1.rs'), 'utf8');
-  const backgroundOwner = await readFile(resolve('src-tauri/src/desktop_background_runtime_v1.rs'), 'utf8');
-  const runtimeOwner = await readFile(resolve('src-tauri/src/lib.rs'), 'utf8');
+  const appSource = await readFile(resolve(desktopRoot, 'src/app.mjs'), 'utf8');
+  const buildSource = await readFile(resolve(desktopRoot, 'scripts/build.mjs'), 'utf8');
+  const capability = await readFile(resolve(desktopRoot, 'src-tauri/capabilities/default.json'), 'utf8');
+  const rust = await readFile(resolve(desktopRoot, 'src-tauri/src/desktop_reminders_v1.rs'), 'utf8');
+  const nativeBridge = await readFile(resolve(desktopRoot, 'src-tauri/src/desktop_reminder_notification_v1.rs'), 'utf8');
+  const backgroundOwner = await readFile(resolve(desktopRoot, 'src-tauri/src/desktop_background_runtime_v1.rs'), 'utf8');
+  const runtimeOwner = await readFile(resolve(desktopRoot, 'src-tauri/src/lib.rs'), 'utf8');
   assert.match(appSource, /confirm_desktop_reminder_draft/);
   assert.match(appSource, /update_desktop_reminder_plan/);
   assert.match(appSource, /send_pending_desktop_reminder_notification/);
@@ -76,8 +149,10 @@ test('desktop reminder bridge keeps explicit confirmation, narrow notification p
   assert.doesNotMatch(backgroundOwner, /ProgramArguments[\s\S]{0,300}conversation_id/);
   assert.match(runtimeOwner, /try_lock_exclusive/);
   assert.match(runtimeOwner, /nanfeng-exit-generation-drain/);
-  assert.match(runtimeOwner, /Duration::from_secs\(30 \* 60\)/);
-  assert.match(runtimeOwner, /drop\(store\);[\s\S]{0,400}reconcile_desktop_background_runtime\(&app\)/);
+  const exitOwner = await readFile(resolve(desktopRoot, 'src-tauri/src/desktop_exit_drain_v1.rs'), 'utf8');
+  assert.match(exitOwner, /CANCEL_AFTER[^;]*Duration::from_secs\(30\s*\*\s*60\)/);
+  assert.match(runtimeOwner, /desktop_exit_drain_v1::CANCEL_AFTER/);
+  assert.match(runtimeOwner, /let _ = reconcile_desktop_background_runtime\(&chat_app\)/);
 });
 
 test('notification action payloads resolve to the exact local reminder route without trusting other fields', () => {
@@ -86,6 +161,7 @@ test('notification action payloads resolve to the exact local reminder route wit
   assert.deepEqual(reminderNotificationExtra({ extra: JSON.stringify(expected) }), expected);
   assert.deepEqual(reminderNotificationExtra({ notification: { extra: { ...expected, planId: 7, leaked: 'ignored' } } }), { ...expected, planId: '' });
   assert.deepEqual(reminderNotificationExtra({ notification: { extra: 'not-json' } }), { route: '', planId: '', workspaceId: '', conversationId: '' });
-  assert.deepEqual(reminderNotificationAction({ payload: { clickId: 'run-7', ...expected, leaked: 'ignored' } }), { clickId: 'run-7', ...expected });
-  assert.deepEqual(reminderNotificationAction({ payload: { clickId: 7, ...expected } }), { clickId: '', ...expected });
+  assert.deepEqual(reminderNotificationAction({ payload: { clickId: 'run-7', ...expected, leaked: 'ignored' } }), { clickId: 'run-7', dataArea: 'CHAT', ...expected });
+  assert.deepEqual(reminderNotificationAction({ payload: { clickId: 'run-8', dataArea: 'WORK', ...expected } }), { clickId: 'run-8', dataArea: 'WORK', ...expected });
+  assert.deepEqual(reminderNotificationAction({ payload: { clickId: 7, ...expected } }), { clickId: '', dataArea: 'CHAT', ...expected });
 });

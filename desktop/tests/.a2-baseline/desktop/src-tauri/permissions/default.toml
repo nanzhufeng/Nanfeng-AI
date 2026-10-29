@@ -1,0 +1,334 @@
+[[permission]]
+identifier = "allow-desktop-reminders"
+description = "Allows only reviewable reminder drafts, explicit confirm/reject/edit, persisted local schedules, runtime due execution through the existing fixed Provider transport and usage ledger, pause/resume/delete/retry, content-safe notification receipts and exact opaque-id routing. It grants no silent plan creation, arbitrary URL/model/credential/path access, notification permission bypass or UNKNOWN auto-resend."
+commands.allow = ["read_desktop_reminders", "generate_desktop_reminder_draft", "retry_desktop_reminder_draft", "create_desktop_manual_reminder_draft", "confirm_desktop_reminder_draft", "reject_desktop_reminder_draft", "update_desktop_reminder_plan", "set_desktop_reminder_plan_paused", "retry_desktop_reminder_plan", "delete_desktop_reminder_plan", "run_desktop_reminders_due", "read_pending_desktop_reminder_notifications", "acknowledge_desktop_reminder_notification", "read_desktop_reminder_notification_bridge_status", "read_desktop_reminder_notification_permission", "request_desktop_reminder_notification_permission", "resolve_desktop_reminder_notification_target", "read_pending_desktop_reminder_activation_area", "consume_desktop_reminder_notification_action", "drain_desktop_reminder_notification_actions", "activate_desktop_reminder_notification_target", "send_pending_desktop_reminder_notification"]
+
+[[permission]]
+identifier = "allow-stage-preflight-selected-exchange"
+description = "Allows only a user-selected .nfai-exchange file to be bounded and copied into private app data staging."
+commands.allow = ["stage_preflight_selected_exchange"]
+
+[[permission]]
+identifier = "allow-import-staged-exchange-as-new-workspace"
+description = "Allows a preflighted private staging ID to become one new isolated Desktop workspace."
+commands.allow = ["import_staged_exchange_as_new_workspace"]
+
+[[permission]]
+identifier = "allow-import-desktop-workspace-exchange-v2-selected"
+description = "Allows one user-selected exact .nfai-exchange or Android DocumentsUI .nfai-exchange.zip package to enter only the v2 strict-preflight/private-archive/single-transaction owner. It grants no path projection, arbitrary filesystem API, v1 staging, credential, transport, Provider or model access."
+commands.allow = ["import_desktop_workspace_exchange_v2_selected"]
+
+[[permission]]
+identifier = "allow-reexport-desktop-workspace-exchange-v2-selected"
+description = "Allows listing committed private v2 exchange records and re-exporting exactly one UI-selected committed v2 owner only to a native-save-picker-selected .nfai-exchange target. It grants no v1 workspace, path projection, arbitrary filesystem API, credential, transport, Provider or model access."
+commands.allow = ["list_desktop_workspace_exchange_v2_committed", "reexport_desktop_workspace_exchange_v2_selected"]
+
+[[permission]]
+identifier = "allow-list-desktop-workspaces"
+description = "Allows read-only workspace summaries from Rust-owned SQLite."
+commands.allow = ["list_desktop_workspaces"]
+
+[[permission]]
+identifier = "allow-read-desktop-workspace"
+description = "Allows one typed workspace ID, or up to 10000 explicit cloud-list workspace IDs with their local favorites, to be projected through the same read-only Rust-owned SQLite owner. No credentials, transport, write or other-area fallback."
+commands.allow = ["read_desktop_workspace", "read_desktop_cloud_workspace_projections"]
+
+[[permission]]
+identifier = "allow-ensure-desktop-local-workspace"
+description = "Initializes an empty local workspace only when the private store has none; otherwise reads the existing workspace. Does not import fixtures, create conversations, read credentials or invoke network services."
+commands.allow = ["ensure_desktop_local_workspace"]
+
+[[permission]]
+identifier = "allow-export-desktop-workspace-to-selected-path"
+description = "Allows a typed workspace ID to export only to a user-selected .nfai-exchange path."
+commands.allow = ["export_desktop_workspace_to_selected_path"]
+
+[[permission]]
+identifier = "allow-mutate-desktop-domain"
+description = "Allows only typed, revision-checked local P6-C domain intents through Rust SQLite."
+commands.allow = ["mutate_desktop_domain"]
+
+[[permission]]
+identifier = "allow-desktop-ordinary-chat"
+description = "Allows one user send or explicit retry to atomically persist an ordinary-chat Attempt and use only the fixed provider/model registry, scoped system credential, verified message attachments and bounded streaming transport. Stop and latest-attempt readback are conversation/Attempt scoped; no arbitrary URL, path, credential value, silent retry or raw payload is exposed."
+commands.allow = ["preview_desktop_ordinary_chat_egress", "preview_desktop_existing_ordinary_chat_egress", "preview_desktop_ordinary_chat_retry_egress", "submit_desktop_ordinary_chat", "generate_desktop_ordinary_chat_for_saved_user", "regenerate_desktop_ordinary_chat", "retry_desktop_ordinary_chat", "cancel_desktop_ordinary_chat", "read_latest_desktop_ordinary_chat_attempt", "read_desktop_ordinary_chat_context_records", "read_desktop_ordinary_chat_context_record", "read_desktop_ordinary_chat_diagnostic_records"]
+
+[[permission]]
+identifier = "allow-desktop-compare"
+description = "Allows only stopping an already-running historical Compare execution so partial content remains recoverable. New Compare submission and branch retry are intentionally unavailable; no arbitrary provider, model, URL, credential projection or automatic resend is exposed."
+commands.allow = ["cancel_desktop_compare"]
+
+[[permission]]
+identifier = "allow-import-desktop-conversation-attachment"
+description = "Allows only a user-mediated native-picker selection, focused-Composer clipboard File bytes, or a current-window PNG camera frame into the same private content-addressed owner; it grants no clipboard path or URI, arbitrary camera control, filesystem API, transport, or credential access."
+commands.allow = ["import_desktop_conversation_attachment", "import_desktop_conversation_clipboard_attachment", "import_desktop_camera_capture"]
+
+[[permission]]
+identifier = "allow-desktop-conversation-draft-recovery"
+description = "Allows only the current ordinary Composer to read or replace its own workspace and conversation scoped local recovery draft, referencing existing private attachment IDs. It grants no attachment bytes, paths, transport, credentials, automatic send, history, or access to another workspace."
+commands.allow = ["read_desktop_conversation_draft", "save_desktop_conversation_draft"]
+
+[[permission]]
+identifier = "allow-desktop-manual-area-reference"
+description = "Allows one explicit message text snapshot from the request area to be appended to the other area's unsent draft with a source revision check. It grants no attachments, automatic send, provider, credential, or broad cross-area search."
+commands.allow = ["reference_desktop_message_to_other_area"]
+
+[[permission]]
+identifier = "allow-desktop-temporary-conversation"
+description = "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, attachment binding/removal, verified image display, and irreversible clear. It grants no arbitrary path or URI, normal Conversation, workspace, search, export, cache, credential, or transport command."
+commands.allow = ["enter_or_restore_desktop_temporary_conversation", "read_desktop_temporary_conversation", "update_desktop_temporary_conversation", "append_desktop_temporary_message", "import_desktop_temporary_attachment", "import_desktop_temporary_clipboard_attachment", "import_desktop_temporary_camera_capture", "read_desktop_temporary_image_preview", "clear_desktop_temporary_conversation", "remove_desktop_temporary_attachment"]
+
+[[permission]]
+identifier = "allow-desktop-domain-history"
+description = "Allows persistent local undo, redo and recycle-bin projections."
+commands.allow = ["undo_desktop_domain", "redo_desktop_domain", "read_desktop_workbench_history", "read_desktop_memory_audit"]
+
+[[permission]]
+identifier = "allow-upsert-desktop-model-metadata"
+description = "Allows typed local-only safe provider/model metadata; no credentials or network catalog."
+commands.allow = ["upsert_desktop_model_metadata"]
+
+[[permission]]
+identifier = "allow-desktop-p6g-model-selection"
+description = "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual model override, conversation-local style/web-search preferences, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access."
+commands.allow = ["read_desktop_p6g_catalog", "read_desktop_p6g_global_default", "upsert_desktop_p6g_catalog_candidate", "remove_desktop_p6g_catalog_candidate", "read_desktop_p6g_selection", "set_desktop_p6g_global_default", "set_desktop_p6g_conversation_override", "clear_desktop_p6g_conversation_override", "set_desktop_conversation_preferences", "evaluate_desktop_p6g_auto_route"]
+
+[[permission]]
+identifier = "allow-desktop-openrouter-registry-verification"
+description = "Allows reading the saved public OpenRouter registry status and explicitly refreshing the fixed no-auth HTTPS models endpoint. It grants no credential, prompt, attachment, arbitrary URL or provider inference access."
+commands.allow = ["read_desktop_openrouter_registry_status", "refresh_desktop_openrouter_registry"]
+
+[[permission]]
+identifier = "allow-inspect-p8-agent-runs"
+description = "Allows only read-only P8 ledger inspection metadata; it cannot plan, approve, execute, pause, resume, cancel, or invoke a tool."
+commands.allow = ["inspect_p8_agent_runs"]
+
+[[permission]]
+identifier = "allow-read-dual-path-status"
+description = "Allows read-only dual-path configuration status; it cannot read credentials, create a transport, or write sync state."
+commands.allow = ["read_dual_path_status"]
+
+[[permission]]
+identifier = "allow-p6e-temporary-maintenance-acceptance"
+description = "Allows only the no-argument P6-E acceptance status and fixed owner-maintenance fixture. Rust rejects both unless the explicit acceptance environment marker selected the isolated /tmp app-private root."
+commands.allow = ["read_p6e_temporary_maintenance_acceptance_status", "run_p6e_temporary_maintenance_acceptance"]
+
+[[permission]]
+identifier = "allow-p6h-chatgpt-export-import"
+description = "Allows only the P6-H ChatGPT conversations.json adapter task: user-selected private copy, inert bounded candidate projection, explicit per-item confirm/skip/cancel/retry, and task recovery. It grants no arbitrary filesystem read, path projection, credential, transport, Provider or model invocation access."
+commands.allow = ["stage_chatgpt_export_selected", "confirm_chatgpt_import_item", "confirm_chatgpt_conflict_reimport_item", "skip_chatgpt_import_item", "read_chatgpt_import_task", "cancel_chatgpt_import_task", "retry_chatgpt_import_task", "read_latest_chatgpt_import_task", "read_p6h_diagnostics_status"]
+
+[[permission]]
+identifier = "allow-p6i-claude-export-import"
+description = "Allows only the P6-I Claude conversations.json adapter task: user-selected private copy, inert bounded candidate projection, explicit per-item confirm/skip/cancel/retry, and task recovery. It grants no arbitrary filesystem read, path projection, credential, transport, Provider or model invocation access."
+commands.allow = ["stage_claude_export_selected", "confirm_claude_import_item", "confirm_claude_conflict_reimport_item", "skip_claude_import_item", "read_claude_import_task", "cancel_claude_import_task", "retry_claude_import_task", "read_latest_claude_import_task"]
+
+[[permission]]
+identifier = "allow-p6j-nanfeng-knowledge-export-import"
+description = "Allows only the P6-J user-selected 南枫知识库完整 JSON adapter task: private copy, inert static chat candidate projection, explicit per-item confirm/skip/retry, and task recovery. It grants no arbitrary filesystem read, credential, transport, Provider, model or tool invocation access."
+commands.allow = ["stage_nanfeng_knowledge_export_selected", "confirm_nanfeng_knowledge_import_item", "confirm_nanfeng_knowledge_conflict_reimport_item", "skip_nanfeng_knowledge_import_item", "read_nanfeng_knowledge_import_task", "retry_nanfeng_knowledge_import_task", "read_latest_nanfeng_knowledge_import_task"]
+
+[[permission]]
+identifier = "allow-p6k-zip-import"
+description = "Allows only P6-K user-selected ChatGPT or Claude ZIP imports: private staging, bounded strict adapter, receipt-backed direct commit, recovery, and soft-delete. It grants no arbitrary filesystem read, credential, transport, Provider, model or tool invocation access."
+commands.allow = ["stage_p6k_zip_import_selected", "retry_p6k_zip_import_task", "skip_p6k_zip_import_failures", "delete_p6k_zip_import_batch", "read_latest_p6k_zip_import_task", "link_p6k_zip_manual_asset"]
+
+[[permission]]
+identifier = "allow-search-desktop-local-index"
+description = "Allows a normalized local query, exact request cancellation, stale-index repair, and history recording only for an explicit submitted query through the Rust-owned search owner. It grants no arbitrary filesystem, transport, credential, export, or media access."
+commands.allow = ["search_desktop_local_index", "query_desktop_local_index", "cancel_desktop_local_search", "repair_desktop_local_search_index_if_stale", "record_desktop_local_search_history"]
+
+[[permission]]
+identifier = "allow-catalog-desktop-local-index"
+description = "Allows Settings 本机数据 to open a blank-query category catalogue from the same Rust-owned safe search index across local workspaces. It records no search history and grants no body, filesystem, transport, credential, export or media access."
+commands.allow = ["catalog_desktop_local_index"]
+
+[[permission]]
+identifier = "allow-read-desktop-local-search-history"
+description = "Allows read-only projection of normalized owner-local search history."
+commands.allow = ["read_desktop_local_search_history"]
+
+[[permission]]
+identifier = "allow-clear-desktop-local-search-history"
+description = "Allows clearing only normalized owner-local search history; it cannot clear conversations, index rows, or workspace content."
+commands.allow = ["clear_desktop_local_search_history"]
+
+[[permission]]
+identifier = "allow-read-desktop-image-preview"
+description = "Allows a workspace-owned image attachment ID to produce verified local thumbnail or user-requested original display bytes; no path, URI or arbitrary file read is granted."
+commands.allow = ["read_desktop_image_preview"]
+
+[[permission]]
+identifier = "allow-read-desktop-pdf-preview"
+description = "Allows only a workspace-owned PDF attachment ID and 1-based page to produce an owner-verified inert local display payload; no path, URI, text extraction, script action, transport or arbitrary file read is granted."
+commands.allow = ["read_desktop_pdf_preview", "begin_desktop_pdf_preview", "cancel_desktop_pdf_preview"]
+
+[[permission]]
+identifier = "allow-read-desktop-video-preview"
+description = "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce owner-verified metadata and a private range-readable media URL; no path, transport, decoder control, or arbitrary file read is granted."
+commands.allow = ["read_desktop_video_preview"]
+
+[[permission]]
+identifier = "allow-save-desktop-video-preview-position"
+description = "Allows only a workspace-owned verified MP4 attachment ID and its local resume position to be recorded; it returns no video bytes, path, URI, transport, or arbitrary file read."
+commands.allow = ["save_desktop_video_preview_position"]
+
+[[permission]]
+identifier = "allow-read-desktop-video-thumbnail"
+description = "Allows only a workspace-owned, hash-verified MP4 attachment ID to return one bounded raster poster frame; no video payload, path, URI, decoder control, or arbitrary file read is granted."
+commands.allow = ["read_desktop_video_thumbnail", "begin_desktop_video_thumbnail", "cancel_desktop_video_thumbnail"]
+
+[[permission]]
+identifier = "allow-read-desktop-search-attachment-preview"
+description = "Allows only a workspace-owned, hash-verified attachment ID to return one bounded inert search-card preview: PDF first-page pixels, UTF-8 text excerpt, or audio duration. It grants no path, media payload, playback, script, transport, export, or arbitrary file read."
+commands.allow = ["read_desktop_search_attachment_preview"]
+
+[[permission]]
+identifier = "allow-read-desktop-audio-preview"
+description = "Allows only a workspace-owned verified audio attachment ID and local resume position; no path, URI, transport, or arbitrary file read is granted."
+commands.allow = ["read_desktop_audio_preview"]
+
+[[permission]]
+identifier = "allow-save-desktop-audio-preview-position"
+description = "Allows only a workspace-owned verified audio attachment ID and its local resume position to be recorded; it returns no audio bytes, path, URI, transport, or arbitrary file read."
+commands.allow = ["save_desktop_audio_preview_position"]
+
+[[permission]]
+identifier = "allow-read-desktop-text-preview"
+description = "Allows only a workspace-owned verified text attachment ID to return bounded inert UTF-8 text; no path, URI, HTML, script, transport, or arbitrary file read is granted."
+commands.allow = ["read_desktop_text_preview"]
+
+[[permission]]
+identifier = "allow-read-desktop-archive-preview"
+description = "Allows only a workspace-owned, hash-verified ZIP attachment ID to return a bounded safe directory projection and one explicitly selected safe relative entry as inert text, image pixels, or PDF page pixels. It grants no path, extraction, executable content, transport, or arbitrary file read."
+commands.allow = ["read_desktop_archive_preview", "read_desktop_archive_entry_preview", "begin_desktop_archive_preview", "cancel_desktop_archive_preview"]
+
+[[permission]]
+identifier = "allow-open-desktop-attachment-with-system"
+description = "Allows an explicit user gesture to hand off only a workspace-owned, hash-verified DOCX attachment to the macOS or Windows system opener. The webview never receives its path and no arbitrary path is accepted."
+commands.allow = ["open_desktop_attachment_with_system"]
+
+[[permission]]
+identifier = "allow-share-desktop-attachment"
+description = "Allows an explicit preview action to present the native macOS share picker for one workspace-owned, hash-verified attachment; no file path or bytes are returned to the renderer."
+commands.allow = ["share_desktop_attachment"]
+
+[[permission]]
+identifier = "allow-open-desktop-source-link"
+description = "Allows an explicit user gesture to hand off a validated hosted HTTP or HTTPS source URL without embedded credentials to the macOS or Windows system browser."
+commands.allow = ["open_desktop_source_link"]
+
+[[permission]]
+identifier = "allow-export-desktop-attachment-to-selected-path"
+description = "Allows one explicit native-save-picker action to copy only a workspace-owned, hash-verified attachment to that selected absolute file and verify the written bytes. It grants no path discovery, arbitrary source read, directory export, transport, credential or automatic share access."
+commands.allow = ["export_desktop_attachment_to_selected_path"]
+
+[[permission]]
+identifier = "allow-read-desktop-runtime-info"
+description = "Allows only the current packaged application version, operating-system family and CPU architecture to be shown in About. It grants no path, environment, device identifier, credential or network access."
+commands.allow = ["read_desktop_runtime_info"]
+
+[[permission]]
+identifier = "allow-read-desktop-c16-visual-acceptance-state"
+description = "Allows only the validated C16 appearance, font and layer tuple selected by the diagnostic-only isolated acceptance gate. Normal startup returns no tuple; this grants no path, environment, data, credential, provider or network access."
+commands.allow = ["read_desktop_c16_visual_acceptance_state"]
+
+[[permission]]
+identifier = "allow-write-desktop-markdown-to-selected-path"
+description = "Allows only bounded visible conversation Markdown to be atomically written to one native-save-picker-selected absolute .md path and read back for hash verification. It grants no arbitrary read, directory traversal, attachment bytes, credential or network access."
+commands.allow = ["write_desktop_markdown_to_selected_path"]
+
+[[permission]]
+identifier = "allow-desktop-model-service-settings"
+description = "Allows the latest model-service settings contract: safe provider projections, revisioned local selection, app-private credential save, provider-scoped delete or explicit reveal, and an explicit fixed-endpoint connection probe. It grants no arbitrary URL, hidden credential read, background test, prompt, conversation or model invocation."
+commands.allow = ["read_desktop_model_service_settings", "set_desktop_model_service_enabled", "set_desktop_model_service_preset", "save_desktop_model_service_settings", "delete_desktop_model_service_credential", "reveal_desktop_model_service_credential", "test_desktop_model_service_connection"]
+
+[[permission]]
+identifier = "allow-desktop-app-settings"
+description = "Allows the native settings surface to read and revision-save only non-secret appearance and Android-parity preferences in Rust-owned SQLite. Runtime capability flags remain fail-closed; this grants no credential, notification, account, update, model, prompt, attachment, path or network access."
+commands.allow = ["read_desktop_app_settings", "save_desktop_app_settings", "read_desktop_favorite_conversation_ids", "set_desktop_conversation_favorite"]
+
+[[permission]]
+identifier = "allow-desktop-conversation-read-state"
+description = "Allows only opaque workspace/conversation read watermarks, manual unread marking, and true-open clearing in device-local SQLite. It grants no title, message body, prompt, attachment, path, credential, transport, export or account-sync access."
+commands.allow = ["read_desktop_conversation_read_state", "mark_desktop_conversation_opened", "mark_desktop_conversation_unread"]
+
+[[permission]]
+identifier = "allow-read-desktop-background-runtime"
+description = "Allows reading only the content-free macOS background wake-up status. It grants no LaunchAgent mutation, arbitrary command, path, prompt, conversation body, credential, provider payload, or network access."
+commands.allow = ["read_desktop_background_runtime"]
+
+[[permission]]
+identifier = "allow-desktop-history-knowledge"
+description = "Allows the opted-in low-frequency history-library owner to read content-free candidate projections, wake the fixed model route, explicitly retry UNKNOWN/failed work, and accept/reject/delete one candidate. It grants no arbitrary URL, credential projection, attachment/tool content, silent retry, direct Memory write, or Knowledge write before explicit acceptance."
+commands.allow = ["read_desktop_history_knowledge", "run_desktop_history_knowledge_due", "retry_desktop_history_knowledge", "accept_desktop_history_knowledge", "reject_desktop_history_knowledge", "delete_desktop_history_knowledge"]
+
+[[permission]]
+identifier = "allow-desktop-transcription"
+description = "Allows persistent workspace-scoped transcription tasks: native-picker-selected bounded media or JPG/PNG/PDF and explicit user-dropped OCR documents imported into verified private attachments, explicit Qwen ASR or GLM-OCR execution on their fixed endpoint/model with the existing provider-scoped credential, cancel/retry/delete, and native-picker-selected verified exports. It grants no arbitrary URL, path projection, recording, pause, hidden background replay, SenseVoice execution, arbitrary OCR model, or credential projection."
+commands.allow = ["read_desktop_transcription_state", "import_desktop_ocr_source", "import_desktop_ocr_drop", "run_desktop_ocr_task", "retry_desktop_transcription_task", "cancel_desktop_transcription_task", "delete_desktop_transcription_task", "export_desktop_transcription_task"]
+
+[[permission]]
+identifier = "allow-read-desktop-usage-ledger"
+description = "Allows only a safe read projection of final measured token and amount facts from the local append-only Usage Ledger. It grants no prompt, response, credential, attachment, path, mutation or provider access."
+commands.allow = ["read_desktop_usage_ledger"]
+
+[[permission]]
+identifier = "allow-desktop-local-backup-restore"
+description = "Allows only native-picker-selected .nfai-backup export, strict private-inbox preflight, explicit replacement restore, cancellation, and restart-status readback. It grants no arbitrary path discovery, credential export, network, merge, background retry, or silent continuation."
+commands.allow = ["export_desktop_local_backup", "preflight_desktop_local_backup", "restore_desktop_local_backup", "cancel_desktop_local_restore", "read_desktop_local_backup_status"]
+
+[[permission]]
+identifier = "allow-read-desktop-privacy-inventory"
+description = "Allows only aggregate counts and byte totals across local workspaces, messages, attachments and private import packages for Settings 本机数据. It grants no content, names, paths, credentials, deletion, export or provider access."
+commands.allow = ["read_desktop_privacy_inventory"]
+
+[[permission]]
+identifier = "allow-choose-desktop-storage-location"
+description = "Allows an explicit system-picker directory to be scheduled as the next application data root after native validation. It copies the complete private root only during the next controlled startup, retains the source, and grants no arbitrary path listing, deletion, export or network access."
+commands.allow = ["choose_desktop_storage_location"]
+
+[[permission]]
+identifier = "allow-desktop-privacy-cleanup"
+description = "Allows Android-parity local cleanup only through an aggregate fingerprinted preview and one of three fixed scopes: explicitly selected terminal failed-task assets, deleted knowledge/memory trash, or all app-private business data with the exact confirmation phrase. It grants no arbitrary path, wildcard command, content projection, export, transport or provider invocation."
+commands.allow = ["preview_desktop_privacy_deletion", "delete_desktop_privacy_data", "read_desktop_full_delete_outcome", "acknowledge_desktop_full_delete_outcome"]
+
+[[permission]]
+identifier = "allow-permanently-delete-desktop-conversation"
+description = "Allows only an exact workspace-owned recycle-bin conversation ID and revision to be permanently removed with its full-snapshot history and last-reference private assets. It grants no bulk wildcard, arbitrary filesystem path, restore, credential, transport or provider access."
+commands.allow = ["permanently_delete_desktop_conversation"]
+
+[[permission]]
+identifier = "allow-desktop-account-sync"
+description = "Allows explicit Google system-browser sign-in, safe account status readback, direct selected-conversation sync, an explicit cloud-list read, and changing only the account-owned cloud-list pin projection for an authenticated listed conversation. It grants no webview credential access, arbitrary endpoint, hidden account switching, local deletion or broad filesystem access."
+commands.allow = ["read_desktop_account_sync", "read_desktop_google_avatar", "sign_in_desktop_google_account", "cancel_desktop_google_account_sign_in", "create_desktop_recovery_code", "confirm_desktop_recovery_code", "sign_out_desktop_google_account", "sync_selected_desktop_conversation", "cancel_desktop_conversation_sync", "reconcile_desktop_conversation_sync", "set_desktop_periodic_sync", "choose_desktop_selected_sync_start", "create_desktop_recovery_rotation", "confirm_desktop_recovery_rotation", "retry_desktop_recovery_rotation", "list_desktop_cloud_documents", "bootstrap_desktop_empty_cloud_recovery", "restore_desktop_cloud_conversation", "restore_all_desktop_cloud_conversations", "set_desktop_cloud_list_pinned"]
+
+[[permission]]
+identifier = "allow-desktop-markdown-knowledge"
+description = "Allows explicit local Markdown selection, pending private candidates and per-item confirmation, skip, cancellation or retry in the selected data area; no network or automatic Knowledge write."
+commands.allow = ["stage_desktop_markdown_knowledge", "list_desktop_markdown_knowledge_tasks", "read_latest_desktop_markdown_knowledge", "read_desktop_markdown_knowledge", "confirm_desktop_markdown_knowledge_item", "skip_desktop_markdown_knowledge_item", "cancel_desktop_markdown_knowledge", "retry_desktop_markdown_knowledge"]
+
+[[permission]]
+identifier = "allow-desktop-json-knowledge"
+description = "Explicit versioned Knowledge JSON private task and item review operations"
+commands.allow = ["stage_desktop_json_knowledge", "read_latest_desktop_json_knowledge", "list_desktop_json_knowledge_tasks", "read_desktop_json_knowledge", "confirm_desktop_json_knowledge_item", "skip_desktop_json_knowledge_item", "cancel_desktop_json_knowledge", "retry_desktop_json_knowledge"]
+
+[[permission]]
+identifier = "allow-desktop-json-knowledge-export"
+description = "Explicit ACTIVE Knowledge JSON export to a user selected destination"
+commands.allow = ["export_desktop_json_knowledge"]
+
+[[permission]]
+identifier = "allow-desktop-pdf-knowledge"
+description = "Explicit private PDF task, bounded local text worker, progress, cancellation and per-page Knowledge confirmation in the captured data area"
+commands.allow = ["stage_desktop_pdf_knowledge", "process_desktop_pdf_knowledge", "retry_desktop_pdf_knowledge", "read_latest_desktop_pdf_knowledge", "list_desktop_pdf_knowledge_tasks", "read_desktop_pdf_knowledge", "confirm_desktop_pdf_knowledge_item", "skip_desktop_pdf_knowledge_item", "cancel_desktop_pdf_knowledge"]
+
+[[permission]]
+identifier = "allow-desktop-web-knowledge"
+description = "Explicit bounded HTTPS private task with fresh URL, history, cancellation and reviewed domain confirmation in captured area"
+commands.allow = ["queue_desktop_web_knowledge", "process_desktop_web_knowledge", "retry_desktop_web_knowledge", "read_latest_desktop_web_knowledge", "list_desktop_web_knowledge_tasks", "read_desktop_web_knowledge", "confirm_desktop_web_knowledge_item", "skip_desktop_web_knowledge_item", "cancel_desktop_web_knowledge"]
+
+[[permission]]
+identifier = "allow-read-desktop-knowledge-duplicates"
+description = "Allows explicit read-only saved Knowledge duplicate candidates in the captured area/workspace, without mutation, transport or credentials."
+commands.allow = ["read_desktop_knowledge_duplicates"]

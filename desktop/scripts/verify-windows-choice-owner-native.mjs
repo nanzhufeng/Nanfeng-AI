@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+// Synthetic diagnostic roots only; delay delivery after actual Rust completion.
+import { readFile, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+
+const [port, mode, output] = process.argv.slice(2);
+assert.ok(['prepare', 'run', 'race', 'cold'].includes(mode));
+let tabs;
+for (let attempt = 0; attempt < 100; attempt++) {
+  try { tabs = await fetch(`http://127.0.0.1:${Number(port)}/json/list`).then(r => r.json()); if (tabs.some(t => t.type === 'page' && t.url === 'http://tauri.localhost/')) break; } catch {}
+  await new Promise(r => setTimeout(r, 100));
+}
+const tab = tabs?.find(t => t.type === 'page' && t.url === 'http://tauri.localhost/');
+assert.ok(tab, 'WebView2 startup');
+const socket = new WebSocket(tab.webSocketDebuggerUrl);
+const pending = new Map(); let serial = 0;
+socket.addEventListener('message', event => { const m = JSON.parse(event.data), p = pending.get(m.id); if (!p) return; pending.delete(m.id); clearTimeout(p.timer); m.error ? p.reject(new Error(m.error.message)) : p.resolve(m.result); });
+await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
+const request = (method, params = {}) => new Promise((resolve, reject) => { const id = ++serial, timer = setTimeout(() => { pending.delete(id); reject(new Error(method + ' timeout')); }, 10000); pending.set(id, { resolve, reject, timer }); socket.send(JSON.stringify({ id, method, params })); });
+const js = JSON.stringify;
+const evaluate = async expression => { const r = await request('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(js(r.exceptionDetails)); return r.result.value; };
+const invoke = (area, command, args = {}) => evaluate(`window.__TAURI__.core.invoke(${js(command)},${js(args)},{headers:{'x-nanfeng-data-area':${js(area)}}})`);
+const until = async (test, name) => { const end = Date.now() + 15000; while (Date.now() < end) { if (await test()) return; await new Promise(r => setTimeout(r, 100)); } throw new Error(name); };
+const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
+const hash = value => createHash('sha256').update(js(canonical(value))).digest('hex');
+const pointer = async selector => { const p = await evaluate(`(()=>{const e=document.querySelector(${js(selector)});if(!e)throw Error('missing '+${js(selector)});e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`); await request('Input.dispatchMouseEvent', { type: 'mousePressed', ...p, button: 'left', clickCount: 1 }); await request('Input.dispatchMouseEvent', { type: 'mouseReleased', ...p, button: 'left', clickCount: 1 }); await new Promise(r => setTimeout(r, 150)); };
+
+
+
+const record=mode==='prepare'?{checks:[],areas:{},layer:'diagnostic native original application choice queue and UI navigation drain with real Rust receipts; exact cross-area late projection remains VM only',realService:false}:JSON.parse(await readFile(output,'utf8'));
+const S='globalThis.__nanfengDesktopWorkState';
+const check=(name,pass,detail)=>{record.checks.push({name,pass,detail});assert.ok(pass,name+': '+js(detail));};
+const click=s=>evaluate(`(()=>{const e=document.querySelector(${js(s)});if(!e||e.disabled)throw Error('missing/disabled '+${js(s)});e.click();return true})()`);
+const select=async area=>{await click(`[data-action=show-${area==='CHAT'?'chat':'work'}]`);await until(()=>evaluate(`${S}.dataArea===${js(area)}&&${S}.current?.summary.id===${js(record.areas[area].workspaceId)}`),'area '+area);const selector=`[data-action=select-chat][data-id="${record.areas[area].conversationId}"]`;await until(()=>evaluate(`Boolean(document.querySelector(${js(selector)}))`),'conversation list');await click(selector);await until(()=>evaluate(`${S}.selectedConversationId===${js(record.areas[area].conversationId)}&&Boolean(${S}.p6gSelection)`),'selection');};
+const route=area=>({workspaceId:record.areas[area].workspaceId,conversationId:record.areas[area].conversationId});
+const read=area=>invoke(area,'read_desktop_p6g_selection',route(area));
+const disk=async area=>({selection:await read(area),global:await invoke(area,'read_desktop_p6g_global_default'),exchange:(await invoke(area,'read_desktop_workspace',{workspaceId:route(area).workspaceId})).exchange});
+const snap=()=>evaluate(`({area:${S}.dataArea,workspace:${S}.current.summary.id,conversation:${S}.selectedConversationId,error:${S}.error,status:${S}.status,exchange:${S}.current.exchange,selection:${S}.p6gSelection,preferences:${S}.conversationPreferences,global:${S}.p6gGlobalDefault,picker:${S}.p6gModelPickerOpen,add:${S}.composerAddOpen,page:${S}.composerAddPage})`);
+try{
+await until(()=>evaluate(`Boolean(${S}?.runtimeInfo?.dataAreasReady)`),'ready');record.runtime=await invoke('CHAT','read_desktop_runtime_info');assert.equal(record.runtime.startupMode,'UI_SCHEMA_DIAGNOSTIC_ACCEPTANCE');assert.equal(record.runtime.automaticWorkSuppressed,true);delete record.error;
+if(mode==='prepare'){
+for(const area of ['CHAT','WORK']){const w=await invoke(area,'ensure_desktop_local_workspace');const c=await invoke(area,'mutate_desktop_domain',{args:{intentId:randomUUID(),workspaceId:w.summary.id,entity:'conversation',action:'create',fields:{title:'Synthetic choice '+area,firstMessage:'Synthetic local record only'}}});record.areas[area]={workspaceId:w.summary.id,conversationId:c.objectId};check('prepare '+area+' actual conversation',Boolean(c.objectId),c);}
+}else if(mode==='run'||mode==='race'){
+check('same workspace and conversation IDs',route('CHAT').workspaceId===route('WORK').workspaceId&&route('CHAT').conversationId===route('WORK').conversationId,record.areas);
+await request('Debugger.enable');const source=await readFile(new URL('../src/app.mjs',import.meta.url),'utf8');record.sourceSha256=createHash('sha256').update(source).digest('hex');
+const bp=await request('Debugger.setBreakpointByUrl',{urlRegex:'/app\\.mjs$',lineNumber:source.slice(0,source.indexOf('const tauriBridge =')).split('\n').length-1});
+const paused=async event=>{const m=JSON.parse(event.data);if(m.method!=='Debugger.paused')return;try{await request('Debugger.evaluateOnCallFrame',{callFrameId:m.params.callFrames[0].callFrameId,expression:'window.__TAURI__.core=Object.assign({},window.__TAURI__.core,{invoke:window.__TAURI__.core.invoke});window.__choiceInstalled=true;window.__choiceModel=updateP6GConversationOverride;window.__choicePreferences=updateConversationPreferences;window.__choiceDefault=saveP6GGlobalDefault;window.__choiceFlush=flushConversationChoiceSaves;window.__choiceSwap=function(area){state=dataAreaStates.get(area);globalThis.__nanfengDesktopWorkState=state;render();return true}'});}finally{await request('Debugger.resume');}};
+socket.addEventListener('message',paused);await request('Page.reload');await until(()=>evaluate(`window.__choiceInstalled&&${S}?.runtimeInfo?.dataAreasReady`),'bridge');await request('Debugger.removeBreakpoint',{breakpointId:bp.breakpointId});socket.removeEventListener('message',paused);await request('Debugger.disable');
+await evaluate(`(()=>{const core=window.__TAURI__.core;window.__choiceOriginal=core.invoke;window.__choiceCalls=[];core.invoke=async function(command,args,options){window.__choiceCalls.push({command,args,area:options?.headers?.['x-nanfeng-data-area']});const result=await window.__choiceOriginal.call(this,command,args,options);if(command===window.__choiceGateCommand){window.__choiceGate={command,args,result,area:options.headers['x-nanfeng-data-area']};await new Promise((resolve,reject)=>Object.assign(window.__choiceGate,{resolve,reject}));}return result;};return true})()`);
+if(mode==='race'){await select('WORK');await select('CHAT');record.raceScope='Controlled diagnostic switch between original app area state objects, bypasses UI write-drain guard; original functions and real Rust owners, not reachable UI navigation';}
+const localDisk=async area=>{const d=await disk(area);return {override:d.selection.conversationOverride,exchange:d.exchange};};const baseline=hash(await localDisk('WORK'));
+for(const kind of ['model','preferences','global']){
+await select('CHAT');await new Promise(r=>setTimeout(r,200));const initial=await read('CHAT');let expression,command;
+if(kind==='model'){expression='window.__choiceModel(null)';command='clear_desktop_p6g_conversation_override';}
+if(kind==='preferences'){expression="window.__choicePreferences({toneOverride:'professional',webSearchOverride:true},{close:true})";command='set_desktop_conversation_preferences';}
+if(kind==='global'){await evaluate(`(()=>{let e=document.querySelector('#p6g-global-default');if(!e){e=document.createElement('select');e.id='p6g-global-default';e.innerHTML='<option value="DEEP">DEEP</option>';document.body.append(e);}e.value='DEEP';return true})()`);expression='window.__choiceDefault()';command='set_desktop_p6g_global_default';}
+await evaluate(`window.__choiceGateCommand=${js(command)};window.__choiceGate=null;window.__choiceCalls=[];window.__choiceDone=false;void ${expression}.then(()=>window.__choiceDone=true);true`);await until(()=>evaluate('Boolean(window.__choiceGate?.resolve)'),'real '+kind+' receipt');const gate=await evaluate('({command:window.__choiceGate.command,area:window.__choiceGate.area,result:window.__choiceGate.result})');check(kind+' actual Rust receipt bound CHAT',gate.area==='CHAT'&&Boolean(gate.result),gate);
+// Queue another authorized preference before switching, proving captured owner survives waiting.
+if(kind==='model'){record.beforeQueued=await evaluate(`${S}.selectedConversationId`);await evaluate("window.__choiceQueuedDone=false;void window.__choicePreferences({toneOverride:'efficient'},{close:true}).then(()=>window.__choiceQueuedDone=true);true");}
+if(mode==='race'){await evaluate("window.__choiceSwap('WORK');true");const before=await snap();await evaluate('window.__choiceGate.resolve();true');await until(()=>evaluate('window.__choiceDone'),'late delivery');if(kind==='model')await until(()=>evaluate('window.__choiceQueuedDone'),'queued original owner save');check(kind+' controlled same-ID late receipt preserves full WORK projection',hash(await snap())===hash(before));}else{await click('[data-action=show-work]');await new Promise(r=>setTimeout(r,250));check(kind+' native navigation waits for authorized queue',await evaluate(`${S}.dataArea==='CHAT'&&!window.__choiceDone`));await evaluate('window.__choiceGate.resolve();true');await until(()=>evaluate('window.__choiceDone'),'delivery');if(kind==='model')await until(()=>evaluate('window.__choiceQueuedDone'),'queued save');await until(()=>evaluate(`${S}.dataArea==='WORK'&&${S}.current?.summary.id===${js(route('WORK').workspaceId)}`),'queue drained navigation');await select('WORK');}check(kind+' WORK persistent owner unchanged',hash(await localDisk('WORK'))===baseline);
+if(kind==='global')check('app-wide global default consistent across areas',hash(await invoke('CHAT','read_desktop_p6g_global_default'))===hash(await invoke('WORK','read_desktop_p6g_global_default')));const calls=await evaluate('window.__choiceCalls');const writes=calls.filter(c=>/^(set_desktop|clear_desktop)/.test(c.command));check(kind+' all authorized writes and readback bind original owner',writes.length===(kind==='model'?2:1)&&writes.every(c=>c.area==='CHAT')&&calls.filter(c=>c.command===(kind==='global'?'read_desktop_p6g_global_default':'read_desktop_p6g_selection')&&c.area==='CHAT').length>=2,calls);
+}
+if(mode==='race'){
+await select('CHAT');await evaluate("window.__choiceGateCommand='set_desktop_conversation_preferences';window.__choiceGate=null;window.__choiceRejectDone=false;void window.__choicePreferences({toneOverride:'efficient'},{close:true}).then(()=>window.__choiceRejectDone=true);true");await until(()=>evaluate('Boolean(window.__choiceGate?.resolve)'),'real preference committed before rejected delivery');await evaluate("window.__choiceSwap('WORK');true");const before=await snap();await evaluate("window.__choiceGate.reject(new Error('SYNTHETIC_AFTER_REAL_RECEIPT'));true");await until(()=>evaluate('window.__choiceRejectDone'),'rejected late delivery');check('rejected real receipt preserves destination error and complete projection',hash(await snap())===hash(before));check('rejected delivery actual CHAT write remains committed',(await read('CHAT')).conversationOverride.toneOverride==='efficient');check('rejected delivery WORK business data unchanged',hash(await localDisk('WORK'))===baseline);await click('[data-action=show-chat]');await new Promise(r=>setTimeout(r,200));check('rejected delivery reported by navigation barrier without automatic retry',await evaluate(`${S}.dataArea==='WORK'&&Boolean(${S}.error)`));
+}
+await evaluate('window.__choiceGateCommand=null;true');await select('CHAT');await evaluate("window.__choiceSameDone=false;void window.__choicePreferences({toneOverride:'professional',webSearchOverride:false},{close:true}).then(()=>window.__choiceSameDone=true);true");await until(()=>evaluate('window.__choiceSameDone'),'same area save');const saved=await read('CHAT');check('same area full selection readback',hash(await evaluate(`${S}.p6gSelection`))===hash(saved));check('merged queued revisions preserve preferences',saved.conversationOverride.toneOverride==='professional'&&saved.conversationOverride.webSearchOverride===false&&saved.conversationOverride.modelId===null,saved.conversationOverride);
+for(const area of ['CHAT','WORK'])record.areas[area].disk=await disk(area);
+}else{
+for(const area of ['CHAT','WORK']){await select(area);check('cold '+area+' complete persistent selection and exchange',hash(await disk(area))===hash(record.areas[area].disk));check('cold '+area+' actual selection projection',hash(await evaluate(`${S}.p6gSelection`))===hash(await read(area)));}
+}
+}catch(error){record.error=String(error);process.exitCode=1;}finally{await writeFile(output,js(record,null,2));socket.close();}

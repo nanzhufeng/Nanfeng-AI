@@ -21,6 +21,10 @@ pub fn checkpoint_text(messages: &Value) -> String {
 pub fn strip_echo(checkpoint: &str, generated: &str) -> String {
     if checkpoint.is_empty() || generated.is_empty() { return generated.into() }
     if checkpoint.chars().count() >= MIN_ECHO && generated.starts_with(checkpoint) { return generated[checkpoint.len()..].into() }
+    // A sufficiently long, unfinished replay of the checkpoint has not reached
+    // any new content. Terminal success and failure must agree with the stream
+    // checkpoint gate; short repeated words still follow the literal policy.
+    if generated.chars().count() >= MIN_ECHO && checkpoint.starts_with(generated) { return String::new() }
     let pattern: Vec<char> = generated.chars().take(MAX_OVERLAP).collect();
     if pattern.len() < MIN_ECHO { return generated.into() }
     let mut failure = vec![0; pattern.len()];
@@ -37,6 +41,25 @@ pub fn strip_echo(checkpoint: &str, generated: &str) -> String {
         if overlap < pattern.len() && point == pattern[overlap] { overlap += 1; }
     }
     if overlap >= MIN_ECHO { generated.chars().skip(overlap).collect() } else { generated.into() }
+}
+
+/// Streaming projection may defer an ambiguous replay; terminal literal policy is separate.
+pub fn stream_suffix(checkpoint: &str, generated: &str) -> Option<String> {
+    if generated.is_empty() { return None }
+    if checkpoint.is_empty() { return Some(generated.into()) }
+    if checkpoint.starts_with(generated) { return None }
+    // Until the next characters disambiguate it, a prefix of a sufficiently
+    // long saved tail is provisional rather than new durable answer text.
+    // Search only the existing scalar overlap window; never normalize words.
+    if generated.chars().take(MAX_OVERLAP + 1).count() <= MAX_OVERLAP {
+        let tail: String = checkpoint.chars().rev().take(MAX_OVERLAP)
+            .collect::<Vec<_>>().into_iter().rev().collect();
+        if tail.find(generated).is_some_and(|offset| tail[offset..].chars().count() >= MIN_ECHO) {
+            return None;
+        }
+    }
+    let suffix = strip_echo(checkpoint, generated);
+    (!suffix.is_empty()).then_some(suffix)
 }
 
 /// A completed upstream response that adds no text must remain retryable locally.
@@ -59,9 +82,46 @@ pub fn completed_suffix(checkpoint: &str, generated: &str) -> Option<String> {
         assert_eq!(completed_suffix(prefix,&format!("{prefix}新的内容")),Some("新的内容".into()));
         assert_eq!(completed_suffix("","完整回答"),Some("完整回答".into()));
     }
+    #[test] fn partial_prefix_completion_remains_incomplete_without_rewriting_short_repetition() {
+        let prefix="这是原始回答的完整长断点，继续之前必须保留全部已保存文字。";
+        let partial=prefix.chars().take(18).collect::<String>();
+        assert_eq!(completed_suffix(prefix,&partial),None);
+        assert_eq!(completed_suffix(prefix,"这是"),Some("这是".into()));
+        assert_eq!(strip_echo(prefix,&format!("{partial}独立新增内容")),format!("{partial}独立新增内容"));
+    }
     #[test] fn checkpoint_projection_joins_only_this_turns_assistant_fragments() {
         let messages=serde_json::json!([{"role":"assistant","content":"unrelated history"},{"role":"user","content":"question"},{"role":"assistant","content":"first"},{"role":"assistant","content":[{"type":"text","text":"second"}]},{"role":"user","content":INSTRUCTION}]);
         assert_eq!(checkpoint_text(&messages),"firstsecond");
         assert_eq!(checkpoint_text(&serde_json::json!([])),"");
     }
+    #[test] fn streaming_suffix_replay_is_held_until_it_reaches_new_text() {
+        let tail="TAIL_REPLAY_abcdefghijklmnopqrstuvwxyz_0123456789";
+        let checkpoint=format!("DIFFERENT_BEGIN_{tail}");
+        assert_eq!(stream_suffix(&checkpoint,&tail[..8]),None);
+        assert_eq!(stream_suffix(&checkpoint,&tail[..20]),None);
+        assert_eq!(stream_suffix(&checkpoint,tail),None);
+        assert_eq!(stream_suffix(&checkpoint,&format!("{tail}新增正文")),Some("新增正文".into()));
+    }
+    #[test] fn streaming_defer_does_not_delete_a_literal_terminal_internal_phrase() {
+        let phrase="这是先前中部出现的一句足够长的相同文字";
+        let checkpoint=format!("不同开头{phrase}但旧回答仍有其他末尾内容");
+        assert_eq!(stream_suffix(&checkpoint,phrase),None);
+        assert_eq!(completed_suffix(&checkpoint,phrase),Some(phrase.into()));
+        assert_eq!(stream_suffix(&checkpoint,&format!("{phrase}全新分叉")),Some(format!("{phrase}全新分叉")));
+    }
+    #[test] fn streaming_short_terminal_repetition_and_ordinary_text_keep_literal_policy() {
+        let checkpoint="不同起点和足够长的旧内容末尾只剩哈哈";
+        assert_eq!(stream_suffix(checkpoint,"哈哈"),Some("哈哈".into()));
+        assert_eq!(completed_suffix(checkpoint,"哈哈"),Some("哈哈".into()));
+        assert_eq!(stream_suffix("","首次实时正文"),Some("首次实时正文".into()));
+    }
+    #[test] fn streaming_suffix_ambiguity_is_unicode_exact_and_bounded() {
+        let tail="😀甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥";
+        let checkpoint=format!("另一处开头{tail}");let partial=tail.chars().take(5).collect::<String>();
+        assert_eq!(stream_suffix(&checkpoint,&partial),None);
+        assert_eq!(stream_suffix(&checkpoint,&format!("{tail}新的末尾")),Some("新的末尾".into()));
+        let outside=format!("OTHER_早期命中{}","x".repeat(MAX_OVERLAP));
+        assert_eq!(stream_suffix(&outside,"早期命中"),Some("早期命中".into()));
+    }
+
 }

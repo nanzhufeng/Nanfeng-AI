@@ -1,6 +1,6 @@
 {
   "identifier": "generation-island-capability",
-  "description": "Presentation-only island; no workspace bodies, credentials, files or Provider commands.",
+  "description": "Only the owned background status view; no workspace/body/secret/provider commands.",
   "windows": [
     "generation-island"
   ],

@@ -1,0 +1,48 @@
+[
+  {
+    "text": "分析一下这家公司",
+    "task": "DEFAULT_TEXT"
+  },
+  {
+    "text": "debugging",
+    "task": "DEFAULT_TEXT"
+  },
+  {
+    "text": "debug this",
+    "task": "COMPLEX_REASONING"
+  },
+  {
+    "text": "中文debug中文",
+    "task": "COMPLEX_REASONING"
+  },
+  {
+    "text": "stacKtrace",
+    "task": "DEFAULT_TEXT"
+  },
+  {
+    "text": "root-cause",
+    "task": "COMPLEX_REASONING"
+  },
+  {
+    "glyph": "a",
+    "count": 2399,
+    "task": "DEFAULT_TEXT"
+  },
+  {
+    "glyph": "a",
+    "count": 2400,
+    "task": "COMPLEX_REASONING"
+  },
+  {
+    "glyph": "😀",
+    "count": 1200,
+    "task": "COMPLEX_REASONING"
+  },
+  {
+    "text": "架构设计",
+    "mimes": [
+      "image/png"
+    ],
+    "task": "ATTACHMENT"
+  }
+]

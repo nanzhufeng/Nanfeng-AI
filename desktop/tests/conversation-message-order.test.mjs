@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { orderedConversationMessages, renderChatFirstShell } from '../src/chat-shell.mjs';
+import { conversationBranchLeaves } from '../src/conversation-message-order.mjs';
 
 const reversedImportedConversation = {
   id: 'reversed-import',
@@ -40,4 +41,14 @@ test('chat transcript renders a question above its answer even when import array
   });
   assert.ok(html.indexOf('这是提问') < html.indexOf('这是回答'));
   assert.ok(!html.includes('不应显示的旧分支'));
+});
+
+test('branch history includes assistant and unanswered user leaves in stable order', () => {
+  const conversation = { currentLeafId: 'edited-user', messages: [
+    { id: 'old-answer', parentId: 'old-user', role: 'assistant', createdAt: '2026-08-12T10:00:00Z' },
+    { id: 'edited-user', parentId: null, role: 'user', createdAt: '2026-08-12T11:00:00Z' },
+    { id: 'old-user', parentId: null, role: 'user', createdAt: '2026-08-12T09:00:00Z' },
+  ] };
+  assert.deepEqual(conversationBranchLeaves(conversation).map(message => message.id), ['old-answer', 'edited-user']);
+  assert.deepEqual(orderedConversationMessages(conversation).map(message => message.id), ['edited-user']);
 });

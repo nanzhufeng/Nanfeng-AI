@@ -36,6 +36,24 @@
     "suffix": "完整回答"
   },
   {
+    "name": "partial checkpoint prefix is still echo",
+    "checkpoint": "0123456789abcdefghijklmnop原始回答的后半段仍须保留",
+    "generated": "0123456789abcdefgh",
+    "suffix": ""
+  },
+  {
+    "name": "partial unicode checkpoint prefix is still echo",
+    "checkpoint": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀旧回答结尾",
+    "generated": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+    "suffix": ""
+  },
+  {
+    "name": "short partial prefix remains literal",
+    "checkpoint": "这是一段足够长的原始回答，短词重复仍保持既有策略",
+    "generated": "这是",
+    "suffix": "这是"
+  },
+  {
     "name": "interrupted without new output",
     "checkpoint": "已经保留的完整断点内容",
     "generated": "",

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { renderDesktopTranscriptionPage } from '../src/desktop-transcription-page.mjs';
+import { renderChatFirstShell } from '../src/chat-shell.mjs';
 
 const desktopRoot = resolve(import.meta.dirname, '..');
 const source = file => readFile(resolve(desktopRoot, 'src', file), 'utf8');
@@ -32,6 +33,19 @@ test('all Desktop copy surfaces use the shared icon-to-check feedback contract',
   assert.ok(!app.includes('showInlineCopyFeedback'));
   assert.ok(!app.includes('chat-copy-success'));
   assert.ok(!account.includes('<span>复制</span>'));
+});
+
+test('direct account settings never render retired recovery controls or secrets', () => {
+  for (const rotation of [false, true]) {
+    const html = renderChatFirstShell({
+      native: true, pane: 'settings', settingsSection: 'account',
+      data: { summary: { id: 'copy-contract-workspace' }, exchange: { conversations: [] } },
+      accountSync: { configured: true, state: 'READY', email: 'copy@example.invalid' },
+      accountRecovery: { rotation, recoveryCode: 'retired-secret-must-not-render', confirmationHash: 'retired-confirmation' },
+    });
+    assert.match(html, /data-action="load-account-cloud-documents"/);
+    assert.doesNotMatch(html, /恢复码|create-account-recovery-rotation|confirm-account-recovery-rotation|id="new-recovery-code"|copy-account-recovery-code|retired-secret-must-not-render|retired-confirmation/);
+  }
 });
 
 test('Desktop transcription renders its completed-copy control as an icon, never visible copy text', () => {

@@ -21,8 +21,7 @@ test('located conversation header puts its title before the optional return-to-s
   const header = shell.slice(shell.indexOf('const header = `'), shell.indexOf('const workspacePageHeader'));
   assert.ok(header.indexOf('<div class="chat-title">') < header.indexOf('data-action="return-to-search"'));
   assert.doesNotMatch(header, /<div class="chat-title"><p>南枫 AI<\/p>/);
-  assert.match(header, /<div class="chat-title">\$\{editingHeaderTitle \?/);
-  assert.match(header, /\$\{escapeHtml\(title\)\}<\/h1>/);
+  assert.match(header, /inlineTitleInput\(inlineRename\) : escapeHtml\(title\)/);
 });
 
 test('selecting a left-sidebar conversation exits search drill-down instead of preserving its return route', () => {

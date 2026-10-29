@@ -1,5 +1,6 @@
-import { ATTACHMENT_DOCUMENT_MIME_TYPES } from "./attachment-document-types.mjs";
-const TEXT_MIME_TYPES = new Set(ATTACHMENT_DOCUMENT_MIME_TYPES);
+import { ATTACHMENT_DOCUMENT_MIME_TYPES } from './attachment-document-types.mjs';
+const TEXT_MIME_TYPES = new Set(ATTACHMENT_DOCUMENT_MIME_TYPES.filter(mime =>
+  mime.startsWith('text/') || ['application/json', 'application/xml', 'application/x-yaml'].includes(mime)));
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm']);
 const AUDIO_MIME_TYPES = new Set(['audio/mpeg', 'audio/wav', 'audio/mp4']);
 
@@ -27,13 +28,15 @@ export function attachmentPreviewCapability(attachment = {}) {
   if (mimeType === 'application/pdf') {
     return { kind: 'pdf', action: 'open-pdf-preview', label: '应用内 PDF 阅读', supported: true };
   }
-  const textExtension = /[.。]\s*(md|markdown|txt|json|csv|xml|yaml|yml|html)\s*$/i.test(String(attachment.displayName || ''));
+  const textExtension = /[.。]\s*(md|markdown|txt|json|csv)\s*$/i.test(String(attachment.displayName || ''));
   const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || (mimeType === 'application/octet-stream' && /[.。]\s*docx\s*$/i.test(String(attachment.displayName || '')));
+  const isXlsx = mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || (mimeType === 'application/octet-stream' && /[.。]\s*xlsx\s*$/i.test(String(attachment.displayName || '')));
+  const isPptx = mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || (mimeType === 'application/octet-stream' && /[.。]\s*pptx\s*$/i.test(String(attachment.displayName || '')));
   const isZip = ['application/zip', 'application/x-zip-compressed'].includes(mimeType) || (mimeType === 'application/octet-stream' && /[.。]\s*zip\s*$/i.test(String(attachment.displayName || '')));
   if (isZip) {
     return { kind: 'archive', action: 'open-archive-preview', label: '应用内压缩包浏览', supported: true };
   }
-  if (isDocx || TEXT_MIME_TYPES.has(mimeType) || ((!mimeType || mimeType === 'application/octet-stream') && textExtension)) {
+  if (isDocx || isXlsx || isPptx || TEXT_MIME_TYPES.has(mimeType) || ((!mimeType || mimeType === 'application/octet-stream') && textExtension)) {
     return { kind: 'text', action: 'open-text-preview', label: '应用内安全文本预览', supported: true };
   }
   return {

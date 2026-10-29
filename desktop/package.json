@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "prelint": "node --check src/image-preview-navigation.mjs",
+    "prelint": "node --check src/image-preview-navigation.mjs && node --check src/data-area-invoke.mjs",
     "protocol:test": "node ../protocol/scripts/run-golden.mjs",
     "inventory:audit": "node scripts/audit-completion-inventory.mjs",
     "theme:computed-style": "node scripts/check-theme-color-computed-style.mjs",
@@ -13,6 +13,8 @@
     "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build.mjs",
     "bundle:macos": "node scripts/bundle-macos.mjs",
+    "bundle:windows": "node scripts/build-windows.mjs",
+    "build:windows:acceptance": "node scripts/build-windows.mjs --acceptance --debug --no-bundle --target=x86_64-pc-windows-msvc",
     "prepare:p6-v2-picker-acceptance": "node scripts/prepare-p6-v2-picker-acceptance.mjs",
     "prepare:desktop-compare-acceptance": "node scripts/prepare-desktop-compare-acceptance.mjs",
     "prepare:c02-c06-acceptance": "node scripts/prepare-c02-c06-visual-acceptance.mjs",
@@ -22,5 +24,8 @@
     "prepare:c16-acceptance": "node scripts/prepare-c16-theme-visual-acceptance.mjs",
     "c16:evidence": "node scripts/c16-evidence-manifest.mjs",
     "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
   }
 }

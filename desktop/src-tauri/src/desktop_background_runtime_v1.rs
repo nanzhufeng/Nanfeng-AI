@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 pub const BACKGROUND_CYCLE_ARGUMENT: &str = "--nanfeng-background-cycle-v1";
 pub const BACKGROUND_APP_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_BACKGROUND_ROOT_V1";
+pub const BACKGROUND_APP_ROOT_ARGUMENT: &str = "--nanfeng-background-root-v1=";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -276,7 +277,155 @@ pub fn reconcile_launch_agent(
     Ok(true)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+fn windows_task_xml(spec: &LaunchAgentSpec, user_sid: &str) -> Result<String, String> {
+    let executable = spec.executable.to_str().ok_or("INSTALL_FAILED")?;
+    let app_root = spec.app_root.to_str().ok_or("INSTALL_FAILED")?;
+    if !spec.label.ends_with(".background-v1")
+        || !spec.executable.is_absolute()
+        || !spec.app_root.is_absolute()
+        || app_root.contains('"')
+        || app_root.contains('\n')
+        || !user_sid.starts_with("S-1-")
+        || !user_sid.chars().all(|c| c.is_ascii_digit() || c == '-' || c == 'S')
+        || spec.acceptance_endpoint.is_some()
+    {
+        return Err("INSTALL_FAILED".to_owned());
+    }
+    let arguments = format!("{} \"{}{}\"", BACKGROUND_CYCLE_ARGUMENT, BACKGROUND_APP_ROOT_ARGUMENT, app_root);
+    Ok(format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n\
+         <Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\
+         <RegistrationInfo><Description>Nanfeng AI authorized background cycle</Description></RegistrationInfo>\
+         <Triggers><TimeTrigger><StartBoundary>2020-01-01T00:00:00</StartBoundary>\
+         <Repetition><Interval>PT1M</Interval></Repetition></TimeTrigger></Triggers>\
+         <Principals><Principal id=\"Author\"><UserId>{}</UserId><LogonType>InteractiveToken</LogonType>\
+         <RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\
+         <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\
+         <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\
+         <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\
+         <StartWhenAvailable>true</StartWhenAvailable><AllowStartOnDemand>true</AllowStartOnDemand>\
+         <Enabled>true</Enabled><ExecutionTimeLimit>PT10M</ExecutionTimeLimit></Settings>\
+         <Actions Context=\"Author\"><Exec><Command>{}</Command><Arguments>{}</Arguments></Exec></Actions></Task>",
+        xml(user_sid), xml(executable), xml(&arguments)
+    ))
+}
+
+#[cfg(windows)]
+fn windows_task_xml_bytes(xml: &str) -> Vec<u8> {
+    let mut bytes = vec![0xff, 0xfe];
+    for unit in xml.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes
+}
+
+#[cfg(windows)]
+fn windows_task_query_result(result: Result<(), windows::core::HRESULT>) -> Result<bool, String> {
+    match result {
+        Ok(()) => Ok(true),
+        // Only GetTask's precise file-not-found result establishes absence.
+        Err(code) if code.0 as u32 == 0x80070002 => Ok(false),
+        Err(_) => Err("REMOVE_FAILED".to_owned()),
+    }
+}
+
+#[cfg(windows)]
+fn windows_task_exists(task_name: &str) -> Result<bool, String> {
+    use windows::core::BSTR;
+    use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize,
+        CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED};
+    use windows::Win32::System::TaskScheduler::{ITaskService, TaskScheduler};
+    use windows::Win32::System::Variant::VARIANT;
+
+    // COM initialization is per-thread. Do not uninitialize another owner's apartment.
+    let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    if initialized.is_err() && initialized != RPC_E_CHANGED_MODE {
+        return Err("REMOVE_FAILED".to_owned());
+    }
+    struct Apartment(bool);
+    impl Drop for Apartment {
+        fn drop(&mut self) {
+            if self.0 { unsafe { CoUninitialize() }; }
+        }
+    }
+    let _apartment = Apartment(initialized.is_ok());
+    let service: ITaskService = unsafe { CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER) }
+        .map_err(|_| "REMOVE_FAILED".to_owned())?;
+    let empty = VARIANT::default();
+    unsafe { service.Connect(&empty, &empty, &empty, &empty) }
+        .map_err(|_| "REMOVE_FAILED".to_owned())?;
+    let folder = unsafe { service.GetFolder(&BSTR::from("\\")) }
+        .map_err(|_| "REMOVE_FAILED".to_owned())?;
+    windows_task_query_result(unsafe { folder.GetTask(&BSTR::from(task_name)) }
+        .map(|_| ()).map_err(|error| error.code()))
+}
+
+#[cfg(windows)]
+fn remove_windows_task(
+    query: impl FnOnce() -> Result<bool, String>,
+    remove: impl FnOnce() -> Result<(), String>,
+) -> Result<bool, String> {
+    if query()? { remove()?; }
+    Ok(false)
+}
+
+#[cfg(windows)]
+pub fn reconcile_launch_agent(
+    desired: bool,
+    _home: &Path,
+    spec: &LaunchAgentSpec,
+) -> Result<bool, String> {
+    use std::process::{Command, Stdio};
+    if !spec.label.ends_with(".background-v1") || spec.label.len() > 240
+        || !spec.label.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-')) {
+        return Err(if desired { "INSTALL_FAILED" } else { "REMOVE_FAILED" }.to_owned());
+    }
+    let task_name = format!(r"\{}", spec.label);
+    if !desired {
+        return remove_windows_task(|| windows_task_exists(&task_name), || {
+            let removed = Command::new("schtasks.exe").args(["/Delete", "/TN", &task_name, "/F"])
+                .stdout(Stdio::null()).stderr(Stdio::null()).status()
+                .map_err(|_| "REMOVE_FAILED".to_owned())?;
+            if removed.success() { Ok(()) } else { Err("REMOVE_FAILED".to_owned()) }
+        });
+    }
+    let whoami = Command::new("whoami.exe").args(["/user", "/fo", "csv", "/nh"])
+        .output().map_err(|_| "INSTALL_FAILED".to_owned())?;
+    if !whoami.status.success() { return Err("INSTALL_FAILED".to_owned()); }
+    let output = String::from_utf8(whoami.stdout).map_err(|_| "INSTALL_FAILED".to_owned())?;
+    let sid = output.trim().rsplit(',').next().unwrap_or("").trim().trim_matches('"');
+    let task_xml = windows_task_xml(spec, sid)?;
+    fs::create_dir_all(&spec.app_root).map_err(|_| "INSTALL_FAILED".to_owned())?;
+    let xml_path = spec.app_root.join(format!(".background-task-{}.xml", std::process::id()));
+    fs::write(&xml_path, windows_task_xml_bytes(&task_xml)).map_err(|_| "INSTALL_FAILED".to_owned())?;
+    let result = Command::new("schtasks.exe")
+        .args(["/Create", "/TN", &task_name, "/XML"])
+        .arg(&xml_path).arg("/F")
+        .output();
+    let _ = fs::remove_file(&xml_path);
+    match result {
+        Ok(output) if output.status.success() => Ok(true),
+        Ok(output) => {
+            if spec.label.contains("windowsacceptance") {
+                // Acceptance roots are synthetic and marked. Keep the scheduler's exact
+                // failure bytes there for diagnosis; normal product logs stay content-free.
+                eprintln!("background task registration exit={:?} stderr={:?}",
+                    output.status.code(), output.stderr);
+            }
+            Err("INSTALL_FAILED".to_owned())
+        }
+        Err(error) => {
+            if spec.label.contains("windowsacceptance") {
+                eprintln!("background task registration spawn error={:?}", error.kind());
+            }
+            Err("INSTALL_FAILED".to_owned())
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 pub fn reconcile_launch_agent(
     _desired: bool,
     _home: &Path,
@@ -298,6 +447,83 @@ fn xml(value: &str) -> String {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_task_query_failure_never_runs_removal() {
+        use windows::core::HRESULT;
+        // Permission denied, scheduler service unavailable, RPC failure, and an
+        // unclassified failure are all unknown presence, not missing tasks.
+        for code in [0x80070005_u32, 0x80041315, 0x800706ba, 0x80004005] {
+            let removed = std::cell::Cell::new(false);
+            let result = remove_windows_task(
+                || windows_task_query_result(Err(HRESULT(code as i32))),
+                || { removed.set(true); Ok(()) },
+            );
+            assert_eq!(result, Err("REMOVE_FAILED".to_owned()), "HRESULT={code:x}");
+            assert!(!removed.get());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_task_absence_is_idempotent_and_existing_removal_reports_failure() {
+        use windows::core::HRESULT;
+        assert_eq!(remove_windows_task(
+            || windows_task_query_result(Err(HRESULT(0x80070002_u32 as i32))),
+            || panic!("an absent task must not be deleted"),
+        ), Ok(false));
+        assert_eq!(remove_windows_task(
+            || windows_task_query_result(Ok(())),
+            || Err("REMOVE_FAILED".to_owned()),
+        ), Err("REMOVE_FAILED".to_owned()));
+        let deleted = std::cell::Cell::new(0);
+        assert_eq!(remove_windows_task(
+            || windows_task_query_result(Ok(())),
+            || { deleted.set(deleted.get() + 1); Ok(()) },
+        ), Ok(false));
+        assert_eq!(deleted.get(), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "Opt-in readonly local Task Scheduler COM probe; never registers or deletes a task"]
+    fn windows_task_com_query_missing_task_is_readonly() {
+        let mut nonce = [0u8; 16];
+        getrandom::fill(&mut nonce).unwrap();
+        let nonce: String = nonce.iter().map(|byte| format!("{byte:02x}")).collect();
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("must-not-be-created");
+        let spec = LaunchAgentSpec {
+            label: format!("com.nanzhufeng.ai.synthetic.query-only.{nonce}.background-v1"),
+            executable: directory.path().join("must-not-run.exe"),
+            app_root: root.clone(),
+            acceptance_endpoint: None,
+        };
+        assert_eq!(reconcile_launch_agent(false, directory.path(), &spec), Ok(false));
+        // The second query exercises repeated COM initialization and release.
+        assert_eq!(reconcile_launch_agent(false, directory.path(), &spec), Ok(false));
+        assert!(!root.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_scheduler_xml_declares_and_writes_utf16_with_unicode_paths() {
+        let spec = LaunchAgentSpec {
+            label: "com.nanzhufeng.ai.desktop.windowsacceptance.background-v1".into(),
+            executable: PathBuf::from(r"C:\Users\测试\南枫 AI.exe"),
+            app_root: PathBuf::from(r"D:\CodexTemp\南枫合成根"),
+            acceptance_endpoint: None,
+        };
+        let xml = windows_task_xml(&spec, "S-1-5-21-123-456-789-1000").unwrap();
+        let bytes = windows_task_xml_bytes(&xml);
+        assert_eq!(&bytes[..2], &[0xff, 0xfe]);
+        let decoded = String::from_utf16(&bytes[2..].chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]])).collect::<Vec<_>>()).unwrap();
+        assert_eq!(decoded, xml);
+        assert!(decoded.starts_with("<?xml version=\"1.0\" encoding=\"UTF-16\"?>"));
+        assert!(decoded.contains("南枫合成根"));
+    }
 
     #[test]
     fn plist_is_fixed_scope_and_acceptance_requires_tmp_localhost() {

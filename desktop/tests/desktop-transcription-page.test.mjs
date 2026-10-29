@@ -33,6 +33,16 @@ test('current transcription root keeps legacy speech results readable without ex
   assert.match(html, /旧版音视频任务/);
 });
 
+test('legacy speech tasks keep their files readable without offering execution or retry', () => {
+  for (const state of ['QUEUED', 'FAILED', 'RECOVERY_REQUIRED', 'CANCELLED']) {
+    const task = { ...completed, state };
+    const html = renderDesktopTranscriptionPage({ native: true, selectedTaskId: task.id, projection: { tasks: [task] } });
+    assert.match(html, /旧版音视频任务/);
+    assert.match(html, /data-action="preview-transcription-source"/);
+    assert.doesNotMatch(html, /data-action="(?:run|retry|cancel)-transcription-task"/);
+  }
+});
+
 test('document transcription mode matches the mobile GLM-OCR intent while keeping a desktop workbench', () => {
   const document = {
     ...completed,
@@ -60,16 +70,21 @@ test('empty transcription root uses the latest Android GLM-OCR copy', () => {
 });
 
 test('desktop packaging and app bridge include the transcription owner and every native command', async () => {
-  const [app, shell, build, index, rust, rustBridge] = await Promise.all([
+  const [app, shell, build, index, rust, rustBridge, permissions] = await Promise.all([
     readFile(new URL('../src/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/chat-shell.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../scripts/build.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src-tauri/src/desktop_transcription_v1.rs', import.meta.url), 'utf8'),
     readFile(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8'),
+    readFile(new URL('../src-tauri/permissions/default.toml', import.meta.url), 'utf8'),
   ]);
-  for (const command of ['read_desktop_transcription_state', 'run_desktop_transcription_task', 'import_desktop_ocr_source', 'run_desktop_ocr_task', 'retry_desktop_transcription_task', 'cancel_desktop_transcription_task', 'delete_desktop_transcription_task', 'export_desktop_transcription_task']) assert.match(app, new RegExp(command));
-  for (const legacyOwner of ['save_desktop_transcription_settings', 'import_desktop_transcription_source']) assert.match(rustBridge, new RegExp(legacyOwner));
+  for (const command of ['read_desktop_transcription_state', 'import_desktop_ocr_source', 'run_desktop_ocr_task', 'retry_desktop_transcription_task', 'cancel_desktop_transcription_task', 'delete_desktop_transcription_task', 'export_desktop_transcription_task']) assert.match(app, new RegExp(command));
+  for (const retiredCommand of ['save_desktop_transcription_settings', 'import_desktop_transcription_source', 'run_desktop_transcription_task']) {
+    assert.doesNotMatch(app, new RegExp(retiredCommand));
+    assert.doesNotMatch(rustBridge, new RegExp(retiredCommand));
+    assert.doesNotMatch(permissions, new RegExp(retiredCommand));
+  }
   for (const retiredEntry of ['pickTranscriptionSource', 'saveTranscriptionSettings']) assert.doesNotMatch(app, new RegExp(retiredEntry));
   assert.match(shell, /show-transcription/);
   assert.match(build, /'desktop-transcription-page\.mjs'/);
@@ -77,7 +92,7 @@ test('desktop packaging and app bridge include the transcription owner and every
   assert.match(index, /desktop-transcription-page\.css/);
   assert.match(app, /read_desktop_transcription_state', \{ workspaceId: null \}/);
   assert.match(app, /workspaceId: state\.current\?\.summary\?\.id \|\| ''/);
-  assert.match(app, /\$\{documentTask \? '图片\/PDF 转写' : '语音转写'\}未完成/);
+  assert.match(app, /图片\/PDF 转写未完成/);
   assert.doesNotMatch(app, /请先导入或选择一个本地工作区/);
   assert.match(rust, /RECOVERY_REQUIRED/);
   assert.match(rust, /workspace-transcription-local/);
@@ -87,4 +102,15 @@ test('desktop packaging and app bridge include the transcription owner and every
   assert.match(rust, /response exceeded 32 MiB/);
   assert.match(rust, /desktop_local_search_index/);
   assert.match(rust, /desktop_attachment_assets/);
+});
+
+test('an in-flight OCR command presents waiting state instead of a stale start or retry action', () => {
+  for (const state of ['QUEUED', 'FAILED', 'RECOVERY_REQUIRED']) {
+    const task = { ...completed, id: 'busy-ocr', modelId: 'glm-ocr', state, sourceMimeType: 'image/png', segments: [], resultAttachmentId: null };
+    const html = renderDesktopTranscriptionPage({ native: true, selectedTaskId: task.id, busyTaskId: task.id, projection: { tasks: [task] } });
+    assert.match(html, /transcription-running/);
+    assert.match(html, /等待处理/);
+    assert.match(html, /离开页面后任务仍会继续/);
+    assert.doesNotMatch(html, /data-action="(?:run|retry|cancel)-transcription-task"/);
+  }
 });

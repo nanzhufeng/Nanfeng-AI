@@ -1,0 +1,270 @@
+import assert from 'node:assert/strict';
+import { createHash, randomUUID } from 'node:crypto';
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdir, readFile, writeFile, appendFile } from 'node:fs/promises';
+import { dirname, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+if (process.platform !== 'win32') throw new Error('仅在 Windows 隔离候选上验收。');
+const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const rootParent = resolve(process.argv[2] || 'D:\\CodexTemp');
+const taskArea=process.argv[3];assert.ok(['CHAT','WORK'].includes(taskArea));
+const otherArea='WORK';
+const mode='real-switch-backup';
+assert.equal(process.argv.length,4);
+assert.ok(process.execArgv.includes('--max-old-space-size=2048'));
+const receipt = JSON.parse(await readFile(join(desktopRoot, 'output/windows-acceptance/current.json'), 'utf8'));
+assert.equal(receipt.identifier, 'com.nanzhufeng.ai.desktop.windowsacceptance');
+const source = resolve(desktopRoot, 'output/windows-acceptance', receipt.sha256, 'NanfengAI-Windows-Acceptance.exe');
+assert.equal(resolve(receipt.executable), source);
+assert.equal(createHash('sha256').update(await readFile(source)).digest('hex').toUpperCase(), receipt.sha256);
+const runningExecutable = resolve(desktopRoot, 'output/windows-acceptance-binaries', receipt.sha256, 'nanfeng-ai-desktop-spike.exe');
+const ps = script => execFileSync('pwsh', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: 60000 }).trim();
+const quote = value => `'${String(value).replaceAll("'", "''")}'`;
+const reservePort = async () => {
+  const server = (await import('node:http')).createServer();
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  const port = server.address().port;
+  await new Promise(done => server.close(done));
+  activePort=port;return port;
+};
+let activePort=0;
+let launch = null;
+let root = '';
+const pids = [];
+const startProcess = args => new Promise((done, fail) => {
+  const child = spawn('pwsh', ['-NoProfile', '-File', join(desktopRoot, 'scripts/start-windows-acceptance.ps1'), ...args], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let out = '';
+  let err = '';
+  const timer = setTimeout(() => { child.kill(); fail(new Error(`启动超时：${err}`)); }, 30000);
+  child.stdout.on('data', async chunk => {
+    out += chunk.toString();
+    const line = out.split(/\r?\n/).find(item => item.trim().startsWith('{') && item.includes('"pid"'));
+    if (!line) return;
+    clearTimeout(timer);
+    // Hidden/redirected PowerShell may encode Chinese paths with a legacy code
+    // page. Its ASCII receipt path locates the authoritative UTF-8 JSON file.
+    try { const emitted=JSON.parse(line); done(JSON.parse(await readFile(emitted.launchReceipt,'utf8'))); } catch (error) { fail(error); }
+    child.stdout.destroy();
+    child.stderr.destroy();
+    child.unref();
+  });
+  child.stderr.on('data', chunk => { err += chunk.toString(); });
+  child.on('error', error => { clearTimeout(timer); fail(error); });
+  child.on('exit', code => { if (!out.includes('"pid"')) { clearTimeout(timer); fail(new Error(`启动失败 ${code}：${err}`)); } });
+});
+async function start(reopen = false) {
+  const port = await reservePort();
+  const args = ['-RootParent', rootParent, '-StartupMode', 'diagnostic', '-Visible', '-DebugPort', String(port)];
+  if (reopen) args.push('-Root', root);
+  launch = await startProcess(args);result.launches??=[];result.launches.push(launch);
+  root = resolve(launch.root);
+  assert.equal(launch.sha256, receipt.sha256);
+  assert.equal(resolve(launch.executable), runningExecutable);
+  assert.ok(root.startsWith(rootParent + sep));
+  const marker = JSON.parse(await readFile(join(root, '.nanfeng-windows-acceptance.json'), 'utf8'));
+  assert.equal(marker.identifier, receipt.identifier);
+  activePort=port;return port;
+}
+function stop() {
+  if (!launch) return;
+  const pid = Number(launch.pid);
+  ps(`$p=Get-CimInstance Win32_Process -Filter "ProcessId=${pid}"; if ($p) { if ([IO.Path]::GetFullPath([string]$p.ExecutablePath) -ne ${quote(runningExecutable)} -or (Get-FileHash -LiteralPath ${quote(runningExecutable)} -Algorithm SHA256).Hash -ne ${quote(receipt.sha256)}) { throw 'PID identity mismatch' }; Stop-Process -Id ${pid} -Force -ErrorAction Stop }`);
+  pids.push(pid);
+  launch = null;
+}
+async function cdp(port, method, params) {
+  const tabs = await fetch(`http://127.0.0.1:${port}/json/list`,{signal:AbortSignal.timeout(10000)}).then(response => response.json());
+  const tab = tabs.find(item => item.type === 'page' && item.url === 'http://tauri.localhost/');
+  assert.ok(tab, 'WebView2 页面未就绪');
+  const socket = new WebSocket(tab.webSocketDebuggerUrl);
+  try {
+    await new Promise((done, fail) => {
+      socket.addEventListener('open', done, { once: true });
+      socket.addEventListener('error', fail, { once: true });
+    });
+    return await new Promise((done, fail) => {
+      const timer = setTimeout(() => fail(new Error('CDP evaluation timed out')), 30000);
+      socket.addEventListener('message', event => {
+        const message = JSON.parse(event.data);
+        if (message.id !== 1) return;
+        clearTimeout(timer);
+        if (message.error || message.result?.exceptionDetails) fail(new Error(JSON.stringify(message.result?.exceptionDetails || message.error)));
+        else done(message.result);
+      });
+      socket.send(JSON.stringify({id:1,method,params}));
+    });
+  } finally { socket.close(); }
+}
+const evaluate = async (port,expression) => (await cdp(port,'Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}))?.result?.value;
+const undoShortcut = async (port,redo=false) => {
+  const params={key:redo?'Z':'z',code:'KeyZ',windowsVirtualKeyCode:90,modifiers:redo?10:2};
+  await cdp(port,'Input.dispatchKeyEvent',{type:'rawKeyDown',...params});
+  await cdp(port,'Input.dispatchKeyEvent',{type:'keyUp',...params});
+};
+
+async function invoke(port, area, command, args = {}) {
+  const value = await evaluate(port, `window.__TAURI__.core.invoke(${JSON.stringify(command)},${JSON.stringify(args)},${JSON.stringify({ headers: { 'x-nanfeng-data-area': area } })}).catch(error=>({__error:String(error)}))`);
+  if (value?.__error) throw new Error(`${command}: ${value.__error}`);
+  return value;
+}
+async function until(read, label) {
+  const deadline = Date.now() + 30000;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try { const value = await read(); if (value) return value; } catch (error) { lastError = String(error); }
+    await new Promise(done => setTimeout(done, 200));
+  }
+  throw new Error(`${label} 未在原生界面出现${lastError ? `；最后读取错误：${lastError}` : ''}`);
+}
+const click = (port, selector) => evaluate(port, `(()=>{const node=document.querySelector(${JSON.stringify(selector)});if(!node)return false;node.click();return true})()`);
+
+let result={checks:[],candidateSha256:receipt.sha256,startupMode:'diagnostic',realService:false,performanceBudget:null,measurements:[],areas:{},fullNormalRecoveryAccepted:false};
+const check=(name,value)=>{assert.ok(value,name);result.checks.push({name,pass:true});};
+async function normalClose(port){
+ const pid=Number(launch.pid);
+ const info=JSON.parse(ps(`$p=Get-Process -Id ${pid} -ErrorAction Stop; @{pid=$p.Id;responding=$p.Responding;title=$p.MainWindowTitle;accepted=$p.CloseMainWindow()}|ConvertTo-Json -Compress`));
+ check('native window responding',info.responding);check('real native title present',Boolean(info.title));check('CloseMainWindow accepted',info.accepted);
+ try { await until(()=>ps(`@(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").Count`)==='0','正常Close进程退出'); }
+ catch(error) { result.closeFailure={info,process:ps(`Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object ProcessId,ExecutablePath | ConvertTo-Json -Compress`),ui:await evaluate(port,'document.body.innerText.slice(-2200)')}; throw error; }
+ await until(()=>ps(`@(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains(${quote(launch.webviewProfile)}) }).Count`)==='0','本根WebView正常退出');result.checks.push({name:'normal Close exited and profile browser exited',pass:true,detail:info});pids.push(pid);launch=null;
+}
+
+const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const delay=ms=>new Promise(ok=>setTimeout(ok,ms));
+const timed=async(label,fn)=>{const t=performance.now();const value=await fn();result.measurements.push({label,milliseconds:performance.now()-t});return value;};
+const areas=['CHAT','WORK'];
+const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+const areaRoot=area=>area==='CHAT'?root:join(root,'work-area');
+function assetBytes(area,count,index){
+ const chunks=[Buffer.from(`SYNTHETIC-W15-REFERENCED-${area}-${count}-${index}\n`)];
+ for(let n=0;n<384;n++)chunks.push(Buffer.from(createHash('sha256').update(`${area}/${count}/${index}/${n}`).digest('hex')));
+ return Buffer.concat(chunks);
+}
+async function assets(area){
+ const records=[];
+ for(const item of result.areas[area].libraries)for(const asset of item.assets){
+  const bytes=await readFile(join(areaRoot(area),'assets',asset.sha256));
+  assert.equal(bytes.length,asset.byteCount);assert.equal(sha(bytes),asset.sha256);
+  records.push({id:asset.id,bytes:bytes.length,sha256:asset.sha256});
+ }
+ return records;
+}
+
+function sqlite(closed=false){
+ const data=JSON.parse(execFileSync('python',[join(desktopRoot,'scripts/check-stability-synthetic-sqlite.py'),root,...(closed?['--closed-browser']:[])],{encoding:'utf8',timeout:60000}));
+ assert.ok(data.allOk);for(const db of data.databases)for(const [table,count]of Object.entries(db.counts))if(table.toLowerCase().includes('attempt'))assert.equal(count,0);
+ return data;
+}
+async function verifyArea(port,area){
+ for(const item of result.areas[area].libraries){
+  const read=await invoke(port,area,'read_desktop_workspace',{workspaceId:item.id});
+  assert.equal(hash(read.exchange),item.hash);
+  const draft=await invoke(port,area,'read_desktop_conversation_draft',{workspaceId:item.id,conversationId:item.draftId});
+  assert.deepEqual(draft,item.draft);
+ }
+ assert.deepEqual(await assets(area),result.areas[area].assets);
+}
+try{
+ let port=await start();result.root=root;
+ await until(()=>evaluate(port,'Boolean(document.querySelector("#chat-composer")&&globalThis.__nanfengDesktopWorkState?.runtimeInfo?.dataAreasReady)'),'native ready');
+ const runtime=await invoke(port,'CHAT','read_desktop_runtime_info');assert.equal(runtime.startupMode,'UI_SCHEMA_DIAGNOSTIC_ACCEPTANCE');assert.equal(runtime.automaticWorkSuppressed,true);
+ const {packageExchange,semanticHash,preflightPackage}=await import('../../protocol/scripts/exchange-lib.mjs');
+ const original=JSON.parse(await readFile(join(desktopRoot,'../protocol/fixtures/nfai.exchange.v1.golden.json'),'utf8'));
+ for(const area of areas){
+  result.areas[area]={libraries:[]};
+  await invoke(port,area,'ensure_desktop_local_workspace');
+  for(const count of [200,400,600]){
+   const ex=structuredClone(original);ex.export.id=`w15-large-${area.toLowerCase()}-${count}`;
+   const inputAssets=new Map(),identities=[];
+   ex.conversations=Array.from({length:count},(_,i)=>{
+    const c=structuredClone(original.conversations[0]);c.id=`w15-${area.toLowerCase()}-${count}-${i}`;c.title=`合成大库 ${area} ${count}/${i}`;c.currentLeafId=c.id+'-a';
+    c.messages[0].id=c.id+'-u';c.messages[0].blocks=[{kind:'TEXT',ordinal:0,text:'合成备份问题 '+i}];
+    c.messages[1].id=c.id+'-a';c.messages[1].parentId=c.id+'-u';
+    const data=assetBytes(area,count,i),digest=sha(data),entry='assets/'+digest;
+    const asset={id:c.id+'-asset',entry,mimeType:'text/plain',displayName:`合成独立附件-${area}-${count}-${i}.txt`,byteCount:data.length,sha256:digest,classification:'NORMAL'};
+    inputAssets.set(entry,data);identities.push(asset);
+    c.messages[1].blocks=[{kind:'TEXT',ordinal:0,text:i===0?'长回答完整备份验证。'.repeat(9000):'完整合成回答 '+i},{kind:'ASSET_REF',ordinal:1,asset}];return c;
+   });
+   ex.export.semanticHash=semanticHash(ex);const bytes=packageExchange(ex,inputAssets);preflightPackage(bytes);
+   const path=join(root,`synthetic-w15-${area}-${count}.nfai-exchange`);await writeFile(path,bytes,{flag:'wx'});
+   const staged=await invoke(port,area,'stage_preflight_selected_exchange',{selectedPath:path});
+   const imported=await invoke(port,area,'import_staged_exchange_as_new_workspace',{args:{stagingId:staged.stagingId,workspaceTitle:`合成W15 ${area} ${count}`}});
+   assert.equal(imported.exchange.conversations.length,count);
+   const item={id:imported.summary.id,hash:hash(imported.exchange),count,draftId:imported.exchange.conversations[1].id,assets:identities,input:path};
+   await invoke(port,area,'save_desktop_conversation_draft',{args:{workspaceId:item.id,conversationId:item.draftId,text:`完整合成草稿 ${area} ${count}`,attachmentIds:[identities[1].id],modelId:null,toneOverride:null,webSearchOverride:null}});
+   item.draft=await invoke(port,area,'read_desktop_conversation_draft',{workspaceId:item.id,conversationId:item.draftId});result.areas[area].libraries.push(item);
+  }
+  for(const item of result.areas[area].libraries){
+   const selectedPath=join(root,`synthetic-export-${area}-${item.count}.nfai-exchange`);
+   item.exportArtifact=await timed(area+' exchange export '+item.count,()=>invoke(port,area,'export_desktop_workspace_to_selected_path',{workspaceId:item.id,selectedPath}));
+   const exported=preflightPackage(await readFile(selectedPath));
+   const read=await invoke(port,area,'read_desktop_workspace',{workspaceId:item.id});
+   assert.deepEqual(exported.exchange.conversations,read.exchange.conversations);
+   assert.equal(exported.entryCount,preflightPackage(await readFile(item.input)).entryCount);item.exportPath=selectedPath;
+  }
+  result.areas[area].assets=await assets(area);check(area+' 1200 independent referenced nonempty assets',result.areas[area].assets.length===1200&&new Set(result.areas[area].assets.map(a=>a.sha256)).size===1200);
+  result.areas[area].physicalBytes=result.areas[area].assets.reduce((n,a)=>n+a.bytes,0);console.log(JSON.stringify({phase:'IMPORTED',area,assets:1200,physicalBytes:result.areas[area].physicalBytes}));
+  const path=join(root,`synthetic-w15-${area}.nfai-backup`);result.areas[area].backup=path;
+  result.areas[area].artifact=await timed(area+' export',()=>invoke(port,area,'export_desktop_local_backup',{selectedPath:path}));
+  assert.equal(sha(await readFile(path)),result.areas[area].artifact.sha256);
+  result.areas[area].preflight=await timed(area+' preflight',()=>invoke(port,area,'preflight_desktop_local_backup',{selectedPath:path}));
+  assert.equal(result.areas[area].preflight.missing.length,0);assert.equal(result.areas[area].preflight.unsupported.length,0);
+  check(area+' native export/preflight with full file bytes',true);await verifyArea(port,area);
+ }
+ result.beforeSqlite=sqlite();await normalClose(port);
+ port=await start(true);await until(()=>evaluate(port,'Boolean(document.querySelector("#chat-composer")&&globalThis.__nanfengDesktopWorkState?.runtimeInfo?.dataAreasReady)'),'pre-restore cold ready');
+ for(const area of areas)await verifyArea(port,area);check('full cold data before restore',true);
+
+ const area=taskArea,item=result.areas[area].libraries[0];
+ result.interruptedArea=area;
+ await invoke(port,area,'save_desktop_conversation_draft',{args:{workspaceId:item.id,conversationId:item.draftId,text:'SYNTHETIC PRE-SWITCH DRAFT MUST SURVIVE ROLLBACK',attachmentIds:[item.assets[1].id],modelId:null,toneOverride:null,webSearchOverride:null}});
+ result.modifiedDraft=await invoke(port,area,'read_desktop_conversation_draft',{workspaceId:item.id,conversationId:item.draftId});
+ const changed=join(areaRoot(area),'assets',item.assets[0].sha256);
+ const modifiedBytes=Buffer.from('SYNTHETIC PRE-SWITCH ASSET MUST SURVIVE ROLLBACK');
+ await writeFile(changed,modifiedBytes);
+ result.modifiedAsset={path:changed,sha256:sha(modifiedBytes),bytes:modifiedBytes.length};
+ const preflight=await invoke(port,area,'preflight_desktop_local_backup',{selectedPath:result.areas[area].backup});
+ result.preSwitchSqlite=sqlite();
+ const pid=Number(launch.pid),profile=launch.webviewProfile;
+ const observer=spawn('python',[join(desktopRoot,'scripts/observe-backup-real-switch.py'),root,area,String(pid),runningExecutable,receipt.sha256],{stdio:['ignore','pipe','pipe']});
+ let observerOut='',observerErr='';
+ const observerDone=new Promise((done,fail)=>{observer.on('error',fail);observer.on('exit',code=>code===0?done():fail(new Error(`Observer exit ${code}: ${observerErr}`)));});
+ observer.stdout.on('data',chunk=>{observerOut+=chunk.toString();});observer.stderr.on('data',chunk=>{observerErr+=chunk.toString();});
+ await until(()=>observerOut.includes('READY'),'actual switch observer ready');
+ result.dispatch=await evaluate(port,`(()=>{window.__realRestoreOutcome={settled:false};window.__TAURI__.core.invoke('restore_desktop_local_backup',${JSON.stringify({fingerprint:preflight.fingerprint,replaceLocal:true})},${JSON.stringify({headers:{'x-nanfeng-data-area':area}})}).then(value=>{window.__realRestoreOutcome={settled:true,value}}).catch(error=>{window.__realRestoreOutcome={settled:true,error:String(error)}});return {dispatched:true}})()`);
+ await observerDone;
+ result.observer=JSON.parse(await readFile(join(root,`real-switch-observer-${area}.json`),'utf8'));
+ result.interruptionHit=result.observer.hit&&result.observer.afterTerminateState?.phase==='SWITCHING'&&result.observer.afterTerminateState?.operation==='INTERRUPTED';
+ if(!result.interruptionHit){result.missed=true;result.restoreOutcome=await evaluate(port,'window.__realRestoreOutcome');throw new Error('Actual switch not captured; preserved root is a MISS, never a passed interruption.');}
+ await until(()=>ps(`@(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").Count`)==='0','observed exact candidate exit');
+ pids.push(pid);launch=null;
+ await until(()=>ps(`@(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains(${quote(profile)}) }).Count`)==='0','interrupted profile exit');
+ check('actual durable SWITCHING and moved database interrupted without hook',true);
+ result.checkpointId=result.observer.afterTerminateState.checkpointId;
+ result.interruptedClosedSqlite=sqlite(true);
+ port=await start(true);await until(()=>evaluate(port,'Boolean(window.__TAURI__?.core?.invoke)'),'same-root diagnostic cold bridge');
+ result.coldRuntime=await invoke(port,'CHAT','read_desktop_runtime_info');
+ assert.equal(result.coldRuntime.automaticWorkSuppressed,true);
+ result.coldStatus=await invoke(port,area,'read_desktop_local_backup_status');
+ assert.equal(result.coldStatus.operation,'INTERRUPTED');
+ result.coldPersistedState=JSON.parse(await readFile(join(areaRoot(area),'local-backup/v1/state.json'),'utf8'));
+ assert.deepEqual(result.coldPersistedState,result.observer.afterTerminateState);
+ await verifyArea(port,area==='CHAT'?'WORK':'CHAT');check('other area complete exchange/drafts/assets cold conserved',true);
+ result.targetColdRead={};
+ for(const library of result.areas[area].libraries){
+  try{const read=await invoke(port,area,'read_desktop_workspace',{workspaceId:library.id});result.targetColdRead[library.id]={hash:hash(read.exchange),expected:library.hash,matches:hash(read.exchange)===library.hash};}
+  catch(error){result.targetColdRead[library.id]={error:String(error)};}
+ }
+ result.targetColdDraft=await invoke(port,area,'read_desktop_conversation_draft',{workspaceId:item.id,conversationId:item.draftId});
+ result.normalRecoveryBoundary='Diagnostic cold suppresses recovery. Actual SWITCHING/checkpoint retained. NORMAL rollback must run after the 12h owner releases; not accepted here.';
+ await normalClose(port);result.finalSqlite=sqlite(true);result.preparationPass=true;
+}catch(error){result.error=String(error.stack||error);process.exitCode=1;}
+finally{
+ if(launch){result.forcedCleanup=true;try{stop();}catch(error){result.cleanupError=String(error);}}
+ result.pids=pids;
+ if(root)await writeFile(join(root,'real-switch-backup-evidence.json'),JSON.stringify(result,null,2),{flag:'wx'});
+}
+console.log(JSON.stringify({root,preparationPass:result.preparationPass,interruptionHit:result.interruptionHit,error:result.error,fullNormalRecoveryAccepted:false}));

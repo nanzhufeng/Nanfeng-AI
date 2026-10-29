@@ -1,5 +1,6 @@
 import { icon, icons } from './icon-source.mjs';
 import { attachmentPreviewCapability } from './desktop-attachment-preview-owner.mjs';
+import { attachmentPreviewKey } from './attachment-preview-key.mjs';
 
 const escapeHtml = value => String(value ?? '').replace(
   /[&<>"']/g,
@@ -84,9 +85,9 @@ function textCard(hit, query) {
 }
 
 function attachmentGlyph(hit, thumbnails, videoThumbnails) {
-  const thumbnail = thumbnails?.[hit.attachmentId];
+  const thumbnail = thumbnails?.[attachmentPreviewKey(hit.workspaceId, hit.attachmentId)];
   if (hit.contentKind === 'IMAGE' && thumbnail?.dataUrl) return `<img src="${escapeHtml(thumbnail.dataUrl)}" alt="${escapeHtml(hit.displayName || '图片')}缩略图">`;
-  const videoThumbnail = videoThumbnails?.[hit.attachmentId];
+  const videoThumbnail = videoThumbnails?.[attachmentPreviewKey(hit.workspaceId, hit.attachmentId)];
   if (hit.contentKind === 'VIDEO' && videoThumbnail?.dataUrl) return `<img src="${escapeHtml(videoThumbnail.dataUrl)}" alt="${escapeHtml(hit.displayName || '视频')}预览图">`;
   const mime = String(hit.mimeType || '').toLowerCase();
   const extension = String(hit.displayName || '').match(/[.。]\s*([a-z0-9]{1,8})\s*$/i)?.[1]?.toUpperCase() || '';
@@ -126,19 +127,24 @@ function videoAttachmentCard(hit, query, thumbnails, videoThumbnails) {
 
 function audioAttachmentCard(hit, query, attachmentPreviews) {
   const entryId = escapeHtml(hit.entryId);
-  const preview = attachmentPreviews?.[hit.attachmentId];
+  const preview = attachmentPreviews?.[attachmentPreviewKey(hit.workspaceId, hit.attachmentId)];
   return `<article class="desktop-search-attachment-card desktop-search-audio-card" data-search-entry-id="${entryId}" data-search-attachment-preview="${escapeHtml(hit.attachmentId)}" data-thumbnail-workspace-id="${escapeHtml(hit.workspaceId)}">
     <button class="desktop-search-attachment-open desktop-search-media-open" data-action="open-search-attachment" data-entry-id="${entryId}" aria-label="播放音频：${escapeHtml(hit.displayName || '音频')}"><span class="desktop-search-visual-preview desktop-search-audio-preview"><span class="desktop-search-audio-heading"><span class="desktop-search-audio-play">${icon(icons.play, '播放')}</span><b>${audioFormatLabel(hit)}</b><time>${preview?.durationMillis ? formatMediaDuration(preview.durationMillis) : '--:--'}</time></span><span class="desktop-search-audio-track"><i></i></span></span>${cardDetails(hit, query)}</button>
   </article>`;
 }
 
 function filePreview(hit, attachmentPreviews) {
-  const preview = attachmentPreviews?.[hit.attachmentId];
+  const preview = attachmentPreviews?.[attachmentPreviewKey(hit.workspaceId, hit.attachmentId)];
   const mime = String(hit.mimeType || '').toLowerCase();
   const isText = attachmentPreviewCapability(hit).kind === 'text';
   if (preview?.dataUrl) return `<span class="desktop-search-visual-preview desktop-search-pdf-preview"><img src="${escapeHtml(preview.dataUrl)}" alt="${escapeHtml(hit.displayName || 'PDF')}首页预览"></span>`;
   if (isText && preview?.text) {
-    const label = mime === 'text/markdown' ? 'MD' : mime === 'application/json' ? 'JSON' : mime === 'text/csv' ? 'CSV' : 'TXT';
+    const label = mime === 'text/markdown' ? 'MD'
+      : mime === 'application/json' ? 'JSON'
+        : mime === 'text/csv' ? 'CSV'
+          : mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? 'DOCX'
+            : mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ? 'XLSX'
+              : mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ? 'PPTX' : 'TXT';
     return `<span class="desktop-search-visual-preview desktop-search-text-file-preview"><b>${label}</b><pre>${escapeHtml(preview.text)}</pre></span>`;
   }
   return `<span class="desktop-search-visual-preview desktop-search-generic-file-preview">${attachmentGlyph(hit, {}, {})}</span>`;

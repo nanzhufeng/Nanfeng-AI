@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { renderChatFirstShell } from '../src/chat-shell.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const source = await readFile(resolve(root, 'src/app.mjs'), 'utf8');
@@ -11,9 +12,17 @@ const capability = await readFile(resolve(root, 'src-tauri/capabilities/default.
 const permissions = await readFile(resolve(root, 'src-tauri/permissions/default.toml'), 'utf8');
 const cargo = await readFile(resolve(root, 'src-tauri/Cargo.toml'), 'utf8');
 
-test('P6-B UI has a real three-pane workbench and explicit empty state', () => {
-  for (const token of ['chat-sidebar', 'chat-main', 'chat-empty-canvas', 'workspace-standalone-shell', '工作区']) assert.ok(`${source}\n${chatShell}`.includes(token));
-  assert.ok(!source.includes('P6-A 交换夹具</h1>'));
+test('P6-B work capabilities use the current standalone workspace and explicit empty state', () => {
+  const html = renderChatFirstShell({ data: { summary: { id: 'workspace-empty' }, exchange: {
+    conversations: [], projects: [], knowledge: [], memory: [], relations: [],
+  } }, native: true, pane: 'work', selectedWorkProjectId: null, selectedConversationId: null,
+  composerDraft: '', status: '', error: '', connection: {} });
+  assert.match(html, /class="workspace-shell"/);
+  assert.match(html, /aria-label="工作区导航"/);
+  for (const action of ['show-work', 'show-projects', 'show-knowledge', 'show-memory']) assert.ok(html.includes(`data-action="${action}"`));
+  assert.match(html, /还没有项目工作对话/);
+  assert.doesNotMatch(html, /Inspector|从受控交换包开始|id="chat-composer"/);
+  assert.ok(source.includes('isWorkspaceRoot(data, visiblePane, state.selectedWorkProjectId, state.selectedConversationId)'));
 });
 
 test('P6-D keyboard, focus and compact contracts remain code-owned', () => {
@@ -38,7 +47,7 @@ test('P6-C keeps editing, durable history, recycle bin and safe metadata on type
 
 test('P10-A exposes separate local, provider and encrypted-sync status without a network plugin', () => {
   for (const token of ['LOCAL_OFFLINE / LOCAL_ONLY', 'ENCRYPTED_SYNC', 'read_dual_path_status']) assert.ok(source.includes(token));
-  for (const token of ['data-action="show-settings"', '本地可用', '联网未配置', '加密同步未配置']) assert.ok(chatShell.includes(token));
+  for (const token of ['data-action="show-settings"', '本地可用', '联网未配置', '云端同步未配置']) assert.ok(chatShell.includes(token));
   assert.ok(capability.includes('allow-read-dual-path-status'));
   assert.ok(permissions.includes('allow-read-dual-path-status'));
   assert.ok(!cargo.includes('tauri-plugin-http'));

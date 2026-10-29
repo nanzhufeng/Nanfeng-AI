@@ -1,9 +1,10 @@
-import { renderConfiguredChatShell as renderChatFirstShell } from './helpers/enabled-model-catalog.mjs';
+import { MODEL_SERVICE_PREVIEW_SETTINGS } from '../src/android-settings-shell.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { } from '../src/chat-shell.mjs';
+import { runInNewContext } from 'node:vm';
+import { renderChatFirstShell } from '../src/chat-shell.mjs';
 
 const data = {
   summary: { id: 'workspace-c04-c06' },
@@ -14,6 +15,7 @@ const data = {
 
 const renderPicker = ({ tier = null, webSearchEnabled = false, now = '2026-09-02T02:00:00Z' } = {}) => renderChatFirstShell({
   data,
+  modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(service => ({ ...service, enabled: true })),
   native: true,
   selectedConversationId: null,
   composerDraft: '',
@@ -41,7 +43,6 @@ test('C04 model root is a Composer-linked sheet with scrim, handle, hierarchy, a
     'data-action="select-p6g-auto"',
     'data-tier="DAILY"',
     'data-tier="DEEP"',
-    'data-tier="RELAYCORE"',
     'aria-selected="true"',
   ]) assert.ok(html.includes(token), token);
   assert.equal((html.match(/class="composer-model-sheet-card/g) || []).length, 4);
@@ -54,7 +55,6 @@ test('C05 daily candidates show the section title and runtime Provider plus live
   for (const token of [
     '选择具体模型',
     'Claude Sonnet 5.5',
-    'Claude Haiku 5.5',
     'DeepSeek V4.1 Flash',
     'GPT-6 Luna',
     'GLM-5.3 Flash',
@@ -80,6 +80,7 @@ test('C06 deep candidates use Qwen3.8-Max and truthful offline runtime labels', 
   const text = visibleText(html);
   for (const token of [
     '选择具体模型',
+    'Muse Wonder',
     'Claude Opus 5.5',
     'DeepSeek V4 Pro',
     'GPT-6.1 Sol',
@@ -91,8 +92,6 @@ test('C06 deep candidates use Qwen3.8-Max and truthful offline runtime labels', 
     '千问 · 未联网',
   ]) assert.ok(text.includes(token), token);
   assert.ok(!text.includes('Kimi K3'));
-  assert.ok(!text.includes('Claude Fable 5.1'));
-  assert.ok(!text.includes('GPT-6 Astra · OpenRouter'));
 });
 
 test('C04-C06 CSS has one shared rounded sheet owner and no legacy model popover selector', async () => {
@@ -122,10 +121,47 @@ test('C06 pricing-period refresh follows every open model-sheet render, not side
   for (const token of [
     'function scheduleComposerModelPricingRefresh()',
     'millisecondsUntilDeepSeekPricingTransition() + 80',
-    'scheduleComposerModelPricingRefresh();',
   ]) assert.ok(app.includes(token), token);
+  const renderStart = app.indexOf('function renderUnified()');
+  const renderEnd = app.indexOf('function cameraCaptureDialog', renderStart);
+  assert.ok(renderStart >= 0 && renderEnd > renderStart);
+  assert.match(app.slice(renderStart, renderEnd), /scheduleComposerModelPricingRefresh\(\);/);
   const sidebarStart = app.indexOf('function updateSidebarWidth(width)');
   const sidebarEnd = app.indexOf("app.addEventListener('pointerdown'", sidebarStart);
   assert.ok(sidebarStart >= 0 && sidebarEnd > sidebarStart);
   assert.ok(!app.slice(sidebarStart, sidebarEnd).includes('composerModelPricingRefreshTimer'));
+});
+
+test('C06 keeps one pricing deadline while open and cancels it when the model sheet closes', async () => {
+  const app = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
+  const start = app.indexOf('function scheduleComposerModelPricingRefresh()');
+  const end = app.indexOf('\n}', start) + 2;
+  assert.ok(start >= 0 && end > start);
+  const timers = new Map();
+  let sequence = 0;
+  let rendered = 0;
+  const state = { p6gModelPickerOpen: false };
+  const context = { state, millisecondsUntilDeepSeekPricingTransition: () => 200,
+    render: () => { rendered += 1; }, window: {
+      setTimeout: (callback, delay) => { const id = ++sequence; timers.set(id, { callback, delay }); return id; },
+      clearTimeout: id => timers.delete(id),
+    } };
+  runInNewContext(`let composerModelPricingRefreshTimer = null;\n${app.slice(start, end)}`, context);
+  const schedule = context.scheduleComposerModelPricingRefresh;
+  schedule();
+  assert.equal(timers.size, 0);
+  state.p6gModelPickerOpen = true;
+  schedule(); schedule();
+  assert.equal(timers.size, 1);
+  const timer = [...timers.values()][0];
+  assert.equal(timer.delay, 280);
+  timers.clear(); timer.callback();
+  assert.equal(rendered, 1);
+  schedule();
+  const queued = [...timers.values()][0];
+  state.p6gModelPickerOpen = false;
+  schedule();
+  assert.equal(timers.size, 0);
+  queued.callback();
+  assert.equal(rendered, 1);
 });

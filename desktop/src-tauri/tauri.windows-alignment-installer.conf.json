@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "南枫 AI Windows 对齐验收",
+  "version": "0.6.0-p6d-dev",
+  "identifier": "com.nanzhufeng.ai.desktop.windowsalignmentinstaller",
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": []
+      }
+    }
+  },
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data:; media-src 'self' data: blob: nfai-media: http://nfai-media.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'"
+    },
+    "windows": [
+      {
+        "label": "main",
+        "dragDropEnabled": false,
+        "title": "南枫 AI · 隔离测试（非日常版）",
+        "visible": false,
+        "width": 1440,
+        "height": 900,
+        "minWidth": 780,
+        "minHeight": 560
+      }
+    ]
+  },
+  "bundle": {
+    "resources": {
+      "resources/media-tools/windows-x86_64": "media-tools/windows-x86_64",
+      "resources/alignment-launcher": "alignment-launcher"
+    }
+  }
+}

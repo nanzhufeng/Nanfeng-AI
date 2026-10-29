@@ -37,10 +37,22 @@ function literalArrayActionHandlers(source) {
   );
 }
 
+function mappedRenderedActions(source) {
+  const result = [];
+  for (const [, name] of source.matchAll(/data-action=\\?["']\$\{([a-zA-Z_$][\w$]*)\}["']/g)) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const map = source.match(new RegExp(`\\b(?:const|let)\\s+${escaped}\\s*=\\s*\\{([\\s\\S]*?)\\}\\s*\\[`));
+    if (map) result.push(...matches(map[1], /:\s*['"]([a-z0-9-]+)['"]/g));
+  }
+  return result;
+}
+
 function collectInventory() {
   const androidRoutes = read('app/src/main/java/com/nanzhufeng/ai/ui/P5AAdaptiveUi.kt');
   const androidApp = read('app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt');
   const appSource = read('desktop/src/app.mjs');
+  // Mounted import controllers bind their handlers to the captured area owner.
+  const mountedHandlerSource = appSource + '\n' + read('desktop/src/pdf-knowledge-tasks.mjs') + '\n' + read('desktop/src/web-knowledge-tasks.mjs') + '\n' + read('desktop/src/knowledge-duplicates.mjs') + '\n' + read('desktop/src/domain-editor-conflict.mjs');
   const desktopSourceEntries = listFiles(path.join(desktopRoot, 'src'), '.mjs').map(file => ({
     file,
     source: fs.readFileSync(file, 'utf8'),
@@ -53,15 +65,22 @@ function collectInventory() {
 
   const renderedActions = sorted([
     ...matches(desktopCombined, /data-action=\\?["']([a-z0-9-]+)["']/g),
+    ...desktopSources.flatMap(mappedRenderedActions),
     ...desktopSourceEntries.flatMap(({ file, source }) => file.endsWith('app.mjs') ? [] : matches(source, /\baction:\s*['"]([a-z0-9-]+)['"]/g)),
   ]);
   const handledActions = sorted([
-    ...matches(appSource, /\baction\s*[!=]==?\s*['"]([a-z0-9-]+)['"]/g),
-    ...matches(appSource, /\[data-action=\\?["']([a-z0-9-]+)["']\]/g),
-    ...matches(appSource, /dataset\.action\s*[!=]==?\s*['"]([a-z0-9-]+)['"]/g),
-    ...literalArrayActionHandlers(appSource),
+    ...matches(mountedHandlerSource, /\baction\s*[!=]==?\s*['"]([a-z0-9-]+)['"]/g),
+    ...matches(mountedHandlerSource, /\[data-action=\\?["']([a-z0-9-]+)["']\]/g),
+    ...matches(mountedHandlerSource, /dataset\.action\s*[!=]==?\s*['"]([a-z0-9-]+)['"]/g),
+    ...literalArrayActionHandlers(mountedHandlerSource),
   ]);
-  const invokedCommands = sorted(matches(desktopCombined, /\binvoke\(\s*['"]([a-zA-Z0-9_:|-]+)['"]/g));
+  // These helpers bind the original area/preview/backup owner. Their literal
+  // commands need the same Rust, registration and ACL checks as direct invoke.
+  // Variable commands still require owner-specific semantic review.
+  const invokedCommands = sorted([
+    ...matches(desktopCombined, /\b(?:invoke|invokeOwner)\(\s*['"]([a-zA-Z0-9_:|-]+)['"]/g),
+    ...matches(desktopCombined, /\b(?:invokeForAuthorizedDataAreaOperation|invokeForDataArea|invokePreviewOwner|invokeSelectedBackup)\(\s*[^,\n]+,\s*['"]([a-zA-Z0-9_:|-]+)['"]/g),
+  ]);
   const rustCommands = sorted(matches(
     rustCombined,
     /#\[tauri::command\][\s\S]{0,160}?\b(?:pub\s+)?(?:async\s+)?fn\s+([a-zA-Z0-9_]+)/g,
@@ -69,6 +88,34 @@ function collectInventory() {
   const handlerBody = read('desktop/src-tauri/src/lib.rs').match(/generate_handler!\[([\s\S]*?)\]\)/)?.[1] || '';
   const registeredCommands = sorted(matches(handlerBody, /\b([a-z][a-zA-Z0-9_]*)\s*,?/g));
   const localInvokes = invokedCommands.filter(command => !command.startsWith('plugin:'));
+  const capability = JSON.parse(read('desktop/src-tauri/capabilities/default.json'));
+  const customPermissions = new Map(read('desktop/src-tauri/permissions/default.toml')
+    .split('[[permission]]').slice(1)
+    .map(block => [
+      block.match(/^identifier\s*=\s*"([^"]+)"/m)?.[1],
+      matches(block.match(/^commands\.allow\s*=\s*\[([^\]]*)\]/m)?.[1] || '', /"([a-zA-Z0-9_]+)"/g),
+    ]));
+  const islandCapability = JSON.parse(read('desktop/src-tauri/capabilities/generation-island.json'));
+  const islandModuleNames = new Set(['island-window.mjs', 'nanfeng-island.mjs']);
+  const islandUsedByMain = desktopSourceEntries.filter(entry => !islandModuleNames.has(path.basename(entry.file)))
+    .some(entry => /\b(?:from\s*|import\s*(?:\(\s*)?)['"][^'"]*(?:island-window|nanfeng-island)\.mjs['"]/.test(entry.source));
+  // The standalone island bootstrap owns its own narrow capability. A main-window
+  // invocation of the same command still has to pass the main-window permission.
+  const windowScopes = [
+    { window: 'main', capability, entries: desktopSourceEntries.filter(entry => !islandModuleNames.has(path.basename(entry.file)) || islandUsedByMain) },
+    { window: 'generation-island', capability: islandCapability, entries: desktopSourceEntries.filter(entry => islandModuleNames.has(path.basename(entry.file))) },
+  ].map(scope => {
+    const source = scope.entries.map(entry => entry.source).join('\n');
+    const commands = sorted([
+      ...matches(source, /\b(?:invoke|invokeOwner)\(\s*['"]([a-zA-Z0-9_:|-]+)['"]/g),
+      ...matches(source, /\b(?:invokeForAuthorizedDataAreaOperation|invokeForDataArea|invokePreviewOwner|invokeSelectedBackup)\(\s*[^,\n]+,\s*['"]([a-zA-Z0-9_:|-]+)['"]/g),
+    ]).filter(command => !command.startsWith('plugin:'));
+    const permissions = scope.capability.permissions.filter(permission => !permission.includes(':'));
+    const allowed = sorted(permissions.flatMap(permission => customPermissions.get(permission) || []));
+    return { window: scope.window, capability: scope.capability.identifier, permissions, invokedCommands: commands, allowedCommands: allowed,
+      invokesWithoutPermission: commands.filter(command => !scope.capability.windows.includes(scope.window) || !allowed.includes(command)) };
+  });
+  const activeCustomPermissions = sorted(windowScopes.flatMap(scope => scope.permissions));
   const testReferencedActions = sorted(renderedActions.filter(action => testCombined.includes(action)));
   const testReferencedCommands = sorted(localInvokes.filter(command => testCombined.includes(command)));
 
@@ -96,8 +143,11 @@ function collectInventory() {
       registeredCommands,
       invokesWithoutRustCommand: localInvokes.filter(command => !rustCommands.includes(command)),
       invokesWithoutRegistration: localInvokes.filter(command => !registeredCommands.includes(command)),
+      windowScopes,
+      invokesWithoutPermission: sorted(windowScopes.flatMap(scope => scope.invokesWithoutPermission)),
+      capabilityPermissionsMissingDefinition: activeCustomPermissions.filter(permission => !customPermissions.has(permission)),
       invokesWithoutTestReference: localInvokes.filter(command => !testReferencedCommands.includes(command)),
-      dialogKinds: sorted(matches(appSource, /\bkind:\s*['"]([a-z0-9-]+)['"]/g)),
+      dialogKinds: sorted(matches(mountedHandlerSource, /\bkind:\s*['"]([a-z0-9-]+)['"]/g)),
     },
   };
 }
@@ -119,6 +169,8 @@ function summarize(inventory) {
     `desktop_registered_commands=${desktop.registeredCommands.length}`,
     `desktop_invokes_without_rust_command=${desktop.invokesWithoutRustCommand.length}:${desktop.invokesWithoutRustCommand.join(',') || '-'}`,
     `desktop_invokes_without_registration=${desktop.invokesWithoutRegistration.length}:${desktop.invokesWithoutRegistration.join(',') || '-'}`,
+    `desktop_invokes_without_permission=${desktop.invokesWithoutPermission.length}:${desktop.invokesWithoutPermission.join(',') || '-'}`,
+    `desktop_capability_permissions_missing_definition=${desktop.capabilityPermissionsMissingDefinition.length}:${desktop.capabilityPermissionsMissingDefinition.join(',') || '-'}`,
     `desktop_invokes_without_test_reference=${desktop.invokesWithoutTestReference.length}`,
     `desktop_dialog_kinds=${desktop.dialogKinds.length}`,
   ].join('\n');
@@ -134,5 +186,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     inventory.desktop.unhandledRenderedActions.length
     || inventory.desktop.invokesWithoutRustCommand.length
     || inventory.desktop.invokesWithoutRegistration.length
+    || inventory.desktop.invokesWithoutPermission.length
+    || inventory.desktop.capabilityPermissionsMissingDefinition.length
   ) process.exitCode = 1;
 }

@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os'; import {join} from 'node:path'; import {pathToFileURL,fileURLToPath} from 'node:url'; import {spawn} from 'node:child_process';
-const chrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+import {tmpdir} from 'node:os'; import {join,resolve,dirname,basename} from 'node:path'; import {pathToFileURL,fileURLToPath} from 'node:url'; import {spawn} from 'node:child_process';
+const chrome=process.platform==='win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 test('shell controls keep long conversations connected and settings navigation stays error free', { skip: !existsSync(chrome), timeout: 40000 }, async () => {
 const dir=await mkdtemp(join(tmpdir(),'nfai-click-'));const src=fileURLToPath(new URL('../src/',import.meta.url));
 const script=`try {
@@ -25,8 +25,7 @@ const script=`try {
  await click(act('toggle-batch-select-all'));await click(act('toggle-batch-select-all'));await click(act('toggle-conversation-batch-edit'));
  for(const name of ['toggle-composer-add','toggle-p6g-model-picker']){await click(act(name));await click(act(name));}
  await click(act('open-conversation-row-menu'));await click(act('context-menu-rename'));
- const renameInput=document.querySelector('[data-inline-conversation-rename]');if(!renameInput)throw Error('missing inline rename editor');
- renameInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,0));controls.push({action:'cancel-inline-conversation-rename',detail:'',ms:0});
+ const titleInput=document.querySelector('[data-inline-conversation-rename]');if(!titleInput)throw Error('inline rename input missing');titleInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,0));if(state.inlineConversationRename)throw Error('Escape must cancel inline rename');
  await click(act('open-conversation-row-menu'));await click(act('context-menu-delete'));await click(act('close-dialog'));
  const chatDetachments=detachments;observer.disconnect();
  await click(act('show-settings'));
@@ -70,6 +69,6 @@ try {
  assert.equal(facts.top,facts.initialTop);
  assert.equal(facts.initialTop,600);
  assert.equal(facts.timing.length,4);
-}finally{ws?.close();child.kill('SIGTERM');await new Promise(r=>child.once('exit',r));await rm(dir,{recursive:true,force:true})}
+}finally{ws?.close();const exited=child.exitCode!==null||child.signalCode!==null?Promise.resolve():new Promise(r=>child.once('exit',r));child.kill('SIGTERM');await exited;const target=resolve(dir);if(dirname(target)!==resolve(tmpdir())||!basename(target).startsWith('nfai-click-'))throw Error('unsafe temporary profile path');await rm(target,{recursive:true,force:true})}
 
 });

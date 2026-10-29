@@ -26,6 +26,7 @@ export function reminderNotificationAction(event) {
   const extra = reminderNotificationExtra(payload);
   return {
     clickId: typeof payload.clickId === 'string' ? payload.clickId : '',
+    dataArea: payload.dataArea === 'WORK' ? 'WORK' : 'CHAT',
     ...extra,
   };
 }

@@ -13,7 +13,7 @@ export function createCloudConversationOpenRoute({
 }) {
   let generation = 0;
 
-  return async function openCloudConversationRoute(route) {
+  async function openCloudConversationRoute(route) {
     const resident = reuse?.(route);
     if (resident?.alreadySelected) return { status: 'ALREADY_OPEN' };
     const requestGeneration = ++generation;
@@ -41,5 +41,7 @@ export function createCloudConversationOpenRoute({
       if (requestGeneration === generation) onFailure(route, error);
       return { status: 'FAILED' };
     }
-  };
+  }
+  openCloudConversationRoute.cancel = () => { generation += 1; };
+  return openCloudConversationRoute;
 }

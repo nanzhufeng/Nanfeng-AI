@@ -1,3 +1,4 @@
+import { workspaceUiEnabled } from './chat-ui-policy.mjs';
 /** Nanfeng Island: background-only generation metadata presentation. */
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const isRunning = task => ['PENDING', 'RUNNING'].includes(task.state);
@@ -42,24 +43,47 @@ export class IslandPresentation {
     return visible;
   }
 }
-export function islandMarkup(controller, now) {
+const workViewHidden=(task,runtimeInfo)=>task.dataArea==='WORK'&&!workspaceUiEnabled(runtimeInfo);
+function taskActions(task,runtimeInfo) {
+  const hidden=workViewHidden(task,runtimeInfo);
+  return `${hidden?'<p>工作区查看入口已隐藏</p>':''}<div class="island-actions"><button data-island-action="open" data-island-key="${escape(task.key)}" ${hidden?'disabled title="工作区查看入口已隐藏"':''}>查看对话</button>${isRunning(task)?`<button data-island-action="stop" data-island-key="${escape(task.key)}">停止</button>`:''}</div>`;
+}
+export function islandMarkup(controller, now, runtimeInfo={}) {
   const tasks=controller.visible(now);const active=tasks.filter(isRunning);const selected=active[0] || tasks.at(-1);
   if (!selected && !controller.notice) return '';
   const kind=controller.notice?.kind || (selected && isRunning(selected) ? 'running' : selected && isComplete(selected) ? 'success' : selected?.state==='CANCELLED' ? 'cancelled' : 'error');
   const summary=controller.notice?.message.split('\n')[0] || (active.length>1 ? `${active.length} 个对话生成中` : `${selected.modelLabel || "模型"} · ${taskStage(selected)} · ${selected.savedCharacters || 0} 字`);
-  return `<section class="nanfeng-island ${kind}${controller.expanded?' expanded':''}" aria-label="南枫岛"><button class="island-summary" data-island-action="toggle" aria-expanded="${controller.expanded}"><span class="island-indicator" aria-hidden="true">${kind==='success'?'✓':kind==='error'?'!':kind==='cancelled'?'−':''}</span><span data-island-summary>${escape(summary)}</span></button><span class="island-sr-status" role="status" aria-live="polite">${escape(controller.notice?.message.split("\n")[0] || (active.length>1 ? `${active.length} 个对话生成中` : taskStage(selected)))}</span>${controller.expanded?`<div class="island-details">${controller.notice?`<p>${escape(controller.notice.message)}</p>`:''}${tasks.map(task=>`<article data-island-task="${escape(task.key)}"><strong>${escape(task.modelLabel || '模型连接中')}</strong><p data-island-detail>${escape(taskStage(task))} · ${escape(taskDetail(task,now))}</p>${!isRunning(task)&&!isComplete(task)&&task.state!=='CANCELLED'?'<p>断点已保留，请返回对话查看原因并手动续写。</p>':''}<div class="island-actions"><button data-island-action="open" data-island-key="${escape(task.key)}">查看对话</button>${isRunning(task)?`<button data-island-action="stop" data-island-key="${escape(task.key)}">停止</button>`:''}</div></article>`).join('')}</div>${active.length?'':'<div class="island-actions"><button data-island-action="dismiss">关闭提醒</button></div>'}`:''}</section>`;
+  return `<section class="nanfeng-island ${kind}${controller.expanded?' expanded':''}" aria-label="南枫岛"><button class="island-summary" data-island-action="toggle" aria-expanded="${controller.expanded}"><span class="island-indicator" aria-hidden="true">${kind==='success'?'✓':kind==='error'?'!':kind==='cancelled'?'−':''}</span><span data-island-summary>${escape(summary)}</span></button><span class="island-sr-status" role="status" aria-live="polite">${escape(controller.notice?.message.split("\n")[0] || (active.length>1 ? `${active.length} 个对话生成中` : taskStage(selected)))}</span>${controller.expanded?`<div class="island-details">${controller.notice?`<p>${escape(controller.notice.message)}</p>`:''}${tasks.map(task=>`<article data-island-task="${escape(task.key)}"><strong>${escape(task.modelLabel || '模型连接中')}</strong><p data-island-detail>${escape(taskStage(task))} · ${escape(taskDetail(task,now))}</p>${!isRunning(task)&&!isComplete(task)&&task.state!=='CANCELLED'&&!workViewHidden(task,runtimeInfo)?'<p>断点已保留，请返回对话查看原因并手动续写。</p>':''}${taskActions(task,runtimeInfo)}</article>`).join('')}</div>${active.length?'':'<div class="island-actions"><button data-island-action="dismiss">关闭提醒</button></div>'}`:''}</section>`;
 }
-export function mountNanfengIsland({host, invoke, background=false, clock=()=>Date.now(), onError=()=>{}}) {
+export function mountNanfengIsland({host, invoke, background=false, runtimeInfo={}, clock=()=>Date.now(), onError=()=>{}}) {
   // Only the native background window may present generation islands.
   if (!background) {
     host.innerHTML = '';
     return { feedback() {}, update() {}, dispose() { host.innerHTML = ''; } };
   }
   const controller=new IslandPresentation();let disposed=false;let timer=null;let last='';let expanded=false;let structure='';
+  let presentationTimer=null;let presentationDeadline=null;let presentationRevision=0;
+  function schedulePresentationDeadline(visible,now) {
+    const deadlines=visible.filter(task=>!isRunning(task)&&!(isComplete(task)&&controller.expanded&&controller.expandedKeys.has(task.key)))
+      .map(task=>controller.deadlines.get(task.key)).filter(deadline=>Number.isFinite(deadline)&&deadline>now);
+    if(controller.notice&&!controller.expanded&&controller.notice.until>now) deadlines.push(controller.notice.until);
+    const next=Math.min(...deadlines);
+    if(presentationTimer!==null&&next===presentationDeadline) return;
+    if(presentationTimer!==null) clearTimeout(presentationTimer);
+    presentationTimer=null;presentationDeadline=null;const revision=++presentationRevision;
+    if(!Number.isFinite(next)) return;
+    presentationDeadline=next;
+    presentationTimer=setTimeout(()=>{
+      if(disposed||revision!==presentationRevision) return;
+      presentationTimer=null;presentationDeadline=null;
+      paint();void publishPresentation();
+    },Math.max(1,Math.min(2147483647,next-now)));
+  }
+
   function paint() {
     if(disposed) return;
-    const now=clock();const visible=controller.visible(now);const active=visible.filter(isRunning);const selected=active[0] || visible.at(-1);
-    const markup=islandMarkup(controller,now);
+    const now=clock();const visible=controller.visible(now);schedulePresentationDeadline(visible,now);const active=visible.filter(isRunning);const selected=active[0] || visible.at(-1);
+    const markup=islandMarkup(controller,now,runtimeInfo);
     const signature=JSON.stringify({expanded:controller.expanded,notice:controller.notice?.message,kind:controller.notice?.kind,tasks:visible.map(t=>[t.key,t.state,t.modelLabel])});
     if(signature===structure && host.firstElementChild) {
       const summary=controller.notice?.message.split('\n')[0] || (active.length>1 ? `${active.length} 个对话生成中` : `${selected.modelLabel || "模型"} · ${taskStage(selected)} · ${selected.savedCharacters || 0} 字`);
@@ -88,26 +112,48 @@ export function mountNanfengIsland({host, invoke, background=false, clock=()=>Da
     }
   }
 
+  let visibilityRevision=0;let outsideUnavailableNotified=false;
+  async function publishPresentation() {
+    if(disposed || !background || !invoke) return;
+    const revision=++visibilityRevision;
+    const frame={visible:!!host.firstElementChild,height:(host.firstElementChild?.getBoundingClientRect().height || 36)+12,expanded:controller.expanded};
+    if(!frame.expanded) outsideUnavailableNotified=false;
+    try {
+      const result=await invoke('generation_island_visibility',frame);
+      if(disposed || revision!==visibilityRevision) return;
+      if(result?.outsideClick==='active') outsideUnavailableNotified=false;
+      if(result?.outsideClick==='unavailable' && frame.expanded && !outsideUnavailableNotified) {
+        outsideUnavailableNotified=true;
+        controller.feedback('点击外部收起暂不可用，请点击顶部收起。','error',clock());
+        paint();void publishPresentation();
+      }
+    } catch(error) {if(!disposed && revision===visibilityRevision) onError(error);}
+  }
   async function poll() {
     if(disposed) return;
-    try { if(invoke) controller.update(await invoke('read_generation_island'),clock());paint();if(background&&invoke) await invoke('generation_island_visibility',{visible:!!host.firstElementChild,height:(host.firstElementChild?.getBoundingClientRect().height || 36)+12}); }
-    catch (error) {onError(error);} // An unavailable presentation cannot cancel native generation.
+    try { const tasks=invoke ? await invoke('read_generation_island') : null;if(disposed) return;if(invoke) controller.update(tasks,clock());paint();await publishPresentation(); }
+    catch (error) {if(!disposed) onError(error);} // An unavailable presentation cannot cancel native generation.
     finally {if(!disposed) timer=setTimeout(poll,1000);}
   }
-  const collapse=()=>{controller.collapse(clock());paint();};
+  const collapse=()=>{controller.collapse(clock());paint();void publishPresentation();};
   const outside=event=>{if(controller.expanded && !host.contains(event.target)) collapse();};
   document.addEventListener('pointerdown',outside,true);
   let unlisten=null;
   const listen=globalThis.window?.__TAURI__?.event?.listen;
   if(background && listen) void listen('nanfeng-island-collapse-v1',collapse).then(fn=>{if(disposed) fn();else unlisten=fn;}).catch(onError);
-  host.addEventListener('click',async event=>{
+  const click=async event=>{
     const button=event.target.closest('[data-island-action]');if(!button) return;
     const action=button.dataset.islandAction;
+    const task=controller.tasks.find(t=>t.key===button.dataset.islandKey);
+    if(action==='open'&&task&&workViewHidden(task,runtimeInfo)){controller.feedback('工作区查看入口已隐藏，任务和数据仍保留。','error',clock());paint();void publishPresentation();return;}
     if(action==='toggle') controller.toggle(clock());
     else if(action==='dismiss') controller.dismiss();
     else if(invoke) {try {await invoke('generation_island_action',{key:button.dataset.islandKey,action});if(action==='open') controller.collapse(clock());} catch {controller.feedback('任务操作未完成，请返回对话重试。','error',clock());}}
-    paint();
-  });
+    paint();void publishPresentation();
+  };
+  host.addEventListener('click',click);
+  const keydown=event=>{if(event.key==='Escape' && controller.expanded){event.preventDefault();event.stopPropagation();collapse();}};
+  document.addEventListener('keydown',keydown,true);
   void poll();
-  return {controller, feedback(message,kind='success') {controller.feedback(message,kind,clock());paint();}, update(tasks) {controller.update(tasks,clock());paint();}, dispose() {disposed=true;clearTimeout(timer);document.removeEventListener('pointerdown',outside,true);unlisten?.();host.innerHTML='';}};
+  return {controller, feedback(message,kind='success') {controller.feedback(message,kind,clock());paint();void publishPresentation();}, update(tasks) {controller.update(tasks,clock());paint();void publishPresentation();}, dispose() {disposed=true;clearTimeout(timer);clearTimeout(presentationTimer);presentationTimer=null;presentationDeadline=null;presentationRevision++;document.removeEventListener('pointerdown',outside,true);document.removeEventListener('keydown',keydown,true);host.removeEventListener('click',click);unlisten?.();host.innerHTML='';}};
 }

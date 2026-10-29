@@ -78,7 +78,7 @@ test('the six screenshot-heavy settings surfaces share spacious cards and comple
     '模型设置', '费用与用量', '上下文记录', '运行诊断',
     '收藏', '已归档', '回收站',
     '导入 ChatGPT ZIP', '导入工作区', '导出工作区', '本机备份与恢复',
-    '多模型聊天 AI', '已有工作区数据保留', '本次 Context 控制', '离线评测',
+    '管理 Projects', '管理知识库', '本次 Context 控制', '离线评测',
   ]) assert.ok(html.includes(token), token);
 });
 

@@ -166,9 +166,9 @@ fn forbidden(key: &str) -> bool {
 /// bounded here so the general sensitive-key guard remains fail-closed.
 fn fixed_portable_model_usage(value: &Value) -> Result<(), String> {
     let usage = object(value)?;
-    exact(
-        usage,
-        &[
+    let versioned = usage.contains_key("factsVersion");
+    if versioned && usage.get("factsVersion").and_then(Value::as_u64) != Some(2) { return Err(err()); }
+    let mut keys = vec![
             "modelId",
             "modelDisplayName",
             "inputTokens",
@@ -180,8 +180,16 @@ fn fixed_portable_model_usage(value: &Value) -> Result<(), String> {
             "costCurrencyCode",
             "costTotalMicros",
             "costSource",
-        ],
-    )?;
+        ];
+    if versioned { keys.extend(["factsVersion", "actualModelId"]); }
+    exact(usage, &keys)?;
+    if versioned {
+        match usage.get("actualModelId") {
+            Some(Value::Null) => {},
+            Some(value) if value.as_str().is_some_and(|value| !value.trim().is_empty() && value.len() <= 256) => {},
+            _ => return Err(err()),
+        }
+    }
     for key in ["modelId", "modelDisplayName"] {
         usage
             .get(key)
@@ -934,6 +942,32 @@ mod tests {
         );
         assert!(open_direct(&sealed, "other.app", "sync-fixture-v1", 7).is_err());
         assert!(open_direct(&sealed, "com.nanzhufeng.ai", "sync-fixture-v1", 8).is_err());
+    }
+
+    #[test]
+    fn direct_envelope_rejects_duplicate_keys_and_mismatched_payload_identity() {
+        let payload = fixture()["payload"].clone();
+        let sealed = seal_direct(payload).unwrap();
+        let duplicate = sealed.replacen(
+            "\"appId\":",
+            "\"appId\":\"shadow.app\",\"appId\":",
+            1,
+        );
+        assert_ne!(duplicate, sealed);
+        assert!(open_direct(&duplicate, "com.nanzhufeng.ai", "sync-fixture-v1", 7).is_err());
+
+        for field in ["appId", "documentId", "revision"] {
+            let mut root: Value = serde_json::from_str(&sealed).unwrap();
+            root["payload"][field] = match field {
+                "appId" => json!("shadow.app"),
+                "documentId" => json!("other-document"),
+                _ => json!(8),
+            };
+            let plain = canonical(&root["payload"]).unwrap();
+            root["payloadHash"] = json!(hash(plain.as_bytes()));
+            root["payloadByteCount"] = json!(plain.len());
+            assert!(open_direct(&canonical(&root).unwrap(), "com.nanzhufeng.ai", "sync-fixture-v1", 7).is_err(), "{field}");
+        }
     }
 
     #[test]

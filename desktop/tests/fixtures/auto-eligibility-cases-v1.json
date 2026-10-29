@@ -1,0 +1,271 @@
+[
+  {
+    "name": "enabled-without-key",
+    "enabled": [
+      "QWEN"
+    ],
+    "stored": [],
+    "mimes": [],
+    "web": false,
+    "expected": null
+  },
+  {
+    "name": "stored-but-disabled",
+    "enabled": [
+      "QWEN"
+    ],
+    "stored": [
+      "DEEPSEEK"
+    ],
+    "mimes": [
+      "text/plain"
+    ],
+    "web": false,
+    "expected": null
+  },
+  {
+    "name": "uncredentialed-first-provider",
+    "enabled": [
+      "QWEN",
+      "RELAYCORE_GPT"
+    ],
+    "stored": [
+      "RELAYCORE_GPT"
+    ],
+    "mimes": [],
+    "web": false,
+    "expected": "RELAYCORE_GPT_6_1_SOL"
+  },
+  {
+    "name": "disabled-stored-qwen",
+    "enabled": [
+      "DEEPSEEK"
+    ],
+    "stored": [
+      "QWEN",
+      "DEEPSEEK"
+    ],
+    "mimes": [
+      "text/plain"
+    ],
+    "web": false,
+    "expected": "DEEPSEEK_V4_FLASH"
+  },
+  {
+    "name": "qwen-image",
+    "enabled": [
+      "QWEN"
+    ],
+    "stored": [
+      "QWEN"
+    ],
+    "mimes": [
+      "image/png"
+    ],
+    "web": false,
+    "expected": "QWEN_3_7_PLUS"
+  },
+  {
+    "name": "qwen-image-search-unavailable",
+    "enabled": [
+      "QWEN"
+    ],
+    "stored": [
+      "QWEN"
+    ],
+    "mimes": [
+      "image/png"
+    ],
+    "web": true,
+    "expected": null
+  },
+  {
+    "name": "deepseek-image",
+    "enabled": [
+      "DEEPSEEK"
+    ],
+    "stored": [
+      "DEEPSEEK"
+    ],
+    "mimes": [
+      "image/png"
+    ],
+    "web": false,
+    "expected": "DEEPSEEK_V4_FLASH"
+  },
+  {
+    "name": "deepseek-image-search-unavailable",
+    "enabled": [
+      "DEEPSEEK"
+    ],
+    "stored": [
+      "DEEPSEEK"
+    ],
+    "mimes": [
+      "image/png"
+    ],
+    "web": true,
+    "expected": null
+  },
+  {
+    "name": "rc-sol-native-search",
+    "enabled": [
+      "RELAYCORE_GPT"
+    ],
+    "stored": [
+      "RELAYCORE_GPT"
+    ],
+    "mimes": [],
+    "web": true,
+    "expected": "RELAYCORE_GPT_6_1_SOL"
+  },
+  {
+    "name": "rc-claude-no-luna",
+    "enabled": [
+      "RELAYCORE_CLAUDE"
+    ],
+    "stored": [
+      "RELAYCORE_CLAUDE"
+    ],
+    "mimes": [],
+    "web": true,
+    "expected": null
+  },
+  {
+    "name": "rc-gemini-no-luna",
+    "enabled": [
+      "RELAYCORE_GEMINI"
+    ],
+    "stored": [
+      "RELAYCORE_GEMINI"
+    ],
+    "mimes": [],
+    "web": true,
+    "expected": null
+  },
+  {
+    "name": "rc-claude-luna-without-key",
+    "enabled": [
+      "RELAYCORE_CLAUDE",
+      "OPENROUTER"
+    ],
+    "stored": [
+      "RELAYCORE_CLAUDE"
+    ],
+    "mimes": [],
+    "web": true,
+    "expected": null
+  },
+  {
+    "name": "rc-gemini-disabled-luna",
+    "enabled": [
+      "RELAYCORE_GEMINI"
+    ],
+    "stored": [
+      "RELAYCORE_GEMINI",
+      "OPENROUTER"
+    ],
+    "mimes": [],
+    "web": true,
+    "expected": null
+  },
+  {
+    "name": "rc-claude-with-luna",
+    "enabled": [
+      "RELAYCORE_CLAUDE",
+      "OPENROUTER"
+    ],
+    "stored": [
+      "RELAYCORE_CLAUDE",
+      "OPENROUTER"
+    ],
+    "mimes": [],
+    "web": true,
+    "expected": "RELAYCORE_SONNET_5_5"
+  },
+  {
+    "name": "rc-gemini-with-luna",
+    "enabled": [
+      "RELAYCORE_GEMINI",
+      "OPENROUTER"
+    ],
+    "stored": [
+      "RELAYCORE_GEMINI",
+      "OPENROUTER"
+    ],
+    "mimes": [],
+    "web": true,
+    "expected": "RELAYCORE_GEMINI_3_8_FLASH"
+  },
+  {
+    "name": "auto-alternative-without-luna",
+    "enabled": [
+      "RELAYCORE_CLAUDE",
+      "QWEN"
+    ],
+    "stored": [
+      "RELAYCORE_CLAUDE",
+      "QWEN"
+    ],
+    "mimes": [],
+    "web": true,
+    "expected": "QWEN_3_7_PLUS"
+  },
+  {
+    "name": "mixed-current-materials",
+    "enabled": [
+      "QWEN"
+    ],
+    "stored": [
+      "QWEN"
+    ],
+    "mimes": [
+      "text/plain",
+      "image/png"
+    ],
+    "web": false,
+    "expected": "QWEN_3_7_PLUS"
+  },
+  {
+    "name": "qwen-pdf-incompatible",
+    "enabled": [
+      "QWEN"
+    ],
+    "stored": [
+      "QWEN"
+    ],
+    "mimes": [
+      "application/pdf"
+    ],
+    "web": false,
+    "expected": null
+  },
+  {
+    "name": "openrouter-pdf",
+    "enabled": [
+      "OPENROUTER"
+    ],
+    "stored": [
+      "OPENROUTER"
+    ],
+    "mimes": [
+      "application/pdf"
+    ],
+    "web": false,
+    "expected": "GEMINI_3_8_FLASH"
+  },
+  {
+    "name": "zip-local-projection",
+    "enabled": [
+      "QWEN"
+    ],
+    "stored": [
+      "QWEN"
+    ],
+    "mimes": [
+      "application/zip"
+    ],
+    "web": false,
+    "expected": "QWEN_3_7_PLUS"
+  }
+]

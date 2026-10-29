@@ -1,21 +1,30 @@
-// Paint navigation before disk work. One read per page; a late completion must
-// not repaint another page or put its error into an unrelated workflow.
-export function createUtilityPageNavigation({ isCurrent, render, loading, failed }) {
-  const pending = new Map();
+// Paint the destination before reading disk. A late read belongs to the area
+// state that started it, even if another area now shows the same page.
+export function createUtilityPageNavigation({ currentOwner, isCurrent, render, loading, failed }) {
+  const pending = new WeakMap();
   return (page, read) => {
-    if (pending.has(page)) {
-      render();
-      return pending.get(page);
+    const owner = currentOwner();
+    let ownerPending = pending.get(owner);
+    if (!ownerPending) {
+      ownerPending = new Map();
+      pending.set(owner, ownerPending);
     }
-    loading(page, true);
-    const task = Promise.resolve().then(read).catch(error => {
-      if (isCurrent(page)) failed(page, error);
-    }).finally(() => {
-      pending.delete(page);
-      loading(page, false);
-      if (isCurrent(page)) render();
-    });
-    pending.set(page, task);
+    if (ownerPending.has(page)) {
+      render();
+      return ownerPending.get(page);
+    }
+    loading(page, true, owner);
+    const task = Promise.resolve()
+      .then(() => isCurrent(page, owner) ? read(owner) : undefined)
+      .catch(error => {
+        if (isCurrent(page, owner) && error?.code !== 'STALE_DATA_AREA') failed(page, error, owner);
+      })
+      .finally(() => {
+        ownerPending.delete(page);
+        loading(page, false, owner);
+        if (isCurrent(page, owner)) render();
+      });
+    ownerPending.set(page, task);
     render();
     return task;
   };

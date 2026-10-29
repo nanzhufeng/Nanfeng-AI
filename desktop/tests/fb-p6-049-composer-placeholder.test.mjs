@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 const shell = await readFile(new URL('../src/chat-shell.mjs', import.meta.url), 'utf8');
-const css = await readFile(new URL('../src/chat-shell.css', import.meta.url), 'utf8');
+const css = (await readFile(new URL('../src/chat-shell.css', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
 
 test('FB-P6-049 keeps the exact composer placeholder while preserving the accessible label', () => {
   assert.match(shell, /id="chat-composer" rows="1" maxlength="12000" placeholder="回复 南枫AI" aria-label="输入内容" aria-description="可直接粘贴或拖入图片、PDF、视频和文件"/);
@@ -12,7 +12,7 @@ test('FB-P6-049 keeps the exact composer placeholder while preserving the access
 });
 
 test('FB-P6-049 locks only the placeholder typography against WebKit hover text adjustment', () => {
-  assert.match(css, /\.chat-composer #chat-composer::placeholder \{[^}]*font-size: 14px;[^}]*font-weight: 400;[^}]*line-height: 22px;[^}]*-webkit-text-size-adjust: 100%;[^}]*text-size-adjust: 100%;[^}]*opacity: 1;/s);
+  assert.match(css, /\.chat-composer #chat-composer::placeholder \{[^}]*font-size: inherit;[^}]*font-weight: 400;[^}]*line-height: inherit;[^}]*-webkit-text-size-adjust: 100%;[^}]*text-size-adjust: 100%;[^}]*opacity: 1;/s);
   assert.match(css, /\.chat-composer #chat-composer,\n\.chat-composer #chat-composer:hover,[\s\S]*?-webkit-text-size-adjust: 100%;[\s\S]*?text-size-adjust: 100%;/);
 });
 

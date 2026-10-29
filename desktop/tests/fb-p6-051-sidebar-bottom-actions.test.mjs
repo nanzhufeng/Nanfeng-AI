@@ -25,9 +25,11 @@ test('FB-P6-051 collapsed sidebar keeps settings and new chat as separate circul
     'flex: 0 0 44px; width: 44px; min-width: 44px; min-height: 44px;',
     'border-radius: 50%;',
     '.chat-sidebar.rail-collapsed .chat-sidebar-bottom-actions .chat-profile.chat-sidebar-settings { display: inline-flex; background: var(--foreground-surface, #fff); box-shadow: 0 6px 16px #1f2e2426; }',
-    '.chat-sidebar.rail-collapsed .chat-sidebar-bottom-actions .chat-sidebar-function[data-action="new-chat"] { order: 1; }',
-    '.chat-sidebar.rail-collapsed .chat-sidebar-bottom-actions .chat-profile.chat-sidebar-settings { order: 2; }',
   ]) assert.ok(css.includes(token), token);
+  const newChatOrder = css.match(/\.chat-sidebar\.rail-collapsed \.chat-sidebar-bottom-actions \.chat-sidebar-function\[data-action="new-chat"\] \{ order:\s*(\d+);/)?.[1];
+  const settingsOrder = css.match(/\.chat-sidebar\.rail-collapsed \.chat-sidebar-bottom-actions \.chat-profile\.chat-sidebar-settings \{ order:\s*(\d+);/)?.[1];
+  assert.ok(newChatOrder !== undefined && settingsOrder !== undefined);
+  assert.ok(Number(newChatOrder) < Number(settingsOrder), 'new chat stays above settings, independently of the numeric order values');
 });
 
 test('FB-P6-051 collapsed brand icon is the only expand control', () => {

@@ -4,6 +4,10 @@
 //! owners while keeping task state, recovery checkpoints and exports in the main workspace
 //! database so local backup and full-local deletion remain truthful.
 
+use crate::desktop_media_tools_v1::{
+    run_command_with_cancel, MediaCommandError, MediaCommandOutput,
+};
+use crate::usage_ledger_v1::{self, AppendResult, Entry, FactGrade, Kind, Source};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
@@ -14,7 +18,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
@@ -27,6 +31,7 @@ const GLM_OCR_ENDPOINT: &str = "https://open.bigmodel.cn/api/paas/v4/layout_pars
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const GLM_OCR_IMAGE_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const GLM_OCR_PDF_MAX_BYTES: u64 = 50 * 1024 * 1024;
+const GLM_OCR_RESPONSE_MAX_BYTES: usize = 32 * 1024 * 1024;
 const MAX_DURATION_MILLIS: u64 = 12 * 60 * 60 * 1000;
 const CHUNK_MILLIS: u64 = 5 * 60 * 1000;
 const QWEN_ESTIMATED_MICRO_CNY_PER_SECOND: u64 = 220;
@@ -263,11 +268,27 @@ pub fn migrate(connection: &Connection) -> Result<(), String> {
 }
 
 pub fn recover_interrupted(connection: &Connection) -> Result<(), String> {
-    connection.execute(
-        "UPDATE desktop_transcription_tasks SET state='RECOVERY_REQUIRED',error_code='APP_INTERRUPTED',user_message='上次转写被中断，请重试',technical_detail='desktop process ended during active transcription',updated_at_ms=?1 WHERE state IN ('PREPARING','TRANSCRIBING','EXPORTING')",
-        [now_millis()],
-    ).map_err(|_| "语音转写恢复状态无法保存".to_owned())?;
-    Ok(())
+    // Migration already owns a transaction; startup may use an autocommit
+    // connection. A savepoint keeps both recovery facts atomic in either case.
+    connection.execute_batch("SAVEPOINT desktop_transcription_recovery")
+        .map_err(|_| "OCR 中断恢复事务不可用".to_owned())?;
+    let recovered = (|| -> Result<(), String> {
+        let recovered_at = now_millis();
+        if connection.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='desktop_ocr_attempts_v1')",[],|row|row.get::<_,bool>(0)).map_err(|_| "OCR Attempt 恢复结构不可读")? {
+            connection.execute("UPDATE desktop_ocr_attempts_v1 SET state='UNKNOWN',safe_error_code='APP_INTERRUPTED',terminal_at_ms=?1 WHERE state='RUNNING'",[recovered_at]).map_err(|_| "OCR Attempt 恢复失败")?;
+        }
+        connection.execute(
+            "UPDATE desktop_transcription_tasks SET state='RECOVERY_REQUIRED',error_code='APP_INTERRUPTED',user_message='上次转写被中断，请重试',technical_detail='desktop process ended during active transcription',updated_at_ms=?1 WHERE state IN ('PREPARING','TRANSCRIBING','EXPORTING')",
+            [recovered_at],
+        ).map_err(|_| "语音转写恢复状态无法保存".to_owned())?;
+        connection.execute_batch("RELEASE SAVEPOINT desktop_transcription_recovery")
+            .map_err(|_| "OCR 中断恢复事务未完成".to_owned())
+    })();
+    if recovered.is_err() {
+        connection.execute_batch("ROLLBACK TO SAVEPOINT desktop_transcription_recovery; RELEASE SAVEPOINT desktop_transcription_recovery")
+            .map_err(|_| "OCR 中断恢复回滚未完成".to_owned())?;
+    }
+    recovered
 }
 
 pub fn read_state(database: &Path, workspace_id: Option<&str>) -> Result<StateProjection, String> {
@@ -524,6 +545,21 @@ pub fn import_document_source(
     read_task(&connection, &task_id)
 }
 
+pub fn require_document_task(database: &Path, task_id: &str) -> Result<(), String> {
+    let model: Option<String> = open(database)?
+        .query_row(
+            "SELECT model_id FROM desktop_transcription_tasks WHERE id=?1",
+            [task_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| "转写任务无法读取".to_owned())?;
+    if model.as_deref() != Some(GLM_OCR_MODEL_ID) {
+        return Err("旧版音视频任务仅供查看和导出".to_owned());
+    }
+    Ok(())
+}
+
 pub fn retry_task(database: &Path, task_id: &str) -> Result<TaskProjection, String> {
     let connection = open(database)?;
     let changed = connection.execute("UPDATE desktop_transcription_tasks SET state=CASE WHEN model_id=?1 THEN 'WAITING_MODEL' ELSE 'QUEUED' END,error_code=NULL,user_message=CASE WHEN model_id=?1 THEN 'SenseVoice 验证中／保留实验；Desktop 本地引擎与许可尚未完成' ELSE NULL END,technical_detail=NULL,updated_at_ms=?2 WHERE id=?3 AND state IN ('FAILED','RECOVERY_REQUIRED','WAITING_MODEL','CANCELLED')", params![SENSEVOICE_MODEL_ID,now_millis(),task_id]).map_err(|_| "任务重试状态未保存".to_owned())?;
@@ -534,11 +570,14 @@ pub fn retry_task(database: &Path, task_id: &str) -> Result<TaskProjection, Stri
 }
 
 pub fn cancel_task(database: &Path, task_id: &str) -> Result<TaskProjection, String> {
-    let connection = open(database)?;
-    let changed = connection.execute("UPDATE desktop_transcription_tasks SET state='CANCELLED',error_code=NULL,user_message='已取消',technical_detail=NULL,updated_at_ms=?1 WHERE id=?2 AND state IN ('QUEUED','WAITING_INPUT','WAITING_MODEL','PREPARING','TRANSCRIBING','EXPORTING','RECOVERY_REQUIRED','FAILED')", params![now_millis(),task_id]).map_err(|_| "任务取消状态未保存".to_owned())?;
+    let mut connection = open(database)?;
+    let transaction = connection.transaction().map_err(|_| "取消任务事务不可用")?;
+    let changed = transaction.execute("UPDATE desktop_transcription_tasks SET state='CANCELLED',error_code=NULL,user_message='已取消',technical_detail=NULL,updated_at_ms=?1 WHERE id=?2 AND state IN ('QUEUED','WAITING_INPUT','WAITING_MODEL','PREPARING','TRANSCRIBING','EXPORTING','RECOVERY_REQUIRED','FAILED')", params![now_millis(),task_id]).map_err(|_| "任务取消状态未保存".to_owned())?;
     if changed != 1 {
         return Err("当前任务状态不可取消".to_owned());
     }
+    finish_ocr_attempt(&transaction,task_id,"CANCELLED",Some("CANCELLED"),now_millis())?;
+    transaction.commit().map_err(|_| "取消任务未提交")?;
     read_task(&connection, task_id)
 }
 
@@ -557,6 +596,16 @@ pub fn delete_task(database: &Path, task_id: &str) -> Result<(), String> {
     if changed != 1 {
         return Err("运行中的任务不能删除，请先取消".to_owned());
     }
+    // Task-owned details include the original filename. Remove them with the task;
+    // the independent quantitative usage ledger remains immutable.
+    let has_attempts: bool = transaction.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='desktop_ocr_attempts_v1')",
+        [], |row| row.get(0),
+    ).map_err(|_| "OCR 调用记录结构不可读")?;
+    if has_attempts {
+        transaction.execute("DELETE FROM desktop_ocr_attempts_v1 WHERE task_id=?1", [task_id])
+            .map_err(|_| "OCR 调用详情未清理")?;
+    }
     transaction
         .commit()
         .map_err(|_| "任务删除未提交；已回滚".to_owned())
@@ -565,6 +614,7 @@ pub fn delete_task(database: &Path, task_id: &str) -> Result<(), String> {
 pub fn run_task(
     root: &Path,
     database: &Path,
+    media_resource_dir: Option<&Path>,
     task_id: &str,
     api_key: &[u8],
 ) -> Result<TaskProjection, String> {
@@ -599,26 +649,23 @@ pub fn run_task(
         )
         .map_err(|_| "音视频引用不可用".to_owned())?;
     let source = root.join("assets").join(&source_sha);
-    let ffprobe =
-        find_binary("ffprobe").ok_or_else(|| "未找到 ffprobe；请安装 FFmpeg 后重试".to_owned());
-    let ffmpeg =
-        find_binary("ffmpeg").ok_or_else(|| "未找到 ffmpeg；请安装 FFmpeg 后重试".to_owned());
-    let (ffprobe, ffmpeg) = match (ffprobe, ffmpeg) {
-        (Ok(probe), Ok(decode)) => (probe, decode),
-        (Err(message), _) | (_, Err(message)) => {
+    let media_tools = match crate::desktop_media_tools_v1::resolve(media_resource_dir) {
+        Ok(tools) => tools,
+        Err(message) => {
             fail_task(
                 database,
                 task_id,
                 "DECODER_UNAVAILABLE",
                 &message,
-                "ffmpeg/ffprobe executable unavailable",
+                "fixed ffmpeg/ffprobe resource bundle unavailable or invalid",
             )?;
             return Err(message);
         }
     };
-    let duration = match probe_duration(&ffprobe, &source) {
+    let duration = match probe_duration(&media_tools.ffprobe, &source, database, task_id) {
         Ok(value) => value,
-        Err(detail) => {
+        Err(MediaCommandError::Cancelled) => return read_task(&open(database)?, task_id),
+        Err(MediaCommandError::Failed(detail)) => {
             fail_task(
                 database,
                 task_id,
@@ -655,16 +702,35 @@ pub fn run_task(
         let work = root.join("transcription-work");
         fs::create_dir_all(&work).map_err(|_| "无法创建转写临时目录".to_owned())?;
         let wav = work.join(format!("{task_id}-{}.wav", start));
-        if let Err(detail) = decode_chunk(&ffmpeg, &source, &wav, start, end - start) {
+        match decode_chunk(
+            &media_tools.ffmpeg,
+            &source,
+            &wav,
+            start,
+            end - start,
+            database,
+            task_id,
+        ) {
+            Ok(()) => {}
+            Err(MediaCommandError::Cancelled) => {
+                let _ = fs::remove_file(&wav);
+                return read_task(&open(database)?, task_id);
+            }
+            Err(MediaCommandError::Failed(detail)) => {
+                let _ = fs::remove_file(&wav);
+                fail_task(
+                    database,
+                    task_id,
+                    "DECODE_FAILED",
+                    "音视频解码失败，请确认文件完整",
+                    &detail,
+                )?;
+                return Err("音视频解码失败，请确认文件完整".to_owned());
+            }
+        }
+        if current_state(database, task_id)? == "CANCELLED" {
             let _ = fs::remove_file(&wav);
-            fail_task(
-                database,
-                task_id,
-                "DECODE_FAILED",
-                "音视频解码失败，请确认文件完整",
-                &detail,
-            )?;
-            return Err("音视频解码失败，请确认文件完整".to_owned());
+            return read_task(&open(database)?, task_id);
         }
         let bytes = fs::read(&wav).map_err(|_| "解码后的音频切片不可读".to_owned())?;
         let _ = fs::remove_file(&wav);
@@ -679,6 +745,9 @@ pub fn run_task(
                 return Err(message);
             }
         };
+        if current_state(database, task_id)? == "CANCELLED" {
+            return read_task(&open(database)?, task_id);
+        }
         let connection = open(database)?;
         let ordinal: u64 = connection
             .query_row(
@@ -705,7 +774,17 @@ pub fn run_ocr_task(
     task_id: &str,
     api_key: &[u8],
 ) -> Result<TaskProjection, String> {
-    let connection = open(database)?;
+    run_ocr_task_at(root, database, task_id, api_key, GLM_OCR_ENDPOINT)
+}
+
+pub fn run_ocr_task_at(
+    root: &Path,
+    database: &Path,
+    task_id: &str,
+    api_key: &[u8],
+    endpoint: &str,
+) -> Result<TaskProjection, String> {
+    let mut connection = open(database)?;
     let task = read_task(&connection, task_id)?;
     if task.model_id != GLM_OCR_MODEL_ID {
         return Err("当前任务不是图片/PDF 转写任务".to_owned());
@@ -716,11 +795,18 @@ pub fn run_ocr_task(
     ) {
         return Err("当前任务状态不可执行".to_owned());
     }
-    connection.execute("UPDATE desktop_transcription_tasks SET attempt_count=attempt_count+1,error_code=NULL,user_message=NULL,technical_detail=NULL,updated_at_ms=?1 WHERE id=?2", params![now_millis(),task_id]).map_err(|_| "GLM-OCR Attempt 未保存".to_owned())?;
+    let attempt_number = task.attempt_count.checked_add(1).ok_or("GLM-OCR Attempt 计数已满")?;
+    let started = now_millis();
+    let transaction = connection.transaction().map_err(|_| "GLM-OCR Attempt 事务不可用")?;
+    let changed = transaction.execute("UPDATE desktop_transcription_tasks SET state='TRANSCRIBING',attempt_count=attempt_count+1,error_code=NULL,user_message=NULL,technical_detail=NULL,updated_at_ms=?1 WHERE id=?2 AND attempt_count=?3 AND state IN ('QUEUED','FAILED','RECOVERY_REQUIRED')", params![started,task_id,task.attempt_count]).map_err(|_| "GLM-OCR Attempt 未保存")?;
+    if changed != 1 { return Err("GLM-OCR 任务已被其他调用改变".into()); }
+    transaction.execute("INSERT INTO desktop_ocr_attempts_v1(attempt_id,task_id,attempt_number,provider_id,requested_model_id,source_display_name,created_at_ms,state) VALUES(?1,?2,?3,'ZHIPU',?4,?5,?6,'RUNNING')", params![format!("transcription-{task_id}-{attempt_number}"),task_id,attempt_number,task.model_id,task.source_display_name,started]).map_err(|_| "GLM-OCR 逐次调用未记录")?;
+    transaction.commit().map_err(|_| "GLM-OCR Attempt 未提交")?;
     if api_key.is_empty() {
-        fail_task(
+        fail_task_for_attempt(
             database,
             task_id,
+            Some(attempt_number),
             "ZHIPU_API_KEY_MISSING",
             "智谱 GLM-OCR 未配置 API Key，请在设置中保存后重试",
             "credential owner returned empty secret",
@@ -746,9 +832,10 @@ pub fn run_ocr_task(
         || source_bytes.len() as u64 > max_bytes
         || hex_digest(&source_bytes) != source_sha
     {
-        fail_task(
+        fail_task_for_attempt(
             database,
             task_id,
+            Some(attempt_number),
             "SOURCE_INTEGRITY",
             "图片/PDF 私有副本校验失败，请重新选择",
             "source byte count or sha256 mismatch",
@@ -768,7 +855,7 @@ pub fn run_ocr_task(
     );
     connection.execute("UPDATE desktop_transcription_tasks SET provider_request_count=provider_request_count+1,updated_at_ms=?1 WHERE id=?2", params![now_millis(),task_id]).map_err(|_| "GLM-OCR Attempt 未保存".to_owned())?;
     let response = match client
-        .post(GLM_OCR_ENDPOINT)
+        .post(endpoint)
         .bearer_auth(key)
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .body(reqwest::blocking::Body::new(payload))
@@ -776,9 +863,10 @@ pub fn run_ocr_task(
     {
         Ok(response) => response,
         Err(error) => {
-            fail_task(
+            fail_task_for_attempt(
                 database,
                 task_id,
+                Some(attempt_number),
                 "NETWORK_UNKNOWN",
                 "GLM-OCR 连接失败，请检查网络后显式重试",
                 &format!("request failed: {}", error.without_url()),
@@ -788,6 +876,18 @@ pub fn run_ocr_task(
     };
     let status = response.status();
     if !status.is_success() {
+        // Error bodies can report billable usage. Read only a bounded structured
+        // response; never persist the error payload or treat it as OCR output.
+        if let Ok(Some(bytes)) = read_bounded_response(response, GLM_OCR_RESPONSE_MAX_BYTES) {
+            if let Ok(value) = serde_json::from_slice::<Value>(&bytes) {
+                if value.pointer("/usage/prompt_tokens").and_then(Value::as_u64).is_some()
+                    || value.pointer("/usage/input_tokens").and_then(Value::as_u64).is_some()
+                    || value.pointer("/usage/completion_tokens").and_then(Value::as_u64).is_some()
+                    || value.pointer("/usage/output_tokens").and_then(Value::as_u64).is_some() {
+                    record_ocr_response_usage(root, database, task_id, attempt_number, &value)?;
+                }
+            }
+        }
         let code = match status.as_u16() {
             401 | 403 => "AUTHENTICATION".to_owned(),
             402 => "BALANCE".to_owned(),
@@ -803,21 +903,34 @@ pub fn run_ocr_task(
         } else {
             "GLM-OCR 请求失败，请稍后显式重试"
         };
-        fail_task(
+        fail_task_for_attempt(
             database,
             task_id,
+            Some(attempt_number),
             &code,
             message,
             &format!("HTTP {}", status.as_u16()),
         )?;
         return Err(message.to_owned());
     }
-    let response_bytes = match response.bytes() {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            fail_task(
+    let response_bytes = match read_bounded_response(response, GLM_OCR_RESPONSE_MAX_BYTES) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            fail_task_for_attempt(
                 database,
                 task_id,
+                Some(attempt_number),
+                "RESPONSE_TOO_LARGE",
+                "GLM-OCR 返回内容过大，未保存",
+                "response exceeded 32 MiB",
+            )?;
+            return Err("GLM-OCR 返回内容过大，未保存".to_owned());
+        }
+        Err(_) => {
+            fail_task_for_attempt(
+                database,
+                task_id,
+                Some(attempt_number),
                 "RESPONSE_UNREADABLE_UNKNOWN",
                 "GLM-OCR 返回内容不可读，请显式重试",
                 "response body read failed",
@@ -825,22 +938,13 @@ pub fn run_ocr_task(
             return Err("GLM-OCR 返回内容不可读，请显式重试".to_owned());
         }
     };
-    if response_bytes.len() > 32 * 1024 * 1024 {
-        fail_task(
-            database,
-            task_id,
-            "RESPONSE_TOO_LARGE",
-            "GLM-OCR 返回内容过大，未保存",
-            "response exceeded 32 MiB",
-        )?;
-        return Err("GLM-OCR 返回内容过大，未保存".to_owned());
-    }
     let value: Value = match serde_json::from_slice(&response_bytes) {
         Ok(value) => value,
         Err(_) => {
-            fail_task(
+            fail_task_for_attempt(
                 database,
                 task_id,
+                Some(attempt_number),
                 "RESPONSE_FORMAT",
                 "GLM-OCR 返回格式异常，请显式重试",
                 "invalid JSON response",
@@ -848,11 +952,13 @@ pub fn run_ocr_task(
             return Err("GLM-OCR 返回格式异常，请显式重试".to_owned());
         }
     };
+    record_ocr_response_usage(root, database, task_id, attempt_number, &value)?;
     let markdown = glm_ocr_markdown(&value);
     if markdown.trim().is_empty() {
-        fail_task(
+        fail_task_for_attempt(
             database,
             task_id,
+            Some(attempt_number),
             "EMPTY_MARKDOWN",
             "GLM-OCR 未返回可用 Markdown",
             "md_results was empty",
@@ -862,6 +968,12 @@ pub fn run_ocr_task(
     if current_state(database, task_id)? == "CANCELLED" {
         return read_task(&open(database)?, task_id);
     }
+    complete_ocr_task(root, database, task_id, attempt_number, &markdown)
+}
+
+fn record_ocr_response_usage(
+    root: &Path, database: &Path, task_id: &str, attempt_number: u64, value: &Value,
+) -> Result<(), String> {
     let input_tokens = value
         .pointer("/usage/prompt_tokens")
         .and_then(Value::as_u64)
@@ -888,34 +1000,66 @@ pub fn run_ocr_task(
         .unwrap_or(0)
         .saturating_add(output_tokens.unwrap_or(0));
     let cost_micros = total_tokens.saturating_mul(200_000).saturating_add(999_999) / 1_000_000;
-    open(database)?.execute("UPDATE desktop_transcription_tasks SET provider_request_id=?1,page_count=?2,input_tokens=?3,output_tokens=?4,estimated_charge_micros=?5,updated_at_ms=?6 WHERE id=?7", params![provider_request_id,page_count,input_tokens,output_tokens,cost_micros,now_millis(),task_id]).map_err(|_| "GLM-OCR 用量未保存".to_owned())?;
-    complete_ocr_task(root, database, task_id, &markdown)
+    append_ocr_reported_usage(root, task_id, attempt_number, input_tokens, output_tokens, cost_micros)?;
+    let mut connection = open(database)?;
+    let transaction = connection.transaction().map_err(|_| "GLM-OCR 用量事务不可用")?;
+    transaction.execute("UPDATE desktop_ocr_attempts_v1 SET provider_request_id=?1,page_count=?2,input_tokens=?3,output_tokens=?4,charge_micros=?5 WHERE task_id=?6 AND attempt_number=?7", params![provider_request_id,page_count,input_tokens,output_tokens,cost_micros,task_id,attempt_number]).map_err(|_| "GLM-OCR 逐次用量未保存")?;
+    transaction.execute("UPDATE desktop_transcription_tasks SET provider_request_id=?1,page_count=?2,input_tokens=?3,output_tokens=?4,estimated_charge_micros=?5,updated_at_ms=?6 WHERE id=?7 AND attempt_count=?8", params![provider_request_id,page_count,input_tokens,output_tokens,cost_micros,now_millis(),task_id,attempt_number]).map_err(|_| "GLM-OCR 用量未保存")?;
+    transaction.commit().map_err(|_| "GLM-OCR 用量未提交")?;
+    Ok(())
+}
+
+fn append_ocr_reported_usage(
+    root: &Path,
+    task_id: &str,
+    attempt_number: u64,
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+    cost_micros: u64,
+) -> Result<(), String> {
+    if input_tokens.is_none() && output_tokens.is_none() {
+        return Ok(());
+    }
+    let fact_id = format!("transcription-{task_id}-{attempt_number}");
+    let entry = Entry {
+        entry_id: format!("usage-{fact_id}"),
+        replay_token: format!("ocr-final-{fact_id}"),
+        execution_id: fact_id.clone(),
+        conversation_id: task_id.to_owned(),
+        branch_leaf_message_id: task_id.to_owned(),
+        invocation_id: fact_id.clone(),
+        attempt_id: fact_id,
+        kind: Kind::FinalMeasured,
+        fact_grade: FactGrade::ProviderReported,
+        requested_model_id: GLM_OCR_MODEL_ID.to_owned(),
+        actual_model_id: Some(GLM_OCR_MODEL_ID.to_owned()),
+        input_tokens: input_tokens.map(i64::try_from).transpose().map_err(|_| "GLM-OCR 输入 Token 超出账本范围")?,
+        output_tokens: output_tokens.map(i64::try_from).transpose().map_err(|_| "GLM-OCR 输出 Token 超出账本范围")?,
+        cached_input_tokens: None,
+        charge_micros: Some(i64::try_from(cost_micros).map_err(|_| "GLM-OCR 费用超出账本范围")?),
+        budget_micros: None,
+        adjustment_micros: None,
+        currency_code: Some("CNY".into()),
+        cost_source: Some("LOCAL_ESTIMATE".into()),
+        reconciliation_fingerprint: None,
+        reconciles_entry_id: None,
+        source: Source::DesktopLocal,
+        occurred_at_ms: now_millis(),
+    };
+    match usage_ledger_v1::Ledger::open(&root.join("usage-ledger"))?.append(&entry)? {
+        AppendResult::Appended(_) | AppendResult::Replayed(_) => Ok(()),
+        AppendResult::Conflict => Err("GLM-OCR 逐次用量账本冲突".to_owned()),
+    }
+}
+
+fn read_bounded_response(mut source: impl Read, max_bytes: usize) -> std::io::Result<Option<Vec<u8>>> {
+    let mut bytes = Vec::new();
+    source.by_ref().take(max_bytes as u64 + 1).read_to_end(&mut bytes)?;
+    Ok((bytes.len() <= max_bytes).then_some(bytes))
 }
 
 fn glm_ocr_markdown(value: &Value) -> String {
-    match value.get("md_results") {
-        Some(Value::String(text)) => text.clone(),
-        Some(Value::Array(items)) => items
-            .iter()
-            .filter_map(|item| match item {
-                Value::String(text) => Some(text.clone()),
-                Value::Object(map) => map
-                    .get("markdown")
-                    .or_else(|| map.get("content"))
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n"),
-        Some(Value::Object(map)) => map
-            .get("markdown")
-            .or_else(|| map.get("content"))
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_owned(),
-        _ => String::new(),
-    }
+    crate::glm_ocr_response_v1::markdown(value)
 }
 
 pub fn export_task(database: &Path, args: ExportArgs) -> Result<ExportReceipt, String> {
@@ -1071,10 +1215,12 @@ fn complete_ocr_task(
     root: &Path,
     database: &Path,
     task_id: &str,
+    attempt_number: u64,
     markdown: &str,
 ) -> Result<TaskProjection, String> {
     let mut connection = open(database)?;
     let task = read_task(&connection, task_id)?;
+    if task.attempt_count != attempt_number { return Err("GLM-OCR 旧调用结果已失效".into()); }
     connection
         .execute(
             "UPDATE desktop_transcription_tasks SET state='EXPORTING',updated_at_ms=?1 WHERE id=?2",
@@ -1109,12 +1255,22 @@ fn complete_ocr_task(
     transaction.execute("INSERT INTO desktop_attachment_assets(sha256,byte_count,created_at_ms,last_referenced_at_ms,last_unreferenced_at_ms,reference_count) VALUES(?1,?2,?3,?3,?3,1) ON CONFLICT(sha256) DO UPDATE SET last_referenced_at_ms=excluded.last_referenced_at_ms", params![digest,bytes.len() as u64,now]).map_err(|_| "GLM-OCR 结果资产未保存".to_owned())?;
     transaction.execute("INSERT INTO desktop_conversation_attachments(workspace_id,attachment_id,mime_type,display_name,byte_count,sha256,created_at) VALUES(?1,?2,'text/markdown',?3,?4,?5,datetime(?6/1000,'unixepoch')) ON CONFLICT(workspace_id,sha256) DO NOTHING", params![task.workspace_id,attachment_id,result_name,bytes.len() as u64,digest,now]).map_err(|_| "GLM-OCR 结果附件未保存".to_owned())?;
     let actual_id: String = transaction.query_row("SELECT attachment_id FROM desktop_conversation_attachments WHERE workspace_id=?1 AND sha256=?2", params![task.workspace_id,digest], |row| row.get(0)).map_err(|_| "GLM-OCR 结果附件无法回读".to_owned())?;
-    transaction.execute("UPDATE desktop_transcription_tasks SET state='COMPLETED',progress_millis=0,total_duration_millis=NULL,result_attachment_id=?1,result_sha256=?2,result_byte_count=?3,error_code=NULL,user_message=NULL,technical_detail=NULL,updated_at_ms=?4 WHERE id=?5", params![actual_id,digest,bytes.len() as u64,now,task_id]).map_err(|_| "GLM-OCR 完成状态未保存".to_owned())?;
+    let changed = transaction.execute("UPDATE desktop_transcription_tasks SET state='COMPLETED',progress_millis=0,total_duration_millis=NULL,result_attachment_id=?1,result_sha256=?2,result_byte_count=?3,error_code=NULL,user_message=NULL,technical_detail=NULL,updated_at_ms=?4 WHERE id=?5 AND attempt_count=?6 AND state IN ('TRANSCRIBING','EXPORTING')", params![actual_id,digest,bytes.len() as u64,now,task_id,attempt_number]).map_err(|_| "GLM-OCR 完成状态未保存".to_owned())?;
+    if changed != 1 { return Err("GLM-OCR 完成调用已失效，事务回滚".into()); }
+    transaction.execute("UPDATE desktop_ocr_attempts_v1 SET state='COMPLETED',terminal_at_ms=?1,safe_error_code=NULL WHERE task_id=?2 AND attempt_number=?3 AND state='RUNNING'", params![now,task_id,task.attempt_count]).map_err(|_| "GLM-OCR 完成调用未保存")?;
     index_task_result(&transaction, task_id)?;
     transaction
         .commit()
         .map_err(|_| "GLM-OCR 结果未提交；已回滚".to_owned())?;
     read_task(&open(database)?, task_id)
+}
+
+fn finish_ocr_attempt(connection: &Connection, task_id: &str, state: &str, code: Option<&str>, now: i64) -> Result<(), String> {
+    let present: bool = connection.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='desktop_ocr_attempts_v1')",[],|row|row.get(0)).map_err(|_| "OCR Attempt 结构不可读")?;
+    if present {
+        connection.execute("UPDATE desktop_ocr_attempts_v1 SET state=?1,safe_error_code=?2,terminal_at_ms=?3 WHERE task_id=?4 AND attempt_number=(SELECT attempt_count FROM desktop_transcription_tasks WHERE id=?4) AND state='RUNNING'",params![state,code,now,task_id]).map_err(|_| "OCR Attempt 终态未保存")?;
+    }
+    Ok(())
 }
 
 fn fail_task(
@@ -1124,7 +1280,25 @@ fn fail_task(
     message: &str,
     detail: &str,
 ) -> Result<(), String> {
-    open(database)?.execute("UPDATE desktop_transcription_tasks SET state='FAILED',error_code=?1,user_message=?2,technical_detail=?3,updated_at_ms=?4 WHERE id=?5 AND state!='CANCELLED'", params![code,message,detail,now_millis(),task_id]).map_err(|_| "失败状态未保存".to_owned())?;
+    fail_task_for_attempt(database,task_id,None,code,message,detail)
+}
+
+fn fail_task_for_attempt(
+    database: &Path,
+    task_id: &str,
+    expected_attempt: Option<u64>,
+    code: &str,
+    message: &str,
+    detail: &str,
+) -> Result<(), String> {
+    let mut connection = open(database)?;
+    let transaction = connection.transaction().map_err(|_| "失败状态事务不可用")?;
+    let now = now_millis();
+    transaction.execute("UPDATE desktop_transcription_tasks SET state='FAILED',error_code=?1,user_message=?2,technical_detail=?3,updated_at_ms=?4 WHERE id=?5 AND state!='CANCELLED' AND (?6 IS NULL OR attempt_count=?6)", params![code,message,detail,now,task_id,expected_attempt]).map_err(|_| "失败状态未保存")?;
+    if expected_attempt.is_none() || transaction.query_row("SELECT attempt_count=?1 FROM desktop_transcription_tasks WHERE id=?2",params![expected_attempt,task_id],|row|row.get::<_,bool>(0)).unwrap_or(false) {
+    finish_ocr_attempt(&transaction,task_id,if code.ends_with("_UNKNOWN") { "UNKNOWN" } else { "FAILED" },Some(code),now)?;
+    }
+    transaction.commit().map_err(|_| "失败状态未提交")?;
     Ok(())
 }
 
@@ -1208,19 +1382,14 @@ fn qwen_request(
     })
 }
 
-fn find_binary(name: &str) -> Option<PathBuf> {
-    [
-        format!("/opt/homebrew/bin/{name}"),
-        format!("/usr/local/bin/{name}"),
-        format!("/usr/bin/{name}"),
-    ]
-    .into_iter()
-    .map(PathBuf::from)
-    .find(|path| path.is_file())
-}
-
-fn probe_duration(ffprobe: &Path, source: &Path) -> Result<u64, String> {
-    let output = Command::new(ffprobe)
+fn probe_duration(
+    ffprobe: &Path,
+    source: &Path,
+    database: &Path,
+    task_id: &str,
+) -> Result<u64, MediaCommandError> {
+    let mut command = Command::new(ffprobe);
+    command
         .args([
             "-v",
             "error",
@@ -1229,21 +1398,22 @@ fn probe_duration(ffprobe: &Path, source: &Path) -> Result<u64, String> {
             "-of",
             "default=noprint_wrappers=1:nokey=1",
         ])
-        .arg(source)
-        .output()
-        .map_err(|_| "ffprobe launch failed".to_owned())?;
+        .arg(source);
+    let output = run_media_command(command, database, task_id, Duration::from_secs(30))?;
     if !output.status.success() {
-        return Err(format!(
+        return Err(MediaCommandError::Failed(format!(
             "ffprobe exit={}",
             output.status.code().unwrap_or(-1)
-        ));
+        )));
     }
     let seconds: f64 = String::from_utf8_lossy(&output.stdout)
         .trim()
         .parse()
-        .map_err(|_| "ffprobe duration invalid".to_owned())?;
+        .map_err(|_| MediaCommandError::Failed("ffprobe duration invalid".to_owned()))?;
     if !seconds.is_finite() || seconds <= 0.0 {
-        return Err("ffprobe duration not positive".to_owned());
+        return Err(MediaCommandError::Failed(
+            "ffprobe duration not positive".to_owned(),
+        ));
     }
     Ok((seconds * 1000.0).ceil() as u64)
 }
@@ -1254,8 +1424,11 @@ fn decode_chunk(
     target: &Path,
     start: u64,
     duration: u64,
-) -> Result<(), String> {
-    let output = Command::new(ffmpeg)
+    database: &Path,
+    task_id: &str,
+) -> Result<(), MediaCommandError> {
+    let mut command = Command::new(ffmpeg);
+    command
         .args([
             "-nostdin",
             "-hide_banner",
@@ -1280,26 +1453,36 @@ fn decode_chunk(
             "wav",
             "-y",
         ])
-        .arg(target)
-        .output()
-        .map_err(|_| "ffmpeg launch failed".to_owned())?;
+        .arg(target);
+    let output = run_media_command(command, database, task_id, Duration::from_secs(180))?;
     if !output.status.success() {
-        return Err(format!(
+        return Err(MediaCommandError::Failed(format!(
             "ffmpeg exit={} stderr={}",
             output.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&output.stderr)
                 .chars()
                 .take(240)
                 .collect::<String>()
-        ));
+        )));
     }
     let length = fs::metadata(target)
-        .map_err(|_| "decoded chunk missing".to_owned())?
+        .map_err(|_| MediaCommandError::Failed("decoded chunk missing".to_owned()))?
         .len();
     if length <= 44 {
-        return Err("decoded chunk empty".to_owned());
+        return Err(MediaCommandError::Failed("decoded chunk empty".to_owned()));
     }
     Ok(())
+}
+
+fn run_media_command(
+    command: Command,
+    database: &Path,
+    task_id: &str,
+    timeout: Duration,
+) -> Result<MediaCommandOutput, MediaCommandError> {
+    run_command_with_cancel(command, timeout, || {
+        current_state(database, task_id).map(|state| state == "CANCELLED")
+    })
 }
 
 fn current_state(database: &Path, task_id: &str) -> Result<String, String> {
@@ -1472,7 +1655,9 @@ fn copy_and_hash(source: &Path, target: &Path) -> Result<(String, u64), String> 
     let mut output = fs::File::create(target).map_err(|_| "无法创建音视频暂存副本".to_owned())?;
     let mut digest = Sha256::new();
     let mut total = 0u64;
-    let mut buffer = [0u8; 1024 * 1024];
+    // OCR drop enters through the Windows WebView command thread, whose stack is too
+    // small for a 1 MiB local array plus the Tauri and SQLite call frames.
+    let mut buffer = vec![0u8; 1024 * 1024];
     loop {
         let count = input
             .read(&mut buffer)
@@ -1545,6 +1730,28 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    #[test]
+    fn ocr_response_reader_stops_after_limit_plus_one_byte() {
+        assert_eq!(read_bounded_response(std::io::repeat(7), 1024).unwrap(), None);
+        assert_eq!(read_bounded_response(std::io::Cursor::new(vec![3; 1024]), 1024).unwrap(), Some(vec![3; 1024]));
+    }
+
+    #[test]
+    fn reported_ocr_usage_is_recorded_once_per_attempt() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        append_ocr_reported_usage(root, "synthetic-task", 1, Some(12), Some(8), 4).unwrap();
+        append_ocr_reported_usage(root, "synthetic-task", 2, Some(5), Some(3), 2).unwrap();
+        let ledger = usage_ledger_v1::Ledger::open(&root.join("usage-ledger")).unwrap();
+        assert_eq!(ledger.all_entries().unwrap().len(), 2);
+        let first = ledger.by_id("usage-transcription-synthetic-task-1").unwrap().unwrap();
+        assert_eq!(first.input_tokens, Some(12));
+        assert_eq!(first.output_tokens, Some(8));
+        assert_eq!(first.charge_micros, Some(4));
+        assert_eq!(first.cost_source.as_deref(), Some("LOCAL_ESTIMATE"));
+        assert!(ledger.by_id("usage-transcription-synthetic-task-2").unwrap().is_some());
+    }
+
     fn database() -> (tempfile::TempDir, PathBuf, PathBuf) {
         let dir = tempdir().unwrap();
         let root = dir.path().join("app");
@@ -1554,8 +1761,33 @@ mod tests {
         let connection = Connection::open(&db).unwrap();
         connection.execute_batch("PRAGMA foreign_keys=ON;CREATE TABLE workspaces(id TEXT PRIMARY KEY,title TEXT,semantic_hash TEXT,package_hash TEXT,created_at TEXT);CREATE TABLE desktop_attachment_assets(sha256 TEXT PRIMARY KEY,byte_count INTEGER,created_at_ms INTEGER,last_referenced_at_ms INTEGER,last_unreferenced_at_ms INTEGER,reference_count INTEGER);CREATE TABLE desktop_conversation_attachments(workspace_id TEXT,attachment_id TEXT,mime_type TEXT,display_name TEXT,byte_count INTEGER,sha256 TEXT,created_at TEXT,PRIMARY KEY(workspace_id,attachment_id),UNIQUE(workspace_id,sha256));CREATE TABLE desktop_local_search_index(workspace_id TEXT,entry_id TEXT,conversation_id TEXT,message_id TEXT,attachment_id TEXT,content_kind TEXT,title TEXT,normalized_text TEXT,snippet TEXT,timestamp TEXT,mime_type TEXT,display_name TEXT,file_type TEXT,byte_count INTEGER,branch_leaf_id TEXT,source_label TEXT,archived INTEGER,conversation_revision INTEGER,title_match INTEGER,PRIMARY KEY(workspace_id,entry_id));INSERT INTO workspaces VALUES('workspace-test','Test','','','');").unwrap();
         migrate(&connection).unwrap();
+        crate::desktop_ocr_attempt_schema::create(&connection).unwrap();
         drop(connection);
         (dir, root, db)
+    }
+
+    #[test]
+    fn deleting_task_removes_its_attempt_details_atomically_and_survives_reopen() {
+        let (_dir, root, db) = database();
+        let connection = open(&db).unwrap();
+        for (id, state) in [("remove", "COMPLETED"), ("active", "TRANSCRIBING"), ("keep", "FAILED")] {
+            connection.execute("INSERT INTO desktop_transcription_tasks(id,workspace_id,source_attachment_id,source_sha256,source_mime_type,source_display_name,source_byte_count,model_id,state,created_at_ms,updated_at_ms) VALUES(?1,'workspace-test',?1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','image/png','private-name.png',1,?2,?3,1,1)",params![id,GLM_OCR_MODEL_ID,state]).unwrap();
+            connection.execute("INSERT INTO desktop_ocr_attempts_v1(attempt_id,task_id,attempt_number,provider_id,requested_model_id,source_display_name,created_at_ms,state) VALUES(?1,?2,1,'ZHIPU',?3,'private-name.png',1,?4)",params![format!("transcription-{id}-1"),id,GLM_OCR_MODEL_ID,if state=="TRANSCRIBING" {"RUNNING"} else {state}]).unwrap();
+        }
+        drop(connection);
+        // No provider replay or ledger mutation belongs to task deletion.
+        append_ocr_reported_usage(&root,"remove",1,Some(12),Some(8),4).unwrap();
+        let ledger = usage_ledger_v1::Ledger::open(&root.join("usage-ledger")).unwrap();
+        let usage_before = ledger.by_id("usage-transcription-remove-1").unwrap().unwrap();
+        assert!(delete_task(&db,"active").is_err());
+        delete_task(&db,"remove").unwrap();
+        let reopened = open(&db).unwrap();
+        let rows: i64 = reopened.query_row("SELECT count(*) FROM desktop_ocr_attempts_v1",[],|r|r.get(0)).unwrap();
+        assert_eq!(rows,2);
+        assert_eq!(reopened.query_row("SELECT count(*) FROM desktop_ocr_attempts_v1 WHERE task_id='remove'",[],|r|r.get::<_,i64>(0)).unwrap(),0);
+        assert_eq!(read_task(&reopened,"active").unwrap().state,"TRANSCRIBING");
+        assert_eq!(ledger.by_id("usage-transcription-remove-1").unwrap().unwrap(),usage_before);
+        assert_eq!(reopened.query_row("PRAGMA quick_check",[],|r|r.get::<_,String>(0)).unwrap(),"ok");
     }
 
     #[test]
@@ -1571,6 +1803,41 @@ mod tests {
             "RECOVERY_REQUIRED"
         );
         assert!(!read_settings(&connection).unwrap().sense_voice_available);
+    }
+
+    #[test]
+    fn interrupted_recovery_is_atomic_and_preserves_the_outer_transaction() {
+        for nested in [false, true] {
+            let (_dir, _root, db) = database();
+            let connection = open(&db).unwrap();
+            connection.execute("INSERT INTO desktop_transcription_tasks(id,workspace_id,source_attachment_id,source_sha256,source_mime_type,source_display_name,source_byte_count,model_id,state,created_at_ms,updated_at_ms) VALUES('recover-atomic','workspace-test','source','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','image/png','synthetic.png',1,?1,'TRANSCRIBING',1,1)",[GLM_OCR_MODEL_ID]).unwrap();
+            connection.execute("INSERT INTO desktop_ocr_attempts_v1(attempt_id,task_id,attempt_number,provider_id,requested_model_id,source_display_name,created_at_ms,state) VALUES('recover-atomic-1','recover-atomic',1,'ZHIPU',?1,'synthetic.png',1,'RUNNING')",[GLM_OCR_MODEL_ID]).unwrap();
+            if nested {
+                connection.execute_batch("BEGIN; UPDATE workspaces SET title='outer-write' WHERE id='workspace-test';").unwrap();
+            }
+            connection.execute_batch("CREATE TEMP TRIGGER deny_recovery BEFORE UPDATE OF state ON desktop_transcription_tasks WHEN NEW.state='RECOVERY_REQUIRED' BEGIN SELECT RAISE(ABORT,'synthetic recovery refusal'); END;").unwrap();
+            assert!(recover_interrupted(&connection).is_err());
+            let old_attempt: (String, Option<String>, Option<i64>) = connection.query_row("SELECT state,safe_error_code,terminal_at_ms FROM desktop_ocr_attempts_v1 WHERE attempt_id='recover-atomic-1'",[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+            assert_eq!(old_attempt, ("RUNNING".into(), None, None), "failed recovery must not partially change the Attempt");
+            assert_eq!(read_task(&connection,"recover-atomic").unwrap().state,"TRANSCRIBING");
+            assert_eq!(connection.is_autocommit(), !nested);
+            connection.execute_batch("DROP TRIGGER deny_recovery;").unwrap();
+            recover_interrupted(&connection).unwrap();
+            let recovered = read_task(&connection,"recover-atomic").unwrap();
+            assert_eq!(recovered.state,"RECOVERY_REQUIRED");
+            let recovered_attempt: (String, Option<String>, Option<i64>) = connection.query_row("SELECT state,safe_error_code,terminal_at_ms FROM desktop_ocr_attempts_v1 WHERE attempt_id='recover-atomic-1'",[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+            assert_eq!(recovered_attempt.0,"UNKNOWN");
+            assert_eq!(recovered_attempt.1.as_deref(),Some("APP_INTERRUPTED"));
+            assert!(recovered_attempt.2.is_some());
+            recover_interrupted(&connection).unwrap();
+            assert_eq!(read_task(&connection,"recover-atomic").unwrap().updated_at_millis,recovered.updated_at_millis);
+            assert_eq!(connection.query_row("SELECT terminal_at_ms FROM desktop_ocr_attempts_v1 WHERE attempt_id='recover-atomic-1'",[],|r|r.get::<_,Option<i64>>(0)).unwrap(), recovered_attempt.2);
+            if nested {
+                assert_eq!(connection.query_row("SELECT title FROM workspaces WHERE id='workspace-test'",[],|r|r.get::<_,String>(0)).unwrap(),"outer-write");
+                connection.execute_batch("COMMIT;").unwrap();
+            }
+            assert_eq!(read_task(&open(&db).unwrap(),"recover-atomic").unwrap().state,"RECOVERY_REQUIRED");
+        }
     }
 
     #[test]
@@ -1614,6 +1881,11 @@ mod tests {
         )
         .unwrap();
         assert_eq!(task.workspace_id, TRANSCRIPTION_WORKSPACE_ID);
+        assert_eq!(
+            require_document_task(&db, &task.id).unwrap_err(),
+            "旧版音视频任务仅供查看和导出"
+        );
+        assert_eq!(read_task(&open(&db).unwrap(), &task.id).unwrap().state, "QUEUED");
         assert_eq!(cancel_task(&db, &task.id).unwrap().state, "CANCELLED");
         assert_eq!(retry_task(&db, &task.id).unwrap().state, "QUEUED");
         let connection = open(&db).unwrap();
@@ -1642,6 +1914,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(task.model_id, GLM_OCR_MODEL_ID);
+        require_document_task(&db, &task.id).unwrap();
         assert_eq!(task.source_mime_type, "image/png");
         assert_eq!(task.state, "QUEUED");
         let connection = open(&db).unwrap();
@@ -1758,6 +2031,46 @@ mod tests {
                 BASE64.encode(bytes)
             )
         );
+    }
+
+    #[test]
+    fn media_child_is_cancelled_and_reaped_without_waiting_for_natural_exit() {
+        use std::sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        };
+
+        #[cfg(windows)]
+        let command = {
+            let mut value = Command::new("powershell.exe");
+            value.args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Start-Sleep -Seconds 20",
+            ]);
+            value
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut value = Command::new("/bin/sleep");
+            value.arg("20");
+            value
+        };
+
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let signal = Arc::clone(&cancelled);
+        let setter = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            signal.store(true, Ordering::SeqCst);
+        });
+        let started = std::time::Instant::now();
+        let result = run_command_with_cancel(command, Duration::from_secs(10), || {
+            Ok(cancelled.load(Ordering::SeqCst))
+        });
+        setter.join().unwrap();
+        assert!(matches!(result, Err(MediaCommandError::Cancelled)));
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 
     #[test]

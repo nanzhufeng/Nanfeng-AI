@@ -3,6 +3,7 @@
 **/build/
 **/target/
 desktop/dist/
+desktop/node_modules/
 .kotlin/
 .playwright-cli/
 tmp/
@@ -34,6 +35,8 @@ signing.properties
 
 # Generated review output and local service state are never release evidence.
 desktop/output/
+desktop/.cache/
+desktop/src-tauri/resources/media-tools/windows-x86_64/
 output/
 supabase/.temp/
 

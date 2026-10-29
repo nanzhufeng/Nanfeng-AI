@@ -22,6 +22,7 @@ const VALID_TONES: &[&str] = &[
     "humorous",
 ];
 const CUSTOM_INSTRUCTIONS_MAX_CHARS: usize = 8_000;
+fn default_true() -> bool { true }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -34,7 +35,11 @@ pub struct AppearanceSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProductSettings {
+    /// Android personalizationEnabled. The visible global switch sets this and retrieval together.
     pub memory_enabled: bool,
+    /// Android memoryRetrievalEnabled; summary pause changes only this setting.
+    #[serde(default = "default_true")]
+    pub memory_retrieval_enabled: bool,
     pub history_library_enabled: bool,
     pub tone: String,
     pub nickname: String,
@@ -134,18 +139,24 @@ pub fn migrate_portable_personalization(transaction: &Transaction<'_>) -> Result
 }
 
 pub fn read(connection: &Connection) -> Result<Projection, String> {
+    let retrieval_column: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('desktop_app_settings') WHERE name='memory_retrieval_enabled')",
+        [], |row| row.get(0),
+    ).map_err(|_| "Desktop 设置结构无法读取".to_owned())?;
+    let retrieval_expression = if retrieval_column { "memory_retrieval_enabled" } else { "memory_enabled" };
     connection.query_row(
-        "SELECT appearance_mode,font_size,theme_color,memory_enabled,history_library_enabled,tone,
+        &format!("SELECT appearance_mode,font_size,theme_color,memory_enabled,history_library_enabled,tone,
                 nickname,occupation,
                 COALESCE((SELECT interests FROM desktop_portable_personalization_v1 WHERE id=1),''),
                 custom_instructions,monitor_notifications,reminder_suggestions,
-                unread_indicators,web_search_enabled,revision
-         FROM desktop_app_settings WHERE id=1",
+                unread_indicators,web_search_enabled,revision,{retrieval_expression}
+         FROM desktop_app_settings WHERE id=1"),
         [],
         |row| Ok(Projection {
             appearance: AppearanceSettings { mode: row.get(0)?, font_size: row.get(1)?, theme_color: row.get(2)? },
             product: ProductSettings {
                 memory_enabled: row.get::<_, i64>(3)? != 0,
+                memory_retrieval_enabled: row.get::<_, i64>(15)? != 0,
                 history_library_enabled: row.get::<_, i64>(4)? != 0,
                 tone: row.get(5)?, nickname: row.get(6)?, occupation: row.get(7)?, interests: row.get(8)?, custom_instructions: row.get(9)?,
                 monitor_notifications: row.get::<_, i64>(10)? != 0,
@@ -169,7 +180,7 @@ pub fn save(connection: &mut Connection, args: SaveArgs) -> Result<Projection, S
             "UPDATE desktop_app_settings SET appearance_mode=?1,font_size=?2,theme_color=?3,
             memory_enabled=?4,history_library_enabled=?5,tone=?6,nickname=?7,occupation=?8,
             custom_instructions=?9,monitor_notifications=?10,reminder_suggestions=?11,
-            unread_indicators=?12,web_search_enabled=?13,revision=revision+1,updated_at_ms=?14
+            unread_indicators=?12,web_search_enabled=?13,memory_retrieval_enabled=?16,revision=revision+1,updated_at_ms=?14
          WHERE id=1 AND revision=?15",
             params![
                 args.appearance.mode,
@@ -187,6 +198,7 @@ pub fn save(connection: &mut Connection, args: SaveArgs) -> Result<Projection, S
                 bool_i64(args.product.web_search_enabled),
                 now_ms(),
                 args.expected_revision,
+                bool_i64(args.product.memory_retrieval_enabled),
             ],
         )
         .map_err(|_| "Desktop 设置保存失败".to_owned())?;
@@ -226,7 +238,7 @@ pub fn read_favorite_conversation_ids(
 }
 
 pub fn set_conversation_favorite(
-    connection: &mut Connection,
+    connection: &Connection,
     workspace_id: &str,
     conversation_id: &str,
     favorite: bool,
@@ -345,6 +357,7 @@ mod tests {
         migrate(&transaction).unwrap();
         migrate_portable_personalization(&transaction).unwrap();
         transaction.commit().unwrap();
+        connection.execute_batch("ALTER TABLE desktop_app_settings ADD COLUMN memory_retrieval_enabled INTEGER NOT NULL DEFAULT 1;").unwrap();
         connection
     }
 
@@ -357,6 +370,7 @@ mod tests {
         migrate(&transaction).unwrap();
         migrate_portable_personalization(&transaction).unwrap();
         transaction.commit().unwrap();
+        connection.execute_batch("ALTER TABLE desktop_app_settings ADD COLUMN memory_retrieval_enabled INTEGER NOT NULL DEFAULT 1;").unwrap();
         let mut initial = read(&connection).unwrap();
         initial.appearance.mode = "dark".into();
         initial.appearance.font_size = "large".into();

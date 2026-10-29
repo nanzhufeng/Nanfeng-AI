@@ -10,11 +10,17 @@ export const WORKSPACE_NAVIGATION_ITEMS = Object.freeze([
   { pane: 'memory', action: 'show-memory', label: '记忆' },
 ]);
 
-export function renderWorkspaceSidebar({ pane, returnLabel = '返回' }) {
+export function renderWorkspaceChoices(data, workspaces = []) {
+  if (workspaces.length < 2) return '';
+  return `<div class="workspace-choices" aria-label="切换本地工作区"><p>本地工作区</p>${workspaces.map(item => `<button type="button" data-action="select-workspace" data-id="${escapeHtml(item.id)}" class="${item.id === data?.summary?.id ? 'selected' : ''}" aria-current="${item.id === data?.summary?.id ? 'true' : 'false'}" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</button>`).join('')}</div>`;
+}
+
+export function renderWorkspaceSidebar({ data, workspaces, pane, returnLabel = '返回' }) {
   return `<aside class="workspace-sidebar" aria-label="工作区导航">
     <div class="workspace-sidebar-scroll">
       <div class="workspace-return-group"><button class="workspace-return-chat" data-action="return-workspace-origin" aria-label="${escapeHtml(returnLabel)}"><span aria-hidden="true">←</span><span>${escapeHtml(returnLabel)}</span></button></div>
       <nav class="workspace-sidebar-pages" aria-label="工作区功能">${WORKSPACE_NAVIGATION_ITEMS.map(item => `<button data-action="${item.action}" class="${pane === item.pane ? 'selected' : ''}" aria-current="${pane === item.pane ? 'page' : 'false'}">${item.label}</button>`).join('')}</nav>
+      ${renderWorkspaceChoices(data, workspaces)}
     </div>
   </aside>`;
 }
@@ -47,10 +53,11 @@ export function isWorkspaceRoot(data, pane, selectedWorkProjectId, selectedConve
   return !project && !conversation;
 }
 
-export function renderWorkspaceNavigation({ pane, returnLabel = '返回' }) {
+export function renderWorkspaceNavigation({ data, workspaces, pane, returnLabel = '返回' }) {
   return `<section class="chat-work-nav" aria-label="工作导航">
     <div class="chat-work-return-group"><button class="chat-work-return" data-action="return-workspace-origin" aria-label="${escapeHtml(returnLabel)}"><span aria-hidden="true">←</span><span>${escapeHtml(returnLabel)}</span></button></div>
     <nav class="chat-work-primary" aria-label="工作区功能">${WORKSPACE_NAVIGATION_ITEMS.map(item => `<button data-action="${item.action}" class="${pane === item.pane ? 'selected' : ''}" aria-current="${pane === item.pane ? 'page' : 'false'}">${item.label}</button>`).join('')}</nav>
+    ${renderWorkspaceChoices(data, workspaces)}
   </section>`;
 }
 

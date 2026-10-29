@@ -21,7 +21,7 @@ pub fn recipient(mime:&str)->Option<Recipient> {
 }
 fn profiles()->&'static Value {
     static PROFILES:OnceLock<Value>=OnceLock::new();
-    PROFILES.get_or_init(||serde_json::from_str(include_str!("../../../app/src/main/assets/model_profiles.json")).expect("owned profile seed"))
+    PROFILES.get_or_init(||serde_json::from_str(include_str!("../../../protocol/model-service/model-profiles-v1.json")).expect("owned profile seed"))
 }
 pub fn native(provider:&str,model:&str,mime:&str,force_text:bool)->bool {
     if force_text {return false}
@@ -44,9 +44,9 @@ pub fn part_mime(part:&Value)->Option<String> {
 }
 pub fn needs_reader(provider:&str,model:&str,route:&str,part:&Value)->Option<Recipient> {
     let mime=part_mime(part)?;
-    if native(provider,model,&mime,route!="NONE" && provider!="OPENROUTER") {None}else{recipient(&mime)}
+    if part["nfaiReaderRequired"]!=true && native(provider,model,&mime,route!="NONE" && provider!="OPENROUTER") {None}else{recipient(&mime)}
 }
-#[derive(Debug,Clone,Deserialize)]
+#[derive(Debug,Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct Grant {
     pub disclosure_version:String, pub material_fingerprint:String,

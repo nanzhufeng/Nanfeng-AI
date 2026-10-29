@@ -96,6 +96,26 @@
   ],
   "models": [
     {
+      "presetId": "GPT_6_1_TERRA",
+      "providerId": "OPENROUTER",
+      "modelId": "openai/gpt-6.1-terra",
+      "displayName": "GPT-6.1 Terra",
+      "selection": "日常",
+      "exceptionIds": [
+        "CHAT_ATTACHMENT_READING"
+      ]
+    },
+    {
+      "presetId": "MERCURY_3",
+      "providerId": "OPENROUTER",
+      "modelId": "inception/mercury-3",
+      "displayName": "Mercury 3",
+      "selection": "日常",
+      "exceptionIds": [
+        "CHAT_ATTACHMENT_READING"
+      ]
+    },
+    {
       "presetId": "CLAUDE_OPUS_5_5",
       "providerId": "OPENROUTER",
       "modelId": "anthropic/claude-opus-5.5",
@@ -140,30 +160,10 @@
       ]
     },
     {
-      "presetId": "GPT_6_1_TERRA",
-      "providerId": "OPENROUTER",
-      "modelId": "openai/gpt-6.1-terra",
-      "displayName": "GPT-6.1 Terra",
-      "selection": "日常",
-      "exceptionIds": [
-        "CHAT_ATTACHMENT_READING"
-      ]
-    },
-    {
       "presetId": "GPT_6_LUNA",
       "providerId": "OPENROUTER",
       "modelId": "openai/gpt-6-luna",
       "displayName": "GPT-6 Luna",
-      "selection": "日常",
-      "exceptionIds": [
-        "CHAT_ATTACHMENT_READING"
-      ]
-    },
-    {
-      "presetId": "MERCURY_3",
-      "providerId": "OPENROUTER",
-      "modelId": "inception/mercury-3",
-      "displayName": "Mercury 3",
       "selection": "日常",
       "exceptionIds": [
         "CHAT_ATTACHMENT_READING"
@@ -294,7 +294,6 @@
       "exceptionIds": [
         "RC_COMPANION",
         "RC_CLAUDE_EFFORT",
-        "RC_SONNET_RESPONSE_ALIAS",
         "RC_CNY",
         "CHAT_ATTACHMENT_READING"
       ]
@@ -532,36 +531,6 @@
   ],
   "exceptions": [
     {
-      "id": "CHAT_ATTACHMENT_READING",
-      "appliesTo": [
-        "CLAUDE_OPUS_5_5",
-        "CLAUDE_SONNET_5_5",
-        "CLAUDE_HAIKU_5_5",
-        "GPT_6_1_SOL",
-        "GPT_6_1_TERRA",
-        "GPT_6_LUNA",
-        "MERCURY_3",
-        "GEMINI_3_8_FLASH",
-        "DEEPSEEK_V4_PRO",
-        "DEEPSEEK_V4_FLASH",
-        "MUSE_WONDER",
-        "GEMINI_4_ARGON",
-        "GLM_5_3",
-        "GLM_5_3_FLASH",
-        "QWEN_3_7_PLUS",
-        "QWEN_3_8_MAX",
-        "RELAYCORE_OPUS_5_5",
-        "RELAYCORE_SONNET_5_5",
-        "RELAYCORE_GPT_6_1_SOL",
-        "RELAYCORE_GPT_6_ASTRA",
-        "RELAYCORE_GEMINI_3_8_FLASH",
-        "RELAYCORE_GEMINI_3_1_PRO",
-        "QWEN_3_6_FLASH"
-      ],
-      "contract": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
-      "rule": "原生、本机完整提取或准确披露的辅助识读共用准备；图片/PDF由OpenRouter Haiku、音视频由OpenRouter Argon读取，原选模型最终回答；独立材料授权和物理计量，不伪造原生能力，失败停止，UNKNOWN不重发。"
-    },
-    {
       "id": "RC_REQUIRED",
       "appliesTo": [
         "RELAYCORE_GPT_6_1_SOL",
@@ -715,15 +684,37 @@
         "CLAUDE_HAIKU_5_5"
       ],
       "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
-      "rule": "联网开启使用原模型OpenRouter Chat Completions web plugin engine=exa，在请求入口检索后由原Haiku回答；原生可选工具与required组合实测仍可跳过。无可读公共计划的原生媒体同请求处理，可读材料仍逐项核验，关闭或grounded不注入。"
+      "rule": "联网开启使用原模型OpenRouter Chat Completions web plugin engine=exa；不同时发server tools或required。关闭或grounded最终回答不注入；原渠道/Key/材料和真实来源门保持。"
     },
     {
-      "id": "RC_SONNET_RESPONSE_ALIAS",
+      "id": "CHAT_ATTACHMENT_READING",
       "appliesTo": [
-        "RELAYCORE_SONNET_5_5"
+        "CLAUDE_OPUS_5_5",
+        "CLAUDE_SONNET_5_5",
+        "CLAUDE_HAIKU_5_5",
+        "GPT_6_1_SOL",
+        "GPT_6_1_TERRA",
+        "GPT_6_LUNA",
+        "MERCURY_3",
+        "GEMINI_3_8_FLASH",
+        "DEEPSEEK_V4_PRO",
+        "DEEPSEEK_V4_FLASH",
+        "MUSE_WONDER",
+        "GEMINI_4_ARGON",
+        "GLM_5_3",
+        "GLM_5_3_FLASH",
+        "QWEN_3_7_PLUS",
+        "QWEN_3_8_MAX",
+        "RELAYCORE_OPUS_5_5",
+        "RELAYCORE_SONNET_5_5",
+        "RELAYCORE_GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_ASTRA",
+        "RELAYCORE_GEMINI_3_8_FLASH",
+        "RELAYCORE_GEMINI_3_1_PRO",
+        "QWEN_3_6_FLASH"
       ],
-      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
-      "rule": "同一服务正式目录发布claude-sonnet-5-5与claude-sonnet-5.5，真实请求前者返回后者。只规范响应身份等价；请求ID、原始返回ID、Provider/渠道/版本/倍率保持，不作自动fallback。"
+      "contract": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "rule": "原生、本机完整提取或准确披露的辅助识读共用准备；图片/PDF由OpenRouter Haiku、音视频由OpenRouter Argon读取，原选模型最终回答；独立材料授权和物理计量，不伪造原生能力，失败停止，UNKNOWN不重发。"
     }
   ],
   "autoPolicy": "protocol/fixtures/auto-routing-rc-domestic-20261010.json",

@@ -9,7 +9,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tauri::{Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewWindow, WindowEvent};
 
@@ -62,7 +62,7 @@ struct PersistedWindowState {
 #[derive(Debug)]
 struct PersistenceState {
     geometry: WindowGeometry,
-    last_write: Option<Instant>,
+    revision: u64,
 }
 
 fn valid_geometry(geometry: WindowGeometry) -> Option<WindowGeometry> {
@@ -111,14 +111,50 @@ pub fn persist_geometry(path: &Path, geometry: WindowGeometry) -> Result<(), Str
     .map_err(|_| "窗口状态无法序列化".to_owned())?;
     let temporary = parent.join(format!(".{STATE_FILE_NAME}.{}.tmp", std::process::id()));
     fs::write(&temporary, payload).map_err(|_| "窗口状态无法写入".to_owned())?;
-    fs::rename(&temporary, path).map_err(|_| "窗口状态无法提交".to_owned())
+    let committed = replace_state_file(&temporary, path);
+    if committed.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    committed.map_err(|_| "窗口状态无法提交".to_owned())
 }
 
-fn state_path<R: Runtime>(app: &tauri::App<R>) -> Option<PathBuf> {
-    app.path()
-        .app_config_dir()
-        .ok()
-        .map(|directory| directory.join(STATE_FILE_NAME))
+#[cfg(windows)]
+fn replace_state_file(temporary: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+    let temporary: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let moved = unsafe {
+        MoveFileExW(
+            temporary.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if moved == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn replace_state_file(temporary: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::rename(temporary, destination)
+}
+
+fn resolve_state_path(config_directory: Option<PathBuf>, isolated_path: Option<PathBuf>) -> Option<PathBuf> {
+    isolated_path.or_else(|| config_directory.map(|directory| directory.join(STATE_FILE_NAME)))
+}
+
+fn state_path<R: Runtime>(app: &tauri::App<R>, isolated_path: Option<PathBuf>) -> Option<PathBuf> {
+    resolve_state_path(app.path().app_config_dir().ok(), isolated_path)
 }
 
 fn monitors<R: Runtime>(window: &WebviewWindow<R>) -> Vec<MonitorBounds> {
@@ -190,17 +226,17 @@ fn restore_desktop_window_state<R: Runtime>(
 
 /// Restores the last valid geometry before the first normal render, then records real native
 /// movement, resize and close events. Diagnostics and background cycles do not call this owner.
-pub fn install_desktop_window_state_persistence<R: Runtime>(app: &tauri::App<R>) {
+pub fn install_desktop_window_state_persistence<R: Runtime>(app: &tauri::App<R>, isolated_path: Option<PathBuf>) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
-    let Some(path) = state_path(app) else {
+    let Some(path) = state_path(app, isolated_path) else {
         return;
     };
     let initial = restore_desktop_window_state(&window, &path);
     let persistence = Arc::new(Mutex::new(PersistenceState {
         geometry: initial,
-        last_write: None,
+        revision: 0,
     }));
     let event_window = window.clone();
     window.on_window_event(move |event| {
@@ -211,24 +247,41 @@ pub fn install_desktop_window_state_persistence<R: Runtime>(app: &tauri::App<R>)
         if !should_save {
             return;
         }
-        let Ok(mut state) = persistence.lock() else {
-            return;
-        };
         let closing = matches!(event, WindowEvent::CloseRequested { .. });
-        let Some(geometry) = snapshot(&event_window, state.geometry) else {
-            return;
+        let revision = {
+            let Ok(mut state) = persistence.lock() else {
+                return;
+            };
+            state.revision = state.revision.saturating_add(1);
+            if closing {
+                if let Some(geometry) = snapshot(&event_window, state.geometry) {
+                    state.geometry = geometry;
+                    let _ = persist_geometry(&path, geometry);
+                }
+                return;
+            }
+            state.revision
         };
-        state.geometry = geometry;
-        if !closing
-            && state
-                .last_write
-                .is_some_and(|written| written.elapsed() < SAVE_INTERVAL)
-        {
-            return;
-        }
-        if persist_geometry(&path, geometry).is_ok() {
-            state.last_write = Some(Instant::now());
-        }
+        let delayed_window = event_window.clone();
+        let delayed_persistence = Arc::clone(&persistence);
+        let delayed_path = path.clone();
+        tauri::async_runtime::spawn(async move {
+            // Windows can dispatch the final maximized resize before its
+            // maximized flag is observable. Debouncing also avoids replacing
+            // the state file for every pixel of a drag.
+            tokio::time::sleep(SAVE_INTERVAL).await;
+            let Ok(mut state) = delayed_persistence.lock() else {
+                return;
+            };
+            if state.revision != revision {
+                return;
+            }
+            let Some(geometry) = snapshot(&delayed_window, state.geometry) else {
+                return;
+            };
+            state.geometry = geometry;
+            let _ = persist_geometry(&delayed_path, geometry);
+        });
     });
 }
 
@@ -236,6 +289,27 @@ pub fn install_desktop_window_state_persistence<R: Runtime>(app: &tauri::App<R>)
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn marked_acceptance_roots_keep_independent_geometry_and_preserve_shared_config() {
+        let directory = tempdir().unwrap();
+        let shared = directory.path().join("shared-config");
+        let shared_path = resolve_state_path(Some(shared.clone()), None).unwrap();
+        persist_geometry(&shared_path, WindowGeometry::default()).unwrap();
+        let shared_before = fs::read(&shared_path).unwrap();
+        let first = directory.path().join("acceptance-one/.device-config/window-state.json");
+        let second = directory.path().join("acceptance-two/.device-config/window-state.json");
+        let one = WindowGeometry { x: 40, y: 60, width: 1000, height: 700, maximized: false };
+        let two = WindowGeometry { x: 120, y: 80, width: 1200, height: 800, maximized: true };
+        persist_geometry(&resolve_state_path(Some(shared.clone()), Some(first.clone())).unwrap(), one).unwrap();
+        persist_geometry(&resolve_state_path(Some(shared.clone()), Some(second.clone())).unwrap(), two).unwrap();
+        assert_eq!(read_geometry(&first), Some(one));
+        assert_eq!(read_geometry(&second), Some(two));
+        assert_eq!(fs::read(&shared_path).unwrap(), shared_before);
+        assert_eq!(resolve_state_path(Some(shared), None), Some(shared_path));
+        assert_eq!(resolve_state_path(None, Some(first.clone())), Some(first));
+        assert_eq!(resolve_state_path(None, None), None);
+    }
 
     #[test]
     fn visible_geometry_accepts_a_second_monitor_with_negative_coordinates() {
@@ -299,14 +373,17 @@ mod tests {
         };
         persist_geometry(&path, geometry).unwrap();
         assert_eq!(read_geometry(&path), Some(geometry));
-        assert!(persist_geometry(
-            &path,
-            WindowGeometry {
-                width: 1,
-                ..geometry
-            }
-        )
-        .is_err());
-        assert_eq!(read_geometry(&path), Some(geometry));
+
+        let latest = WindowGeometry {
+            x: -280,
+            y: 48,
+            width: 1_320,
+            height: 840,
+            maximized: false,
+        };
+        persist_geometry(&path, latest).unwrap();
+        assert_eq!(read_geometry(&path), Some(latest));
+        assert!(persist_geometry(&path, WindowGeometry { width: 1, ..latest }).is_err());
+        assert_eq!(read_geometry(&path), Some(latest));
     }
 }

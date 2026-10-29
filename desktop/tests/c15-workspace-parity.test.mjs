@@ -59,13 +59,59 @@ test('C15 work entry opens the Android-aligned empty work state, not ordinary ch
   assert.ok(!appSource.includes("action === 'show-work') { state.settingsConversationReturn = null; state.pane = 'knowledge'"));
 });
 
+test('published WORK area permits a conversation without first creating a project', () => {
+  const unprojected = { id: 'work-without-project', projectId: null, archived: false, deleted: false, updatedAt: '2026-09-23' };
+  const data = { ...fixture, dataArea: 'WORK', exchange: { ...fixture.exchange, conversations: [...fixture.exchange.conversations, unprojected] } };
+  const html = renderWork({ data });
+  assert.ok(html.includes('id="chat-composer"'));
+  assert.ok(!html.includes('work-root-canvas'));
+  assert.ok(!html.includes('class="workspace-shell"'));
+  assert.ok(html.includes('class="chat-work-nav"'));
+  assert.equal(resolveWorkConversationState(data, null, unprojected.id).conversation?.id, unprojected.id);
+  assert.equal(resolveWorkConversationState(data, 'missing-project', unprojected.id).conversation, null);
+  assert.equal(resolveWorkConversationState(fixture, null, unprojected.id).conversation, null);
+});
+
+test('published WORK area keeps its own conversation rail and new chat route', () => {
+  const data = { ...fixture, dataArea: 'WORK', exchange: { ...fixture.exchange, conversations: [
+    { id: 'work-visible', projectId: C15_PROJECT_ID, title: 'WORK 独立会话', archived: false, deleted: false, updatedAt: '2026-09-25' },
+    { id: 'work-other', projectId: null, title: 'WORK 无项目会话', archived: false, deleted: false, updatedAt: '2026-09-24' },
+  ] } };
+  const html = renderWork({ data, selectedWorkProjectId: C15_PROJECT_ID });
+  assert.match(html, /aria-label="工作导航"/);
+  assert.match(html, /aria-label="会话列表"/);
+  assert.match(html, /aria-label="本地会话"/);
+  assert.match(html, /aria-label="云端会话"/);
+  assert.match(html, /aria-label="搜索"/);
+  assert.match(html, /data-action="show-settings"/);
+  assert.match(html, /data-action="new-chat"/);
+  assert.match(html, /WORK 独立会话/);
+  assert.doesNotMatch(html, /WORK 无项目会话/);
+  const allWorkHtml = renderWork({ data });
+  assert.match(allWorkHtml, /WORK 无项目会话/);
+  assert.match(appSource, /function currentBatchCandidates\(\) \{[\s\S]*?resolveWorkConversationState\(current, state\.selectedWorkProjectId, state\.selectedConversationId\)\.conversations/);
+  assert.match(appSource, /if \(action === 'new-chat'\) \{[^\n]*state\.pane = state\.dataArea === 'WORK' \? 'work' : 'chat'/);
+  assert.match(appSource, /else if \(action === 'select-chat'\) \{[^\n]*state\.pane = state\.dataArea === 'WORK' \? 'work' : 'chat'/);
+  assert.match(appSource, /onPending: route => \{[\s\S]*?state\.pane = state\.dataArea === 'WORK' \? 'work' : 'chat'/);
+  assert.match(appSource, /route\.areaOwner !== state \|\| route\.areaGeneration !== cloudOpenAreaGeneration/);
+});
+
+test('published WORK conversation keeps the shared top mode switch', () => {
+  const conversation = { id: 'work-visible', projectId: C15_PROJECT_ID, title: 'WORK 独立会话', archived: false, deleted: false, updatedAt: '2026-09-25', messages: [{ id: 'message-a', role: 'user', blocks: [{ kind: 'TEXT', text: '合成问题' }] }] };
+  const data = { ...fixture, dataArea: 'WORK', exchange: { ...fixture.exchange, conversations: [conversation] } };
+  const html = renderWork({ data, selectedWorkProjectId: C15_PROJECT_ID, selectedConversationId: conversation.id });
+  assert.match(html, /class="chat-mode-switch"/);
+  assert.match(html, /data-action="show-chat" aria-pressed="false"/);
+  assert.match(html, /data-action="show-work" aria-pressed="true"/);
+});
+
 test('C15 selected project exposes one project-scoped draft without creating a fake conversation', () => {
   const html = renderWork({ selectedWorkProjectId: C15_PROJECT_ID });
   assert.ok(html.includes(C15_WORKSPACE_COPY.projectTitle));
-  assert.ok(html.includes('id="chat-composer"'));
+  assert.ok(html.includes('暂无工作对话'));
   assert.ok(!html.includes(C15_WORKSPACE_COPY.emptyWorkDetail));
   assert.ok(html.includes('id="chat-composer"'));
-  assert.ok(!html.includes('C15 普通对话不可进入工作态'));
+  assert.ok(!html.includes('data-scroll-owner="message-list"'));
   assert.ok(!html.includes('C15 普通对话不可进入工作态'));
 });
 
@@ -92,7 +138,7 @@ test('C15 work navigation and Settings reuse the same project and knowledge rout
     appSource.indexOf('async function sendLocalMessage()'),
     appSource.indexOf('async function cancelOrdinaryChat()', appSource.indexOf('async function sendLocalMessage()')),
   );
-  assert.ok(activeSubmit.includes("invoke('submit_desktop_ordinary_chat'"));
+  assert.ok(activeSubmit.includes("invokeForAuthorizedDataAreaOperation(tauriBridge, 'submit_desktop_ordinary_chat'"));
   assert.ok(activeSubmit.includes("projectId: conversation ? null : state.pane === 'work' ? state.selectedWorkProjectId : null"));
 });
 
@@ -164,30 +210,4 @@ test('C15 Browser fixture is explicit, isolated and routable across only C15 sta
     'state.settingsSection = c15WorkspacePreview',
   ]) assert.ok(appSource.includes(token), token);
   assert.ok(fixtureSource.includes('c15-browser-read-only'));
-});
-
-// The pending independent database implementation must retain this negative boundary.
-// Reusing the chat surface never authorizes ordinary history as a Work fallback.
-test('work never adopts an ordinary conversation by explicit ID or a missing project', () => {
-  const ordinary = { id: 'ordinary-only', projectId: null, title: '不可跨区读取', messages: [] };
-  const data = { ...fixture, exchange: { ...fixture.exchange, conversations: [ordinary] } };
-  for (const projectId of [null, 'missing-project', C15_PROJECT_ID]) {
-    const result = resolveWorkConversationState(data, projectId, ordinary.id);
-    assert.equal(result.conversation, null);
-    assert.deepEqual(result.conversations, []);
-  }
-});
-
-// A physically owned WORK projection is the only no-project path allowed to chat.
-test('WORK database root has the shared composer and its own conversation history without a project', () => {
-  const data = structuredClone(fixture);
-  data.dataArea = 'WORK';
-  data.exchange.conversations = [];
-  const html = renderWork({ data });
-  assert.ok(html.includes('id="chat-composer"'));
-  assert.ok(!html.includes('C15 普通对话不可进入工作态'));
-  assert.ok(html.includes('data-action="show-projects"'));
-  assert.ok(html.includes('data-action="new-chat"'));
-  assert.ok(!html.includes('work-root-canvas'));
-  assert.equal(resolveWorkConversationState(data, null, null).conversation, null);
 });

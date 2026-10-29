@@ -46,23 +46,28 @@ test('memory overview matches the Android summary owner with explicit query, ful
     page: 'memory-overview',
     data,
     native: true,
-    settings: { memoryEnabled: true },
+    settings: { memoryEnabled: true, memoryRetrievalEnabled: true },
     memorySummaryQuery: '可追溯',
     memorySummaryComposer: '继续保留真实证据',
     memorySummaryNotice: '本机筛选完成',
   });
-  for (const token of ['偏好真实、可追溯的交付。', 'edit-memory-summary', 'refresh-memory-summary', 'ask-delete-memory-summary', 'ask-disable-memory-summary', '本机筛选完成']) assert.ok(html.includes(token));
+  for (const token of ['偏好真实、可追溯的交付。', 'edit-memory-summary', 'show-memory-audit', 'refresh-memory-summary', 'ask-delete-memory-summary', 'ask-disable-memory-summary', '本机筛选完成']) assert.ok(html.includes(token));
   assert.ok(!html.includes('询问或更新'));
   assert.ok(!html.includes('submit-memory-summary'));
   assert.ok(!html.includes('data-action="show-memory"'));
-  const empty = renderAndroidSettingsShell({ page: 'memory-overview', data: { ...data, exchange: { ...data.exchange, memory: [] } }, native: true, settings: { memoryEnabled: true } });
+  const empty = renderAndroidSettingsShell({ page: 'memory-overview', data: { ...data, exchange: { ...data.exchange, memory: [] } }, native: true, settings: { memoryEnabled: true, memoryRetrievalEnabled: true } });
   assert.ok(empty.includes('还没有记忆摘要。'));
   assert.doesNotMatch(empty, /data-action="edit-memory-summary"[^>]*disabled/);
+  const paused = renderAndroidSettingsShell({ page: 'memory-overview', data, native: true, settings: { memoryEnabled: true, memoryRetrievalEnabled: false } });
+  assert.match(paused, /data-action="ask-disable-memory-summary"[^>]*disabled/);
+  const pausedPersonalization = renderAndroidSettingsShell({ page: 'personalization', data, native: true, settings: { memoryEnabled: true, memoryRetrievalEnabled: false } });
+  assert.match(pausedPersonalization, /data-key="memoryEnabled"[^>]*aria-checked="false"/);
   const [app, rust] = await Promise.all([
     readFile(new URL('../src/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8'),
   ]);
   assert.match(app, /action: editor\.memoryId \? 'replaceMemorySummary' : 'create'/);
+  assert.match(app, /read_desktop_memory_audit/);
   assert.match(app, /id="memory-summary-editor"/);
   assert.match(rust, /args\.action == "replaceMemorySummary" && args\.entity == "memory"/);
   assert.match(rust, /item\.insert\("status"\.into\(\), Value::String\("DELETED"\.into\(\)\)\)/);

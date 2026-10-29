@@ -7,19 +7,11 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 static JOURNAL_LOCK: Mutex<()> = Mutex::new(());
-pub struct ExitDrainEpoch(std::sync::atomic::AtomicU64);
-impl ExitDrainEpoch {
-    pub const fn new() -> Self {
-        Self(std::sync::atomic::AtomicU64::new(0))
-    }
-    pub fn advance(&self) -> u64 {
-        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
-    }
-    pub fn owns(&self, epoch: u64) -> bool {
-        self.0.load(std::sync::atomic::Ordering::SeqCst) == epoch
-    }
+fn valid_stage(stage:&str)->bool {
+    !stage.is_empty() && stage.len()<=80 && stage.bytes().all(|b|b.is_ascii_uppercase()||b.is_ascii_digit()||b==b'_')
 }
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Event {
     at_ms: u128,
     task: String,
@@ -35,6 +27,9 @@ pub struct Trace {
 }
 impl Trace {
     pub fn begin(root: &Path, task: &str) -> Self {
+        Self::begin_stage(root,task,"START")
+    }
+    pub fn begin_stage(root:&Path,task:&str,stage:&str)->Self {
         let value = Self {
             root: root.to_owned(),
             task: hex::encode(Sha256::digest(task.as_bytes()))[..12].into(),
@@ -42,41 +37,44 @@ impl Trace {
             last_progress: None,
             finished: false,
         };
-        value.record("START");
+        value.record(stage);
         value
     }
     fn record(&self, stage: &str) {
-        if stage.len() > 80
-            || !stage
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
-        {
-            return;
-        }
+        if !valid_stage(stage) { return; }
         let _ = (|| -> Result<(), Box<dyn std::error::Error>> {
+            use std::io::{Read, Write};
             let _lock = JOURNAL_LOCK.lock().map_err(|_| "journal lock")?;
-            let path = self.root.join("generation-continuity-v1.json");
-            let mut events: Vec<Event> =
-                if std::fs::metadata(&path).is_ok_and(|m| m.len() <= 32_768) {
-                    serde_json::from_slice(&std::fs::read(&path)?).unwrap_or_default()
-                } else {
-                    Vec::new()
-                };
-            events.push(Event {
-                at_ms: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
-                task: self.task.clone(),
-                stage: stage.into(),
-                age_ms: self.started.elapsed().as_millis(),
-            });
-            if events.len() > 64 {
-                events.drain(..events.len() - 64);
-            }
-            let pending = path.with_extension("pending");
-            std::fs::write(&pending, serde_json::to_vec(&events)?)?;
-            std::fs::rename(pending, path)?;
+            let root_meta=std::fs::symlink_metadata(&self.root)?;
+            if !root_meta.is_dir() || root_meta.file_type().is_symlink() {return Err("journal root".into());}
+            let path=self.root.join("generation-continuity-v1.json");
+            let mut events:Vec<Event>=match std::fs::symlink_metadata(&path) {
+                Ok(meta)=>{
+                    if !meta.is_file() || meta.file_type().is_symlink() || meta.len()>32768 {return Err("journal shape".into());}
+                    let mut bytes=Vec::new();std::fs::File::open(&path)?.take(32769).read_to_end(&mut bytes)?;
+                    if bytes.len()>32768 {return Err("journal size".into());}
+                    let rows:Vec<Event>=serde_json::from_slice(&bytes)?;
+                    if rows.len()>64 || rows.iter().any(|e| !valid_stage(&e.stage) || e.task.len()!=12 || !e.task.bytes().all(|b|b.is_ascii_hexdigit())) {return Err("journal entries".into());}
+                    rows
+                }
+                Err(error) if error.kind()==std::io::ErrorKind::NotFound=>Vec::new(),
+                Err(error)=>return Err(error.into()),
+            };
+            events.push(Event {at_ms:SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),task:self.task.clone(),stage:stage.into(),age_ms:self.started.elapsed().as_millis()});
+            if events.len()>64 {events.drain(..events.len()-64);}
+            let bytes=serde_json::to_vec(&events)?;if bytes.len()>32768 {return Err("journal serialized size".into());}
+            // A new file inherits this same private root's ACL. Never reuse an unknown
+            // pending slot; a stale slot pauses diagnostics instead of accumulating files.
+            // Close our handle before Windows replacement semantics apply.
+            let pending=self.root.join("generation-continuity-v1.pending");
+            let mut file=std::fs::OpenOptions::new().write(true).create_new(true).open(&pending)?;
+            if let Err(error)=file.write_all(&bytes) {drop(file);let _=std::fs::remove_file(&pending);return Err(error.into());}
+            drop(file);
+            if let Err(error)=std::fs::rename(&pending,&path) {let _=std::fs::remove_file(&pending);return Err(error.into());}
             Ok(())
         })();
     }
+    pub fn stage(&self, stage:&str) {self.record(stage);}
     pub fn progress(&mut self) {
         if self.last_progress.is_none()
             || self
@@ -142,17 +140,6 @@ impl Drop for ActivityGuard {
 mod tests {
     use super::*;
     #[test]
-    fn reopening_revokes_old_exit_even_if_the_user_quits_again() {
-        let owner = ExitDrainEpoch::new();
-        let old_exit = owner.advance();
-        assert!(owner.owns(old_exit));
-        owner.advance(); // Reopen / focus.
-        assert!(!owner.owns(old_exit));
-        let new_exit = owner.advance();
-        assert!(owner.owns(new_exit));
-        assert!(!owner.owns(old_exit));
-    }
-    #[test]
     fn generation_activity_has_bounded_ownership() {
         let activity = ActivityGuard::begin();
         drop(activity);
@@ -176,4 +163,38 @@ mod tests {
             .unwrap()
             .contains("private-conversation-name"));
     }
+    #[test]
+    fn unavailable_diagnostic_target_does_not_mutate_business_data() {
+        let root=tempfile::tempdir().unwrap();let target=root.path().join("generation-continuity-v1.json");std::fs::create_dir(&target).unwrap();
+        let marker=root.path().join("business.txt");std::fs::write(&marker,b"unchanged").unwrap();
+        let mut trace=Trace::begin(root.path(),"synthetic-task");trace.progress();trace.finish("COMPLETED");
+        assert!(target.is_dir());assert_eq!(std::fs::read(marker).unwrap(),b"unchanged");
+    }
+    #[test]
+    fn unknown_existing_payload_and_invalid_stage_are_not_rewritten_or_retained() {
+        let root=tempfile::tempdir().unwrap();let target=root.path().join("generation-continuity-v1.json");
+        let original=b"unknown existing input";std::fs::write(&target,original).unwrap();{let mut trace=Trace::begin(root.path(),"secret-task-name");trace.finish("COMPLETED");}
+        assert_eq!(std::fs::read(&target).unwrap(),original);
+        std::fs::remove_file(&target).unwrap();{let mut trace=Trace::begin(root.path(),"secret-task-name");trace.finish("private body: secret");}
+        let bytes=std::fs::read(&target).unwrap();assert!(!String::from_utf8(bytes).unwrap().contains("secret"));
+    }
+
+    #[test]
+    fn concurrent_replacement_and_unwind_keep_bounded_owned_records() {
+        let root=tempfile::tempdir().unwrap();let mut workers=Vec::new();
+        for index in 0..4 {let path=root.path().to_owned();workers.push(std::thread::spawn(move||{for _ in 0..10 {let mut trace=Trace::begin(&path,&format!("synthetic-{index}"));trace.progress();trace.finish("COMPLETED");}}));}
+        for worker in workers {worker.join().unwrap();}
+        let path=root.path().to_owned();assert!(std::panic::catch_unwind(move||{let _trace=Trace::begin(&path,"synthetic-unwind");panic!("synthetic owner interruption");}).is_err());
+        let bytes=std::fs::read(root.path().join("generation-continuity-v1.json")).unwrap();assert!(bytes.len()<=32768);
+        let events:Vec<Event>=serde_json::from_slice(&bytes).unwrap();assert_eq!(events.len(),64);assert_eq!(events.last().unwrap().stage,"OWNER_EXIT_UNSETTLED");
+        assert!(std::fs::read_dir(root.path()).unwrap().all(|entry|!entry.unwrap().file_name().to_string_lossy().ends_with(".pending")));
+    }
+
+    #[test]
+    fn stale_pending_slot_is_preserved_without_creating_more_files() {
+        let root=tempfile::tempdir().unwrap();let pending=root.path().join("generation-continuity-v1.pending");std::fs::write(&pending,b"unknown interrupted input").unwrap();
+        for _ in 0..70 {let mut trace=Trace::begin(root.path(),"synthetic-task");trace.progress();trace.finish("COMPLETED");}
+        assert_eq!(std::fs::read(&pending).unwrap(),b"unknown interrupted input");assert_eq!(std::fs::read_dir(root.path()).unwrap().count(),1);
+    }
+
 }

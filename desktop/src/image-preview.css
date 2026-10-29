@@ -112,6 +112,18 @@
   color: #202722;
   border-color: #fff;
 }
+/* The generic dark dialog rule must not recolor the white text reader. */
+:root[data-appearance-mode] .attachment-preview-overlay > .text-preview-surface {
+  background: #fff;
+  color: #202722;
+  border-color: #fff;
+  --body-text: #202722;
+  --secondary-text: #66736c;
+}
+:root[data-appearance-mode] .text-preview-overlay .file-preview-action,
+:root[data-appearance-mode] .text-preview-overlay .text-preview-menu-item:not(:disabled) { color: #233342; }
+:root[data-appearance-mode] .text-preview-overlay :is(.file-preview-action, .text-preview-menu-item):is(:hover, :focus-visible):not(:disabled) { background: #e8ece9; }
+:root[data-appearance-mode] .text-preview-overlay :is(.file-preview-action, .text-preview-menu-item):active:not(:disabled) { background: #dfe5e0; }
 .text-preview-overlay .text-preview-header {
   flex: 0 0 auto;
   display: flex;
@@ -156,11 +168,11 @@
 .archive-preview-overlay .file-preview-action { background: #f1f3f2; color: #202722; border-color: #e5e9e6; backdrop-filter: none; }
 .archive-preview-overlay .file-preview-action:hover { background: #e8ece9; }
 .archive-preview-directory-header, .archive-preview-entry-header { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; min-height: 38px; }
-.archive-preview-directory-header > small { color: #748078; font-size: 12px; }
+.archive-preview-directory-header > small { color: #748078; font-size: calc(12px * var(--app-font-scale, 1)); }
 .archive-preview-entry-header > button { display: inline-flex; width: 34px; height: 34px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; border: 1px solid #e4e9e5; border-radius: 10px; background: #fff; color: #455047; }
 .archive-preview-entry-header > button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .archive-preview-breadcrumb { display: flex; min-width: 0; align-items: center; gap: 7px; overflow: auto; color: #66736c; white-space: nowrap; }
-.archive-preview-breadcrumb button { overflow: hidden; padding: 4px 2px; border: 0; background: transparent; color: #455047; font: inherit; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.archive-preview-breadcrumb button { overflow: hidden; padding: 4px 2px; border: 0; background: transparent; color: #455047; font: inherit; font-size: calc(13px * var(--app-font-scale, 1)); text-overflow: ellipsis; white-space: nowrap; }
 .archive-preview-breadcrumb button:hover { color: var(--accent-orange, #de6f2b); }
 .archive-preview-list { flex: 1 1 0; min-height: 0; overflow: auto; padding: 4px 0 18px; }
 .archive-preview-row { display: grid; width: 100%; grid-template-columns: 34px minmax(0, 1fr) 18px; align-items: center; gap: 10px; min-height: 58px; padding: 8px 12px; border: 0; border-bottom: 1px solid #edf0ed; border-radius: 10px; background: transparent; color: #202722; text-align: left; }
@@ -170,11 +182,11 @@
 .archive-directory-row .archive-preview-row-icon { background: #fff0e3; color: #a6521a; }
 .archive-preview-row-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.65; }
 .archive-preview-row > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
-.archive-preview-row strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.archive-preview-row small, .archive-entry-facts { color: #748078; font-size: 11px; }
+.archive-preview-row strong { overflow: hidden; font-size: calc(13px * var(--app-font-scale, 1)); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.archive-preview-row small, .archive-entry-facts { color: #748078; font-size: calc(11px * var(--app-font-scale, 1)); }
 .archive-preview-empty { margin: 24px 0; color: #748078; text-align: center; }
 .archive-preview-overlay .archive-text-preview { overflow: auto; white-space: pre; overflow-wrap: normal; }
-.archive-preview-overlay .archive-text-preview pre { margin: 0; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.archive-preview-overlay .archive-text-preview pre { margin: 0; font: calc(12px * var(--app-font-scale, 1))/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .archive-preview-overlay .archive-image-preview { flex: 1 1 0; min-height: 0; margin: 0; display: flex; }
 .archive-preview-overlay .archive-image-preview .image-preview-viewport { background: #f4f6f4; border: 1px solid #e4e9e5; border-radius: 12px; }
 .archive-preview-overlay .archive-preview-unsupported { max-width: 620px; margin: 28px auto; padding: 20px; border: 1px solid #e4e9e5; border-radius: 16px; background: #f8faf8; color: #566259; }
@@ -191,6 +203,21 @@
   background: var(--attachment-media-canvas);
   overflow: hidden;
 }
+.attachment-preview-overlay .video-preview-error {
+  align-self: center;
+  width: min(520px, calc(100% - 48px));
+  margin: auto;
+  padding: 22px 24px;
+  border: 1px solid var(--accent-subtle-border);
+  border-radius: 18px;
+  background: var(--accent-orange-soft);
+  color: #74401f;
+  text-align: center;
+}
+.attachment-preview-overlay .video-preview-error strong,
+.attachment-preview-overlay .video-preview-error small { display: block; }
+.attachment-preview-overlay .video-preview-error strong { font-weight: 650; }
+.attachment-preview-overlay .video-preview-error small { margin-top: 8px; color: #6a5647; font-size: calc(12px * var(--app-font-scale, 1)); }
 .attachment-preview-overlay .video-preview-stage .video-preview-frame {
   flex: 1 1 0;
   width: 100%;
@@ -421,6 +448,17 @@
   backdrop-filter: none;
 }
 .audio-preview-overlay .file-preview-action:hover { background: #e8ece9; }
+.attachment-preview-overlay.audio-preview-overlay .image-preview-dialog .audio-preview-error {
+  width: 100%;
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--accent-subtle-border);
+  border-radius: 16px;
+  background: var(--accent-orange-soft);
+  color: #74401f;
+  font-weight: 600;
+  text-align: center;
+}
 .audio-preview-overlay .audio-preview-player {
   display: grid;
   place-items: center;
@@ -596,20 +634,31 @@
 :root[data-appearance-mode="dark"] .chat-file-format-label,
 :root[data-appearance-mode="dark"] .chat-file-preview-fallback { color: #b8c3bb; }
 
-/* Text reader: one light canvas, circular navigation and a labelled action menu. */
-.scrim.attachment-preview-overlay.text-preview-overlay,
-.attachment-preview-overlay > .text-preview-surface { background: color-mix(in srgb, var(--page-background, #f5f6f5) 96%, #888 4%); color: var(--body-text, #202722); border: 0; }
+/* Reader parity: symmetric header, inert title and explicit text actions.
+   Preserve the Windows white reading surface and original preview owner. */
 .text-preview-overlay .text-preview-header { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 16px; }
-.text-preview-title { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.text-preview-overlay .file-preview-action { background: var(--foreground-surface, #fff); border-radius: 50%; width: 44px; height: 44px; display: grid; place-items: center; border: 0; cursor: pointer; }
+.text-preview-title { min-width: 0; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.text-preview-overlay .text-preview-header > .file-preview-action,
+.text-preview-menu > summary.file-preview-action { display: grid; width: 44px; height: 44px; min-width: 0; min-height: 0; padding: 0; place-items: center; border: 0; border-radius: 50%; background: #f4f4f4; color: #233342; }
 .text-preview-menu { position: relative; }
-.text-preview-menu summary { list-style: none; }
-.text-preview-menu summary::-webkit-details-marker { display: none; }
-.text-preview-menu-items { position: absolute; right: 0; top: 50px; min-width: 160px; padding: 8px; border-radius: 16px; background: var(--foreground-surface, #fff); box-shadow: 0 8px 28px #0002; z-index: 2; }
-.text-preview-menu-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border: 0; background: transparent; border-radius: 10px; }
-.text-preview-overlay .local-text-preview { background: transparent; color: var(--body-text, #202722); border: 0; border-radius: 0; }
-.text-preview-overlay .local-text-preview h1 { font-size: 1.8em; font-weight: 700; }
-.text-preview-overlay .text-preview-facts { margin: 8px 24px; }
-.preview-progress-range { min-height: 44px; touch-action: none; }
-
+.text-preview-menu > summary { list-style: none; cursor: pointer; }
+.text-preview-menu > summary::-webkit-details-marker { display: none; }
+.text-preview-menu-items { position: absolute; top: calc(100% + 6px); right: 0; min-width: 220px; max-width: min(320px, calc(100vw - 16px)); margin: 0; padding: 8px; border: 0; border-radius: 16px; background: #fff; color: #233342; box-shadow: 0 8px 24px rgb(0 0 0 / 10%); }
+.text-preview-menu-item { display: flex; width: 100%; min-height: 36px; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.text-preview-menu-item svg { flex: 0 0 18px; width: 18px; height: 18px; }
+.text-preview-menu-item:hover:not(:disabled),
+.text-preview-menu-item:focus-visible { outline: none; background: #eee; box-shadow: none; }
+.text-preview-menu > summary:focus-visible,
+.text-preview-overlay .text-preview-header > .file-preview-action:focus-visible { outline: none; background: #e8e8e8; box-shadow: none; }
+.text-preview-menu-item:disabled { color: #8b8b8b; cursor: default; }
+.text-preview-overlay .text-preview-menu-items .text-preview-facts { margin: 6px 10px; padding: 0; color: #667782; font-size: 11px; line-height: 16px; white-space: normal; overflow-wrap: anywhere; }
+.text-preview-overlay .local-text-preview > h1,
 .text-preview-overlay .local-text-preview > h2:first-child { font-size: 1.8em; font-weight: 700; }
+
+.text-preview-menu-items { z-index: 3; }
+
+/* Keep the standard reader menu size; small/large follow saved appearance. */
+.text-preview-menu-items { min-width: min(max(220px, calc(220px * var(--app-font-scale, 1))), calc(100vw - 16px)); }
+.text-preview-menu-item { min-height: max(36px, calc(36px * var(--app-font-scale, 1))); font-size: calc(16px * var(--app-font-scale, 1)); }
+.text-preview-menu-item svg { flex-basis: calc(18px * var(--app-font-scale, 1)); width: calc(18px * var(--app-font-scale, 1)); height: calc(18px * var(--app-font-scale, 1)); }
+.text-preview-overlay .text-preview-menu-items .text-preview-facts { font-size: calc(11px * var(--app-font-scale, 1)); line-height: calc(16px * var(--app-font-scale, 1)); }

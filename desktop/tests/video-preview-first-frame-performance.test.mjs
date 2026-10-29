@@ -28,7 +28,8 @@ test('the media protocol never queues on the mutable store or reads an un-ranged
   const protocolStart = rust.indexOf('fn desktop_media_protocol_response(');
   const protocolEnd = rust.indexOf('\nfn read_desktop_video_thumbnail_from_paths', protocolStart);
   const protocol = rust.slice(protocolStart, protocolEnd);
-  assert.match(protocol, /let paths = state\.store_paths\.clone\(\)/);
+  assert.match(protocol, /desktop_media_area_paths\(/);
+  assert.match(protocol, /root_state\.work_area\.as_deref\(\)\.map\(\|work\| &work\.store_paths\)/);
   assert.match(protocol, /open_desktop_workspace_readonly_connection/);
   assert.doesNotMatch(protocol, /state\.store\.lock\(\)/);
   assert.match(protocol, /byte_count\.min\(DESKTOP_MEDIA_RANGE_CHUNK_BYTES\) - 1/);

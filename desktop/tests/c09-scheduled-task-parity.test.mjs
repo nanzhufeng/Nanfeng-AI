@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
 import { renderDesktopRemindersPage } from '../src/desktop-reminders-page.mjs';
 
 const emptyProjection = { drafts: [], plans: [] };
@@ -85,8 +88,8 @@ test('C09 plan cards expose persisted active, paused, result and safe failure fa
 });
 
 test('C09 delete remains a confirmation and edit cancellation returns to the plan list', async () => {
-  const source = await readFile(resolve('src/app.mjs'), 'utf8');
-  const page = await readFile(resolve('src/desktop-reminders-page.mjs'), 'utf8');
+  const source = await readFile(resolve(desktopRoot, 'src/app.mjs'), 'utf8');
+  const page = await readFile(resolve(desktopRoot, 'src/desktop-reminders-page.mjs'), 'utf8');
   assert.match(source, /kind: 'reminder-editor'/);
   assert.match(source, /mode: 'edit'/);
   assert.match(page, /data-action=\"cancel-reminder-editor\"/);
@@ -98,8 +101,8 @@ test('C09 delete remains a confirmation and edit cancellation returns to the pla
 });
 
 test('C09 production mutations stay on the Rust owner while browser QA stays fixture-only', async () => {
-  const source = await readFile(resolve('src/app.mjs'), 'utf8');
-  const rust = await readFile(resolve('src-tauri/src/desktop_reminders_v1.rs'), 'utf8');
+  const source = await readFile(resolve(desktopRoot, 'src/app.mjs'), 'utf8');
+  const rust = await readFile(resolve(desktopRoot, 'src-tauri/src/desktop_reminders_v1.rs'), 'utf8');
   assert.match(source, /c09ReminderPreview/);
   assert.match(source, /Web 只读交互样本不会写入 Desktop SQLite/);
   assert.match(source, /confirm_desktop_reminder_draft/);

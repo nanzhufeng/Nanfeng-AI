@@ -1,7 +1,8 @@
 import { RELAYCORE_MODELS } from './relaycore-models.mjs';
 // Read-only Desktop projection of the Android ConversationCostEstimator. Provider-reported
 // amounts remain authoritative; this table only fills a visible estimate when that fact is absent.
-const USD_TO_CNY = 6.720309145556033;
+export const USD_TO_CNY = 6.720309145556033;
+export const CNY_REFERENCE_DATE = '2026-08-27';
 
 const price = (priceVersion, input, output, cachedInput = null, currencyCode = 'USD') => ({
   priceVersion, input: Number(input), output: Number(output), cachedInput: cachedInput == null ? null : Number(cachedInput), currencyCode,
@@ -24,9 +25,9 @@ const flatPrices = new Map([
 ]);
 
 const tieredPrices = new Map([
+  ['openai/gpt-6.1-terra', [[271_999, price('openrouter-public-prices-2026-10-27-v1', 1, 5, 0.05)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-27-v1', 2, 7.5, 0.1)]]],
   ['anthropic/claude-haiku-5.5', [[99_999, price('openrouter-public-prices-2026-10-09-v1', 0.1, 0.5, 0.01)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-09-v1', 0.5, 2.5, 0.05)]]],
   ['openai/gpt-6.1-sol', [[271_999, price('openrouter-public-prices-2026-10-09-v1', 2, 10, 0.1)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-09-v1', 4, 15, 0.2)]]],
-  ['openai/gpt-6.1-terra', [[271_999, price('openrouter-public-prices-2026-10-27-v1', 1, 5, 0.05)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-27-v1', 2, 7.5, 0.1)]]],
   ['openai/gpt-6-luna', [[271_999, price('openrouter-public-prices-2026-10-09-v1', 0.1, 0.5, 0.01)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-09-v1', 0.2, 0.75, 0.02)]]],
   ['openai/gpt-5.6-sol', [[271_999, price('openrouter-public-prices-2026-08-v1', 2, 10)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-08-v1', 4, 15)]]],
   ['openai/gpt-5.6-terra', [[271_999, price('openrouter-public-prices-2026-08-v1', 2, 12)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-08-v1', 4, 18)]]],
@@ -88,10 +89,8 @@ export function accountingPricingModelId(requested,actual) {
 /** Returns an immutable display projection; it never writes an estimate into the usage ledger. */
 export function projectedCost({ modelId, inputTokens, outputTokens, cachedInputTokens = 0, occurredAtMs, chargeMicros, currencyCode, costSource, modelDisplayName, priceVersion } = {}) {
   if (Number.isSafeInteger(chargeMicros) && chargeMicros >= 0 && currencyCode) {
-    // Read-only correction of the old nominal Relay estimate; genuine USD facts stay USD.
-    const legacyRelay = costSource === 'LOCAL_ESTIMATE' && currencyCode === 'USD'
-      && (priceVersion?.startsWith('relaycore-verified-group-') || RELAYCORE_MODELS.some(model => model.modelId === modelId));
-    return { chargeMicros, currencyCode: legacyRelay ? 'CNY' : currencyCode, costSource: costSource === 'LOCAL_ESTIMATE' ? 'LOCAL_ESTIMATE' : 'PROVIDER_RESPONSE' };
+    // Stored amounts/currencies remain immutable facts, including historical estimates.
+    return { chargeMicros, currencyCode, costSource: costSource === 'LOCAL_ESTIMATE' ? 'LOCAL_ESTIMATE' : 'PROVIDER_RESPONSE' };
   }
   if (!Number.isSafeInteger(inputTokens) || inputTokens < 0 || !Number.isSafeInteger(outputTokens) || outputTokens < 0 || !Number.isSafeInteger(occurredAtMs) || occurredAtMs < 0) return null;
   const normalized = String(modelId || '').trim().toLocaleLowerCase();
@@ -119,7 +118,8 @@ export function projectedMessageCost(message) {
   if (message?.retrievalModelId) return null; // Historical helper calls with no quantitative facts remain unknown.
   const usage = message?.usage || {};
   const estimatedUsage = message?.estimatedUsage || {};
-  const effectiveUsage = Number.isSafeInteger(usage.inputTokens) && Number.isSafeInteger(usage.outputTokens) ? usage : estimatedUsage;
+  const hasReportedUsage = ['inputTokens', 'outputTokens', 'totalTokens', 'cachedInputTokens', 'reasoningTokens'].some(key => Number.isSafeInteger(usage[key]));
+  const effectiveUsage = hasReportedUsage ? usage : estimatedUsage;
   const occurredAtMs = Date.parse(message?.createdAt || '');
   return projectedCost({
     modelId: accountingPricingModelId(message?.modelSnapshot?.modelId,message?.actualModelId),

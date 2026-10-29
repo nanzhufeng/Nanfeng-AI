@@ -20,7 +20,7 @@ pub fn requires_companion(preset: &str, enabled: bool) -> bool {
 
 pub fn retrieval_request(parent: &TransportRequest) -> Result<TransportRequest, Failure> {
     if parent.web_search_route != "RELAYCORE_COMPANION" || !parent.provider_id.starts_with("RELAYCORE_")
-        || parent.endpoint != chat::ordinary_provider_endpoint(&parent.provider_id, "https://api.relaycore.cn/v1", "NONE") {
+        || parent.endpoint != chat::ordinary_provider_endpoint("https://api.relaycore.cn/v1", &parent.provider_id, "NONE") {
         return Err(Failure::Explicit { code: "EGRESS_AUTHORIZATION", http_status: None });
     }
     // User question plus bounded fact clues from current text projection; never filenames, files, memory or system prompts.
@@ -82,21 +82,124 @@ pub fn has_current_attachment_material(parent:&TransportRequest)->bool {
         .is_some_and(|parts|parts.len()>1)
 }
 fn continue_attachment_analysis(parent:&mut TransportRequest,failure:&Failure)->bool {
-    let code=match failure {Failure::Cancelled=>return false,Failure::Explicit{code,..}|Failure::Quantified{code,..}|Failure::Unknown{code}=>*code};
+    let code=match failure {Failure::Cancelled|Failure::MeasuredCancelled{..}=>return false,Failure::Explicit{code,..}|Failure::MeasuredExplicit{code,..}|Failure::Unknown{code}|Failure::MeasuredUnknown{code,..}=>*code};
     if code.starts_with("LOCAL_") || code.starts_with("EGRESS_") || !has_current_attachment_material(parent) {return false;}
     parent.messages.as_array_mut().unwrap().push(json!({"role":"system","content":"外部检索未完成。仅分析用户已提交附件及对话材料；明确区分材料原始主张与推理，外部或实时事实标为未核实，不得声称联网核验成功。仍需给出有用的附件分析。"}));
     parent.web_search_route="NONE".into();parent.grounded_answer=true;true
 }
 
+/// Quantities and execution result are independent observed facts. Attempt both local writes,
+/// then fail closed if either failed; no follow-up HTTP is authorized by an accounting failure.
+pub fn audit_child_terminal(
+    request:&TransportRequest,result:&Result<Completed,Failure>,
+    audit:&mut impl FnMut(&TransportRequest,Option<&Completed>)->Result<(),Failure>,
+    on_outcome:&mut impl FnMut(&TransportRequest,&crate::chat_call_accounting_v1::CallOutcome)->Result<(),Failure>,
+)->Result<(),Failure> {
+    let quantitative=match result {
+        Ok(reply)=>audit(request,Some(reply)),
+        Err(failure)=>match failure.quantitative_completed(){Some(reply)=>audit(request,Some(&reply)),None=>Ok(())},
+    };
+    let terminal=on_outcome(request,&crate::chat_call_accounting_v1::CallOutcome::from_result(result));
+    quantitative.and(terminal)
+}
+
 pub async fn execute_companion(
     parent: TransportRequest, answer_secret: Zeroizing<Vec<u8>>, search_secret: Zeroizing<Vec<u8>>,
     cancelled: Arc<AtomicBool>, audit: impl FnMut(Option<&Completed>) -> Result<(), Failure>,
-    before_answer: impl FnOnce() -> Result<(), Failure>,
-    on_delta: impl FnMut(&str) -> Result<(), Failure>,
+    before_answer: impl FnOnce() -> Result<(), Failure>, on_delta: impl FnMut(&str) -> Result<(), Failure>,
 ) -> Result<Completed, Failure> {
-    execute_companion_core(parent,answer_secret,search_secret,cancelled,audit,
-        |request,secret,signal|chat::execute_streaming(request,secret,signal,|_|Ok(())),
-        |request,secret,signal|async move {before_answer()?;chat::execute_streaming(request,secret,signal,on_delta).await}).await
+    execute_companion_with_endpoint(parent,answer_secret,search_secret,cancelled,audit,
+        move |_|before_answer(),on_delta,None).await
+}
+
+pub(crate) fn validate_endpoint_override(endpoint_override:Option<&str>)->Result<(),Failure>{
+    if let Some(endpoint) = endpoint_override {
+        let valid = reqwest::Url::parse(endpoint).ok().is_some_and(|url|
+            url.scheme()=="http" && url.host_str()==Some("127.0.0.1") && url.port().is_some_and(|port|port>0)
+            && url.path()=="/" && url.query().is_none() && url.fragment().is_none()
+            && url.username().is_empty() && url.password().is_none());
+        if !valid { return Err(Failure::Explicit { code:"EGRESS_AUTHORIZATION",http_status:None }); }
+    }
+    Ok(())
+}
+pub async fn execute_companion_or_scoped_with_endpoint(
+ parent:TransportRequest,answer_secret:Zeroizing<Vec<u8>>,search_secret:Zeroizing<Vec<u8>>,
+ cancelled:Arc<AtomicBool>,cache:impl crate::attachment_search_checkpoint_v1::Cache,mut audit:impl FnMut(&TransportRequest,Option<&Completed>)->Result<(),Failure>,
+ before_answer:impl FnOnce(&TransportRequest)->Result<(),Failure>,on_delta:impl FnMut(&str)->Result<(),Failure>,endpoint_override:Option<String>,
+)->Result<Completed,Failure>{
+ execute_companion_or_scoped_with_endpoint_observed(parent,answer_secret,search_secret,cancelled,cache,audit,before_answer,on_delta,|_|Ok(()),endpoint_override).await
+}
+pub async fn execute_companion_or_scoped_with_endpoint_observed(
+ parent:TransportRequest,answer_secret:Zeroizing<Vec<u8>>,search_secret:Zeroizing<Vec<u8>>,
+ cancelled:Arc<AtomicBool>,cache:impl crate::attachment_search_checkpoint_v1::Cache,mut audit:impl FnMut(&TransportRequest,Option<&Completed>)->Result<(),Failure>,
+ before_answer:impl FnOnce(&TransportRequest)->Result<(),Failure>,on_delta:impl FnMut(&str)->Result<(),Failure>,on_measurement:impl FnMut(&chat::ReportedMeasurement)->Result<(),Failure>,endpoint_override:Option<String>,
+)->Result<Completed,Failure>{
+ execute_companion_or_scoped_with_endpoint_fully_observed(parent,answer_secret,search_secret,cancelled,cache,audit,before_answer,on_delta,on_measurement,|_,_|Ok(()),endpoint_override).await
+}
+pub async fn execute_companion_or_scoped_with_endpoint_fully_observed(
+ parent:TransportRequest,answer_secret:Zeroizing<Vec<u8>>,search_secret:Zeroizing<Vec<u8>>,
+ cancelled:Arc<AtomicBool>,cache:impl crate::attachment_search_checkpoint_v1::Cache,mut audit:impl FnMut(&TransportRequest,Option<&Completed>)->Result<(),Failure>,
+ before_answer:impl FnOnce(&TransportRequest)->Result<(),Failure>,on_delta:impl FnMut(&str)->Result<(),Failure>,on_measurement:impl FnMut(&chat::ReportedMeasurement)->Result<(),Failure>,on_retrieval:impl Fn(&TransportRequest,&chat::ReportedMeasurement)->Result<(),Failure>+Clone,endpoint_override:Option<String>,
+)->Result<Completed,Failure>{
+ execute_companion_or_scoped_with_endpoint_audited(parent,answer_secret,search_secret,cancelled,cache,audit,before_answer,on_delta,on_measurement,on_retrieval,|_,_|Ok(()),endpoint_override).await
+}
+pub async fn execute_companion_or_scoped_with_endpoint_audited(
+ parent:TransportRequest,answer_secret:Zeroizing<Vec<u8>>,search_secret:Zeroizing<Vec<u8>>,
+ cancelled:Arc<AtomicBool>,cache:impl crate::attachment_search_checkpoint_v1::Cache,mut audit:impl FnMut(&TransportRequest,Option<&Completed>)->Result<(),Failure>,
+ before_answer:impl FnOnce(&TransportRequest)->Result<(),Failure>,on_delta:impl FnMut(&str)->Result<(),Failure>,on_measurement:impl FnMut(&chat::ReportedMeasurement)->Result<(),Failure>,on_retrieval:impl Fn(&TransportRequest,&chat::ReportedMeasurement)->Result<(),Failure>+Clone,on_outcome:impl FnMut(&TransportRequest,&crate::chat_call_accounting_v1::CallOutcome)->Result<(),Failure>,endpoint_override:Option<String>,
+)->Result<Completed,Failure>{
+ if crate::attachment_web_search_execution_v1::required(&parent){
+  crate::attachment_web_search_execution_v1::execute_relay_with_endpoint_audited(parent,answer_secret,search_secret,cancelled,cache,audit,before_answer,on_delta,on_measurement,on_retrieval,on_outcome,endpoint_override).await
+ }else{
+  let child=retrieval_request(&parent).ok();
+  execute_companion_with_endpoint_audited(parent,answer_secret,search_secret,cancelled,move |reply|audit(child.as_ref().ok_or(Failure::Explicit{code:"WEB_SEARCH_QUERY_EMPTY",http_status:None})?,reply),before_answer,on_delta,on_measurement,on_retrieval,on_outcome,endpoint_override).await
+ }
+}
+pub async fn execute_companion_with_endpoint(
+    parent: TransportRequest, answer_secret: Zeroizing<Vec<u8>>, search_secret: Zeroizing<Vec<u8>>,
+    cancelled: Arc<AtomicBool>, audit: impl FnMut(Option<&Completed>) -> Result<(), Failure>,
+    before_answer: impl FnOnce(&TransportRequest) -> Result<(), Failure>,
+    on_delta: impl FnMut(&str) -> Result<(), Failure>, endpoint_override: Option<String>,
+) -> Result<Completed, Failure> {
+ execute_companion_with_endpoint_observed(parent,answer_secret,search_secret,cancelled,audit,before_answer,on_delta,|_|Ok(()),endpoint_override).await
+}
+pub async fn execute_companion_with_endpoint_observed(
+    parent: TransportRequest, answer_secret: Zeroizing<Vec<u8>>, search_secret: Zeroizing<Vec<u8>>,
+    cancelled: Arc<AtomicBool>, audit: impl FnMut(Option<&Completed>) -> Result<(), Failure>,
+    before_answer: impl FnOnce(&TransportRequest) -> Result<(), Failure>,
+    on_delta: impl FnMut(&str) -> Result<(), Failure>, on_measurement: impl FnMut(&chat::ReportedMeasurement)->Result<(),Failure>, endpoint_override: Option<String>,
+) -> Result<Completed, Failure> {
+    execute_companion_with_endpoint_fully_observed(parent,answer_secret,search_secret,cancelled,audit,before_answer,on_delta,on_measurement,|_,_|Ok(()),endpoint_override).await
+}
+pub async fn execute_companion_with_endpoint_fully_observed(
+    parent: TransportRequest, answer_secret: Zeroizing<Vec<u8>>, search_secret: Zeroizing<Vec<u8>>,
+    cancelled: Arc<AtomicBool>, audit: impl FnMut(Option<&Completed>) -> Result<(), Failure>,
+    before_answer: impl FnOnce(&TransportRequest) -> Result<(), Failure>,
+    on_delta: impl FnMut(&str) -> Result<(), Failure>, on_measurement: impl FnMut(&chat::ReportedMeasurement)->Result<(),Failure>, on_retrieval:impl Fn(&TransportRequest,&chat::ReportedMeasurement)->Result<(),Failure>+Clone, endpoint_override: Option<String>,
+) -> Result<Completed, Failure> {
+ execute_companion_with_endpoint_audited(parent,answer_secret,search_secret,cancelled,audit,before_answer,on_delta,on_measurement,on_retrieval,|_,_|Ok(()),endpoint_override).await
+}
+pub async fn execute_companion_with_endpoint_audited(
+    parent: TransportRequest, answer_secret: Zeroizing<Vec<u8>>, search_secret: Zeroizing<Vec<u8>>,
+    cancelled: Arc<AtomicBool>, audit: impl FnMut(Option<&Completed>) -> Result<(), Failure>,
+    before_answer: impl FnOnce(&TransportRequest) -> Result<(), Failure>,
+    on_delta: impl FnMut(&str) -> Result<(), Failure>, on_measurement: impl FnMut(&chat::ReportedMeasurement)->Result<(),Failure>, on_retrieval:impl Fn(&TransportRequest,&chat::ReportedMeasurement)->Result<(),Failure>+Clone, on_outcome:impl FnMut(&TransportRequest,&crate::chat_call_accounting_v1::CallOutcome)->Result<(),Failure>, endpoint_override: Option<String>,
+) -> Result<Completed, Failure> {
+    validate_endpoint_override(endpoint_override.as_deref())?;
+    let search_override = endpoint_override.clone();
+    execute_companion_core_audited(parent,answer_secret,search_secret,cancelled,audit,on_outcome,
+        move |mut request,secret,signal| {
+            if let Some(endpoint)=search_override {request.endpoint=endpoint;}
+            {
+                let identity=request.clone();
+                async move {chat::execute_streaming_observed(request,secret,signal,|_|Ok(()),|measurement|on_retrieval(&identity,measurement)).await}
+            }
+        },
+        move |mut request,secret,signal| async move {
+            before_answer(&request)?;
+            if let Some(endpoint)=endpoint_override {request.endpoint=endpoint;}
+            chat::execute_streaming_observed(request,secret,signal,on_delta,on_measurement).await
+        }).await
 }
 
 async fn execute_companion_core<SF,AF>(
@@ -106,18 +209,33 @@ async fn execute_companion_core<SF,AF>(
     answer:impl FnOnce(TransportRequest,Zeroizing<Vec<u8>>,Arc<AtomicBool>)->AF,
 )->Result<Completed,Failure>
 where SF:std::future::Future<Output=Result<Completed,Failure>>,AF:std::future::Future<Output=Result<Completed,Failure>> {
+    execute_companion_core_audited(parent,answer_secret,search_secret,cancelled,audit,|_,_|Ok(()),search,answer).await
+}
+async fn execute_companion_core_audited<SF,AF>(
+    mut parent: TransportRequest,answer_secret:Zeroizing<Vec<u8>>,search_secret:Zeroizing<Vec<u8>>,
+    cancelled:Arc<AtomicBool>,mut audit:impl FnMut(Option<&Completed>)->Result<(),Failure>,
+    mut on_outcome:impl FnMut(&TransportRequest,&crate::chat_call_accounting_v1::CallOutcome)->Result<(),Failure>,
+    search:impl FnOnce(TransportRequest,Zeroizing<Vec<u8>>,Arc<AtomicBool>)->SF,
+    answer:impl FnOnce(TransportRequest,Zeroizing<Vec<u8>>,Arc<AtomicBool>)->AF,
+)->Result<Completed,Failure>
+where SF:std::future::Future<Output=Result<Completed,Failure>>,AF:std::future::Future<Output=Result<Completed,Failure>> {
     let retrieval=match retrieval_request(&parent) {
         Ok(search_request)=>{
             audit(None)?; // Persist a pending child only for an actual external request.
-            if cancelled.load(Ordering::SeqCst) {return Err(Failure::Cancelled);}
-            search(search_request,search_secret,cancelled.clone()).await
+            if cancelled.load(Ordering::SeqCst) {
+                on_outcome(&search_request,&crate::chat_call_accounting_v1::CallOutcome::cancelled_before_dispatch())?;
+                return Err(Failure::Cancelled);
+            }
+            let identity=search_request.clone();
+            let result=search(search_request,search_secret,cancelled.clone()).await;
+            audit_child_terminal(&identity,&result,&mut |_,reply|audit(reply),&mut on_outcome)?;
+            result
         },
         Err(failure @ Failure::Explicit{code:"WEB_SEARCH_QUERY_EMPTY",..})=>Err(failure),
         Err(failure)=>return Err(failure),
     };
     let (sources,elapsed,verified)=match retrieval {
         Ok(retrieval)=>{
-            audit(Some(&retrieval))?;
             match apply_retrieval(&mut parent,&retrieval) {
                 Ok(sources)=>(sources,retrieval.elapsed_ms,true),
                 Err(failure) if continue_attachment_analysis(&mut parent,&failure)=>(String::new(),retrieval.elapsed_ms,false),
@@ -125,8 +243,15 @@ where SF:std::future::Future<Output=Result<Completed,Failure>>,AF:std::future::F
             }
         },
         Err(failure)=>{
-            if let Some(reply)=failure.quantified_reply() {audit(Some(reply))?;}
-            if continue_attachment_analysis(&mut parent,&failure) {(String::new(),0,false)} else {return Err(failure)}
+            if continue_attachment_analysis(&mut parent,&failure) {(String::new(),0,false)} else {
+                // The child audit owns these facts. Returning them as parent usage
+                // would charge an answer call that has never been sent.
+                return Err(match failure {
+                    Failure::MeasuredExplicit{code,http_status,..}=>Failure::Explicit{code,http_status},
+                    Failure::MeasuredCancelled{..}=>Failure::Cancelled,Failure::MeasuredUnknown{code,..}=>Failure::Unknown{code},
+                    other=>other,
+                });
+            }
         },
     };
     if cancelled.load(Ordering::SeqCst) {return Err(Failure::Cancelled);}
@@ -159,6 +284,54 @@ mod tests {
             {"role":"system","content":"private-memory-do-not-forward"},
             {"role":"user","content":[{"type":"text","text":"latest public release?"},{"type":"image_url","image_url":{"url":"private-image"}}]}
         ]), idempotency_key:"synthetic-attempt".into(), max_output_tokens:512, web_search_route:"RELAYCORE_COMPANION".into(), structured_json:false, disable_thinking: false, grounded_answer:false,explicit_search_query:None }
+    }
+    #[tokio::test]
+    async fn failed_retrieval_measurement_is_audited_once_and_never_becomes_answer_usage() {
+        let mut facts=Vec::new();
+        let mut request=parent();request.messages=json!([{"role":"user","content":"latest public release?"}]);
+        let result=execute_companion_core(request,Zeroizing::new(b"synthetic-answer".to_vec()),
+            Zeroizing::new(b"synthetic-search".to_vec()),Arc::new(AtomicBool::new(false)),
+            |reply| { if let Some(reply)=reply {facts.push(reply.clone());} Ok(()) },
+            |_,_,_|async {Err(Failure::MeasuredExplicit {code:"WEB_SEARCH_NO_SOURCES",http_status:Some(200),
+                measurement:chat::ReportedMeasurement {usage:chat::Usage {input_tokens:Some(5),output_tokens:Some(2),..Default::default()},
+                    reported_cost_micros:Some(4),actual_model_id:Some(RETRIEVAL_MODEL.into()),elapsed_ms:7}})},
+            |_,_,_|async {panic!("answer must not be requested after failed retrieval")}).await;
+        assert_eq!(facts.len(),1);assert_eq!(facts[0].reported_cost_micros,Some(4));
+        assert_eq!(facts[0].actual_model_id.as_deref(),Some(RETRIEVAL_MODEL));assert!(facts[0].text.is_empty());
+        assert!(matches!(result,Err(Failure::Explicit{code:"WEB_SEARCH_NO_SOURCES",http_status:Some(200)})));
+    }
+    #[tokio::test]
+    async fn measured_unknown_retrieval_is_audited_once_and_not_charged_as_answer() {
+        let mut facts=Vec::new();let mut request=parent();
+        request.messages=json!([{"role":"user","content":"latest public release?"}]);
+        let result=execute_companion_core(request,Zeroizing::new(b"synthetic-answer".to_vec()),
+            Zeroizing::new(b"synthetic-search".to_vec()),Arc::new(AtomicBool::new(false)),
+            |reply| {if let Some(reply)=reply {facts.push(reply.clone());}Ok(())},
+            |_,_,_|async {Err(Failure::MeasuredUnknown {code:"NETWORK",measurement:chat::ReportedMeasurement {
+                usage:chat::Usage {input_tokens:Some(5),output_tokens:Some(2),..Default::default()},
+                reported_cost_micros:Some(4),actual_model_id:Some(RETRIEVAL_MODEL.into()),elapsed_ms:7}})},
+            |_,_,_|async {panic!("UNKNOWN retrieval must not send an answer")}).await;
+        assert_eq!(facts.len(),1);assert_eq!(facts[0].reported_cost_micros,Some(4));
+        assert!(facts[0].text.is_empty() && facts[0].native_sources.is_empty());
+        assert!(matches!(result,Err(Failure::Unknown {code:"NETWORK"})));
+        assert!(result.unwrap_err().quantitative_completed().is_none());
+    }
+
+    #[tokio::test]
+    async fn measured_cancelled_retrieval_is_audited_once_without_answer_usage() {
+        let mut facts=Vec::new();
+        let mut request=parent();request.messages=json!([{"role":"user","content":"latest public release?"}]);
+        let result=execute_companion_core(request,Zeroizing::new(b"synthetic-answer".to_vec()),
+            Zeroizing::new(b"synthetic-search".to_vec()),Arc::new(AtomicBool::new(false)),
+            |reply| {if let Some(reply)=reply {facts.push(reply.clone());} Ok(())},
+            |_,_,_|async {Err(Failure::MeasuredCancelled {measurement:chat::ReportedMeasurement {
+                usage:chat::Usage {input_tokens:Some(6),cached_input_tokens:Some(1),..Default::default()},
+                reported_cost_micros:None,actual_model_id:Some(RETRIEVAL_MODEL.into()),elapsed_ms:7}})},
+            |_,_,_|async {panic!("cancelled retrieval must not send answer")}).await;
+        assert!(matches!(result,Err(Failure::Cancelled)));
+        assert_eq!(facts.len(),1);assert_eq!(facts[0].usage.input_tokens,Some(6));
+        assert!(facts[0].text.is_empty()&&facts[0].native_sources.is_empty());
+        assert_eq!(facts[0].reported_cost_micros,None);
     }
     #[test]
     fn source_title_url_cannot_replace_the_actual_tool_source() {
@@ -194,8 +367,8 @@ mod tests {
     #[test] fn retrieval_excludes_plain_text_file_blocks_as_well_as_binary_parts() {
         let mut parent=parent();
         parent.messages=json!([
-            {"role":"user","content":[{"type":"text","text":"previous question"},{"type":"text","text":"### 附件：old.md\nconfidential: private-old-file-fixture"}]},
-            {"role":"user","content":[{"type":"text","text":"分析报告"},{"type":"text","text":"### 附件：report.md\nconfidential: private-new-file-fixture"}]}
+            {"role":"user","content":[{"type":"text","text":"previous question"},{"type":"text","text":"### 附件：old.md\n仅限内部 private-old-file-fixture"}]},
+            {"role":"user","content":[{"type":"text","text":"分析报告"},{"type":"text","text":"### 附件：report.md\n仅限内部 private-new-file-fixture"}]}
         ]);
         assert!(matches!(retrieval_request(&parent),Err(Failure::Explicit{code:"WEB_SEARCH_QUERY_EMPTY",..})));
         parent.messages.as_array_mut().unwrap()[1]["content"].as_array_mut().unwrap().push(json!({"type":"text","text":"### 附件：public.md\n(1) Python 3.14.0在2025年发布。"}));
@@ -244,6 +417,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires explicitly approved public-only Relay calls within the account test budget"]
+    #[cfg(unix)]
     async fn authorized_live_relay_companion_keeps_selected_answer_model() {
         assert_eq!(std::env::var("NFAI_RELAY_LIVE_AUTH").as_deref(), Ok("public-only-budget-0.10"));
         let model = std::env::var("NFAI_RELAY_LIVE_MODEL").unwrap();
@@ -388,7 +562,7 @@ mod tests {
     fn attachment_failure_keeps_cancel_and_authorization_boundaries_for_all_companion_models() {
         for (provider,model) in [("RELAYCORE_CLAUDE","claude-opus-5-5"),("RELAYCORE_CLAUDE","claude-sonnet-5-5"),("RELAYCORE_GEMINI","gemini-3.8-flash"),("RELAYCORE_GEMINI","gemini-3.1-pro")] {
             let mut input=parent();input.provider_id=provider.into();input.model_id=model.into();
-            input.endpoint=chat::ordinary_provider_endpoint(provider,"https://api.relaycore.cn/v1","NONE");
+            input.endpoint=chat::ordinary_provider_endpoint("https://api.relaycore.cn/v1",provider,"NONE");
             assert!(retrieval_request(&input).is_ok());
             for failure in [Failure::Cancelled,Failure::Explicit{code:"EGRESS_AUTHORIZATION",http_status:None},Failure::Explicit{code:"LOCAL_PERSISTENCE",http_status:None}] {
                 assert!(!continue_attachment_analysis(&mut input.clone(),&failure));
@@ -412,7 +586,7 @@ mod tests {
         for p in presets.into_iter().filter(|p|p.provider_id==scope) {
             let secret=credentials.with_secret(p.provider_id,|bytes|Ok(Zeroizing::new(bytes.to_vec()))).unwrap();
             let provider=models::provider(p.provider_id).unwrap();
-            let request=TransportRequest{endpoint:chat::ordinary_provider_endpoint(p.provider_id,provider.endpoint,"NONE"),provider_id:p.provider_id.into(),model_id:p.model_id.into(),
+            let request=TransportRequest{endpoint:chat::ordinary_provider_endpoint(provider.endpoint,p.provider_id,"NONE"),provider_id:p.provider_id.into(),model_id:p.model_id.into(),
                 messages:json!([{"role":"system","content":crate::answer_language_v1::INSTRUCTION},
                     {"role":"user","content":[{"type":"text","text":"分析附件的模拟报告，只用一句中文回答：请求失败率是多少？不要联网，不要补充外部事实。"},{"type":"text","text":"### 附件：public-fixture.md\n# 公开模拟测试报告\n系统共处理100次请求，其中5次失败。"}]}]),
                 idempotency_key:format!("public-attachment-{}-{}",p.id,std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()),max_output_tokens:chat::ordinary_output_token_limit(p.provider_id,p.model_id),web_search_route:"NONE".into(),structured_json:false,disable_thinking: false, grounded_answer:false,explicit_search_query:None};
@@ -427,6 +601,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "single explicitly authorized public Android wire request; native credential owner only"]
+    #[cfg(unix)]
     async fn android_public_attachment_wire_probe() {
         use crate::desktop_model_service_v1::{AppPrivateProviderCredentialStore, ProviderCredentialStore};
         use futures_util::StreamExt;
@@ -464,7 +639,7 @@ mod tests {
         let credentials=models::AppPrivateProviderCredentialStore::at(std::path::PathBuf::from(std::env::var("NFAI_CURRENT_FAILURE_ROOT").unwrap()));
         let read=|id:&str|credentials.with_secret(id,|s|Ok(Zeroizing::new(s.to_vec()))).unwrap();
         let route=crate::ordinary_chat_web_search_route(descriptor.provider_id,descriptor.model_id,true,true);
-        let request=TransportRequest{endpoint:chat::ordinary_provider_endpoint(descriptor.provider_id,provider.endpoint,route),provider_id:descriptor.provider_id.into(),model_id:descriptor.model_id.into(),
+        let request=TransportRequest{endpoint:chat::ordinary_provider_endpoint(provider.endpoint,descriptor.provider_id,route),provider_id:descriptor.provider_id.into(),model_id:descriptor.model_id.into(),
             messages:json!([{"role":"system","content":crate::answer_language_v1::INSTRUCTION.to_owned()+crate::attachment_web_search_v1::ANSWER_INSTRUCTION+"请用中文简短逐项给出正确发布日期与来源，不写软件用法。"},
                 {"role":"user","content":[{"type":"text","text":"分析报告"},{"type":"text","text":"### 附件：public-claim-fixture.md\n# 公开报告\n(1) Python 3.14.0在2025年10月8日发布。\n相关链接：https://www.python.org/downloads/release/python-3140/"},{"type":"text","text":"### 附件：public-rust-fixture.md\n(1) Rust 1.90.0在2025年9月18日发布。\n相关链接：https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/"}]}]),
             idempotency_key:format!("authorized-public-fact-scope-{}-{}",preset_id,std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()),max_output_tokens:chat::ordinary_output_token_limit(descriptor.provider_id,descriptor.model_id),web_search_route:route.into(),structured_json:false,disable_thinking: false, grounded_answer:false,explicit_search_query:None};

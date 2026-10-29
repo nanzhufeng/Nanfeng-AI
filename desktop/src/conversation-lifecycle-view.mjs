@@ -64,7 +64,22 @@ export function projectConversationLifecycle({ conversations = [], favoriteConve
   };
 }
 
-export function renderConversationLifecyclePage({ page, conversations = [], favoriteConversationIds = new Set() } = {}) {
+function domainRecycleRows(exchange = {}) {
+  const groups = [
+    ['knowledge', '知识', exchange.knowledge || [], 'DELETED'],
+    ['memory', '记忆', exchange.memory || [], 'DELETED'],
+    ['relation', '关系', exchange.relations || [], 'REVOKED'],
+  ];
+  return groups.flatMap(([entity, label, items, status]) => items.filter(item => item.status === status)
+    .map(item => ({ ...item, entity, label })));
+}
+
+function renderDomainRecycleRows(items) {
+  if (!items.length) return '';
+  return `<section class="android-settings-card domain-recycle-list" aria-label="知识、记忆与关系回收站"><h2>知识、记忆与关系</h2><p class="android-settings-helper">恢复后回到本区工作资料；只恢复所选条目，保留正文与修订历史。</p>${items.map(item => `<div class="android-settings-list-row"><span><strong>${escapeHtml(item.title || `${item.fromId || ''} → ${item.toId || ''}`)}</strong><small>${item.label} · r${Number(item.revision || 0)}</small></span><button data-action="restore" data-entity="${item.entity}" data-id="${escapeHtml(item.id)}" data-revision="${Number(item.revision || 0)}">${icon(icons.restore, '恢复')}<span>恢复</span></button></div>`).join('')}</section>`;
+}
+
+export function renderConversationLifecyclePage({ page, conversations = [], favoriteConversationIds = new Set(), domainExchange = {} } = {}) {
   if (page === 'conversations') return renderConversationManagementRoot();
   const projection = projectConversationLifecycle({ conversations, favoriteConversationIds });
   const items = projection[page] || [];
@@ -74,10 +89,12 @@ export function renderConversationLifecyclePage({ page, conversations = [], favo
     </div>`;
   }
   const recycle = page === 'recycle';
+  const domainItems = recycle ? domainRecycleRows(domainExchange) : [];
   const summary = recycle ? '会话消息树尚未物理删除；恢复后会回到普通对话列表。' : '归档会话不会出现在日常列表；恢复后会回到普通对话列表。';
   const empty = recycle ? '暂无回收站会话。' : '暂无已归档会话。';
   return `<div class="android-settings-page android-settings-list android-settings-lifecycle">
-    <div class="android-settings-lifecycle-head"><p class="android-settings-helper">${summary}</p>${items.length ? `<button class="${recycle ? 'danger' : ''}" data-action="open-conversation-bulk-cleanup" data-scope="${page}" data-count="${items.length}">${recycle ? '清空回收站' : '清空已归档'}</button>` : ''}</div>
+    <div class="android-settings-lifecycle-head"><p class="android-settings-helper">${summary}</p>${items.length ? `<button class="${recycle ? 'danger' : ''}" data-action="open-conversation-bulk-cleanup" data-scope="${page}" data-count="${items.length}">${recycle ? (domainItems.length ? '清空会话回收站' : '清空回收站') : '清空已归档'}</button>` : ''}</div>
     ${items.map(item => lifecycleRow({ item, page })).join('') || `<p class="android-settings-empty">${empty}</p>`}
+    ${renderDomainRecycleRows(domainItems)}
   </div>`;
 }

@@ -84,6 +84,154 @@
       "accepted": true,
       "reply": "[A1] 已核实（事件部分）；风险判断未核实\nPython正式发布，但后续预测未证实。\n来源：https://www.python.org/releases/\n\n[A2] 已核实\nRust正式发布。\n来源：https://blog.rust-lang.org/releases/",
       "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "English partial verification cannot certify the full claim",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"Python release date is only partially verified; remaining details are unconfirmed.\", \"urls\": [\"https://www.python.org/releases/\"]}]}",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "English unverified summary overrides a verified JSON status",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"Python release date remains unverified.\", \"urls\": [\"https://www.python.org/releases/\"]}]}",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "English partial qualifier in a Markdown verified row stays unverified",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "[A1] 已核实：Python release date is partly confirmed.\n来源：https://www.python.org/releases/",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "English not yet searched JSON is not a completed item",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": false,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"Python release date has not yet been searched.\", \"urls\": [\"https://www.python.org/releases/\"]}]}"
+    },
+    {
+      "name": "English not actually queried JSON is not a completed item",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": false,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"Python release date was not actually queried.\", \"urls\": [\"https://www.python.org/releases/\"]}]}"
+    },
+    {
+      "name": "English unsearched prose cannot use native-source fallback",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": false,
+      "reply": "Python release date has not yet been searched.\n来源：https://www.python.org/releases/"
+    },
+    {
+      "name": "English unable to confirm cannot certify the full claim",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"We are unable to confirm the Python release date.\", \"urls\": [\"https://www.python.org/releases/\"]}]}",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "English verified positive remains a verified claim",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"Python release date is verified with independent sources and no remaining uncertainty.\", \"urls\": [\"https://www.python.org/releases/\"]}]}",
+      "normalized_includes": "已核实："
+    },
+    {
+      "name": "English searched without matching results is insufficient rather than unqueried",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"Python was searched, but no matching results were returned.\", \"urls\": [\"https://www.python.org/releases/\"]}]}",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "English verified query without errors is not a no-query disclaimer",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"Python query returned no errors and the release date is verified.\", \"urls\": [\"https://www.python.org/releases/\"]}]}",
+      "normalized_includes": "已核实："
+    },
+    {
+      "name": "uncertain contradiction English",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"contradicted\", \"summary\": \"Python release date could not be confirmed.\", \"urls\": [\"https://www.python.org/releases/\", \"https://blog.rust-lang.org/releases/\"]}]}",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "uncertain contradiction Chinese",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"contradicted\", \"summary\": \"Python发布日期尚未核实，不能确定材料是否有误。\", \"urls\": [\"https://www.python.org/releases/\", \"https://blog.rust-lang.org/releases/\"]}]}",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "uncertain contradiction Markdown",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "[A1] 与材料矛盾\nPython release date is unconfirmed.\n来源：https://www.python.org/releases/",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "uncertain contradiction refuses strict verified adoption",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": false,
+      "accepted": false,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"contradicted\", \"summary\": \"Python release date is unconfirmed.\", \"urls\": [\"https://www.python.org/releases/\", \"https://blog.rust-lang.org/releases/\"]}]}"
+    },
+    {
+      "name": "certain contradiction remains contradiction",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"contradicted\", \"summary\": \"Python官方记录为2025年，材料写2024年，年份与官方记录矛盾。\", \"urls\": [\"https://www.python.org/releases/\", \"https://blog.rust-lang.org/releases/\"]}]}",
+      "normalized_includes": "与材料矛盾："
+    },
+    {
+      "name": "Chinese uncertainty verified json",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"verified\", \"summary\": \"Python发布日期的证据不足。\", \"urls\": [\"https://www.python.org/releases/\"]}]}",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "Chinese uncertainty verified markdown",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "[A1] 已核实\nPython发布日期的证据不足。\n来源：https://www.python.org/releases/",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "Chinese uncertainty contradicted json",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "{\"items\": [{\"id\": \"A1\", \"status\": \"contradicted\", \"summary\": \"Python发布日期无法确认。\", \"urls\": [\"https://www.python.org/releases/\"]}]}",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "Chinese uncertainty contradicted markdown",
+      "material": "(1) Python 3.14.0发布。",
+      "allow_unverified": true,
+      "accepted": true,
+      "reply": "[A1] 与材料矛盾\nPython发布日期无法确认。\n来源：https://www.python.org/releases/",
+      "normalized_includes": "证据不足，仍未核实："
     }
   ]
 }

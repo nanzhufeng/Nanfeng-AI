@@ -25,6 +25,32 @@ test('a confirmed empty cloud presentation cannot retain a cached Desktop pin', 
   assert.match(app, /pinned: pinnedConversationIds\.has\(item\.id\),\s*cloudPinned: pinnedConversationIds\.has\(item\.id\)/);
 });
 
+test('active account settings disclose the direct sync privacy boundary', () => {
+  const rendered = renderChatFirstShell({
+    data: fixture, native: true, pane: 'settings', settingsSection: 'account',
+    accountSync: { configured: true, state: 'READY', email: 'safe@example.invalid' },
+  });
+  assert.match(rendered, /仅同步明确选择的对话/);
+  assert.match(rendered, /同步内容可由南枫云服务读取/);
+  assert.match(rendered, /传输保护与账号隔离不等于端到端加密/);
+});
+
+test('Google authorization exposes a temporary cancel action and keeps account management visible', () => {
+  const pending = renderChatFirstShell({
+    data: fixture, native: true, pane: 'settings', settingsSection: 'account',
+    accountSync: { configured: true, state: 'SIGNED_OUT', signInPending: true },
+  });
+  assert.match(pending, /data-action="cancel-google-account-sign-in"/);
+  assert.match(pending, /等待 Google 授权…/);
+  assert.match(pending, /data-action="sign-in-google-account"[^>]*disabled/);
+  const idle = renderChatFirstShell({
+    data: fixture, native: true, pane: 'settings', settingsSection: 'account',
+    accountSync: { configured: true, state: 'SIGNED_OUT', signInPending: false },
+  });
+  assert.doesNotMatch(idle, /cancel-google-account-sign-in/);
+  assert.match(idle, /data-action="sign-in-google-account"/);
+});
+
 test.skip('retired: recovery replacement accepts one private input instead of generating a code', () => {
   const html = renderChatFirstShell({ data: fixture, native: true, pane: 'settings', settingsSection: 'account', accountSync: { email: 'safe@example.invalid', state: 'READY', recoveryState: 'CONFIRMED' }, accountRecovery: { rotation: true } });
   assert.match(html, /id="new-recovery-code" type="password"/);
@@ -213,26 +239,26 @@ test.skip('retired: a normal first-time signed-in account can create a recovery 
   assert.ok(!rendered.includes('data-action="bootstrap-empty-account-recovery"'));
 });
 
-test('account settings match the phone recovery-and-cloud card', () => {
+test('account settings expose direct cloud access without retired recovery controls', () => {
   const rendered = renderChatFirstShell({
     data: fixture, native: true, pane: 'settings', settingsSection: 'account', status: '', error: '', connection: {},
     settingsCapabilities: { googleAccountSync: true },
     accountSync: { configured: true, state: 'READY', email: 'safe@example.invalid', remoteDocuments: [{ documentId: 'conversation-cloud-safe', revision: 2, payloadHashPrefix: 'abcdef123456' }] },
   });
   for (const token of ['云端会话', 'data-action="load-account-cloud-documents"', '读取云端列表']) assert.ok(rendered.includes(token));
-  for (const forbidden of ['更换恢复码', '创建新的恢复码', '从南枫云恢复', '恢复为新工作区', 'conversation-cloud-safe']) assert.ok(!rendered.includes(forbidden));
+  for (const forbidden of ['恢复码', 'data-action="create-account-recovery-rotation"', '从南枫云恢复', '恢复为新工作区', 'conversation-cloud-safe']) assert.ok(!rendered.includes(forbidden));
 });
 
-test('sidebar keeps the local and cloud tabs with an explicit cloud read action', async () => {
-  const [chat, icons] = await Promise.all([
+test('sidebar owns centered recent and cloud list switching', async () => {
+  const [chat, settings, icons] = await Promise.all([
     readFile(resolve(import.meta.dirname, '../src/chat-shell.mjs'), 'utf8'),
+    readFile(resolve(import.meta.dirname, '../src/android-settings-shell.mjs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src/icon-source.mjs'), 'utf8'),
   ]);
   assert.match(chat, /data-action="show-recent-conversation-list"/);
   assert.match(chat, /data-action="show-cloud-conversation-list"/);
-  assert.match(chat, /aria-label="本地会话"/);
-  assert.match(chat, /aria-label="云端会话"/);
-  assert.match(chat, /chat-sidebar-list-tabs/);
+  assert.match(chat, /aria-label="本地会话"[^>]*>本地<\/button>/);
+  assert.match(chat, /aria-label="云端会话"[^>]*>云端<\/button>/);
   assert.match(chat, /class="chat-sidebar-list-utility \$\{batchEditing \? 'selected' : ''\}" data-action="toggle-conversation-batch-edit"/);
   assert.match(chat, /toggle-conversation-batch-edit[^`]*icons\.listChecks/);
   assert.match(icons, /listChecks: `\$\{p\('m3 6 2 2 4-4'\)\}\$\{p\('m3 14 2 2 4-4'\)\}\$\{p\('M13 6h8'\)\}\$\{p\('M13 14h8'\)\}`/);
@@ -242,9 +268,11 @@ test('sidebar keeps the local and cloud tabs with an explicit cloud read action'
   assert.match(chat, /icons\.cloudDownloadSolid/);
   assert.match(chat, /data-action="load-account-cloud-documents"/);
   assert.doesNotMatch(chat, /data-action="open-cloud-restore"/);
+  assert.match(settings, /data-action="load-account-cloud-documents"/);
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   for (const token of [
     '.chat-sidebar-list-selector { position: relative; display: flex; width: 100%; min-height: 30px;',
+    '.chat-sidebar-list-tabs { display: grid; width: 33.333%;',
     '.chat-sidebar-list-utility { display: grid; box-sizing: border-box; flex: 0 0 26px;',
     '.chat-first .chat-sidebar-list-utility { flex: 0 0 26px !important; width: 26px !important; min-width: 26px !important; max-width: 26px !important; height: 26px !important; min-height: 26px !important; max-height: 26px !important; padding: 0 !important; border-radius: 50% !important; line-height: 1 !important; }',
     '.chat-first .chat-sidebar-list-utility:hover,',
@@ -258,7 +286,9 @@ test('opening a cloud row is a single cancellable route and never waits for mode
   const app = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   assert.match(app, /createCloudConversationOpenRoute/);
   assert.match(app, /cloudConversationOpening/);
-  assert.match(app, /reuse: \(\{ workspaceId, conversationId \}\) => \{[\s\S]*alreadySelected: !state\.cloudConversationOpening && state\.pane === 'chat' && state\.selectedConversationId === conversationId,/);
+  assert.match(app, /reuse: \(\{ workspaceId, conversationId \}\) => \{[\s\S]*alreadySelected: !state\.cloudConversationOpening && state\.pane === \(state\.dataArea === 'WORK' \? 'work' : 'chat'\) && state\.selectedConversationId === conversationId,/);
+  assert.match(app, /load: async \(\{ workspaceId, conversationId, areaOwner \}\) => \{[\s\S]*invoke\('read_desktop_workspace', \{ workspaceId \}, areaOwner\)/);
+  assert.match(app, /loadPreferences: \(\{ workspaceId, conversationId, areaOwner, areaGeneration \}\) => \{\s*if \(areaOwner !== state \|\| areaGeneration !== cloudOpenAreaGeneration\) return null;\s*return invoke\('read_desktop_p6g_selection', \{ workspaceId, conversationId \}, areaOwner\)/);
   assert.match(app, /openCloudConversationRoute\(\{ workspaceId, conversationId, title:/);
   assert.doesNotMatch(app, /delete target\.dataset\.workspaceId;\s*target\.click\(\)/);
   const rendered = renderChatFirstShell({
@@ -283,18 +313,17 @@ test('cloud empty state has no duplicate read button and the read list survives 
     "startupStage = 'CLOUD_LIST_CACHE_READBACK'",
     'await restoreCachedCloudConversationList()',
   ]) assert.ok(app.includes(token));
-  assert.match(app, /cloudRowsFromLocalEntries[\s\S]*read_desktop_workspace[\s\S]*read_desktop_favorite_conversation_ids/);
+  assert.match(app, /cloudRowsFromLocalEntries[\s\S]*read_desktop_cloud_workspace_projections/);
   assert.match(app, /sign-out-google-account[\s\S]*clearCloudConversationCache/);
 });
 
-test('cloud tab renders the restored cloud conversations without deleting local rows', async () => {
+test('cloud tab reuses the complete local conversation row after the direct read', async () => {
   const rendered = renderChatFirstShell({
     data: fixture, native: true, pane: 'chat', selectedConversationId: 'conversation-safe',
     sidebarConversationList: 'cloud', cloudConversations: [{ workspaceId: 'workspace-cloud-safe', id: 'conversation-safe', title: '云端测试会话', revision: 1, createdAt: '2026-09-13T00:00:00Z', updatedAt: '2026-09-13T00:00:00Z', messages: [] }],
   });
+  assert.ok(rendered.includes('aria-label="云端会话"'));
   assert.ok(rendered.includes('云端测试会话'));
-  assert.match(rendered, /aria-label="本地会话"/);
-  assert.match(rendered, /aria-label="云端会话"/);
   assert.ok(rendered.includes('data-action="select-chat" data-id="conversation-safe" data-workspace-id="workspace-cloud-safe"'));
   assert.ok(rendered.includes('data-action="set-conversation-pinned"'));
   assert.ok(rendered.includes('data-action="open-conversation-rename"'));
@@ -382,10 +411,17 @@ test('sync keeps an uncertain commit out of the failure path and reconciles it i
 test('desktop batch edit follows the Android conversation list contract', async () => {
   const rendered = renderChatFirstShell({
     data: fixture, native: true, pane: 'chat', selectedConversationId: 'conversation-safe',
-    batchEditing: true, batchSelectedConversationKeys: new Set(['local:conversation-safe']),
+    batchEditing: true, batchSelectedConversationKeys: new Set(['workspace-safe:conversation-safe']),
   });
   assert.match(rendered, /data-action="toggle-batch-conversation"/);
+  assert.match(rendered, /data-batch-key="workspace-safe:conversation-safe"/);
   assert.match(rendered, /aria-checked="true"/);
+  const sameIdOtherWorkspace = renderChatFirstShell({
+    data: { ...fixture, summary: { id: 'workspace-other' } }, native: true, pane: 'chat',
+    batchEditing: true, batchSelectedConversationKeys: new Set(['workspace-safe:conversation-safe']),
+  });
+  assert.match(sameIdOtherWorkspace, /data-batch-key="workspace-other:conversation-safe"/);
+  assert.match(sameIdOtherWorkspace, /class="chat-batch-select"[^>]*aria-checked="false"/);
   const unselectedRendered = renderChatFirstShell({
     data: fixture, native: true, pane: 'chat', selectedConversationId: 'conversation-safe',
     batchEditing: true, batchSelectedConversationKeys: new Set(),
@@ -418,25 +454,31 @@ test('desktop batch edit follows the Android conversation list contract', async 
   ]) assert.ok(css.includes(token), token);
 });
 
-test('desktop cloud read is a single batch action that validates account documents and preserves legacy recovery', async () => {
+test('desktop cloud read is a single batch action with direct grouping and guarded legacy migration', async () => {
   const [owner, command, app, permissions] = await Promise.all([
     readFile(resolve(import.meta.dirname, '../src-tauri/src/desktop_account_sync_v1.rs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src-tauri/src/lib.rs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src-tauri/permissions/default.toml'), 'utf8'),
   ]);
-  assert.match(owner, /sync_v1::open_with_account_wrapping_material\(/);
   assert.match(owner, /sync_v1::open_direct\(/);
   assert.match(owner, /CLOUD_LIST_LEGACY_SKIPPED/);
-  assert.match(owner, /restore_remote_envelope\(connection, credentials, document\)/);
+  assert.match(owner, /restore_remote_envelope_observed\(connection, credentials, document,Some\(observed\)\)/);
+  assert.match(owner, /prepared\.cancel_epoch=Some\(cancel_epochs\.get/);
   assert.match(owner, /skipped_legacy_count/);
-  assert.match(owner, /LEGACY_DEVICE_REQUIRED/);
+  const batch = owner.slice(owner.indexOf('for (document,public_identity) in documents.into_iter().zip(public_identities)'));
+  assert.match(batch, /let format=public_identity\.format\.as_deref\(\);/);
+  assert.match(batch, /prepared_identity\.is_some\(\) && !was_legacy[\s\S]*format==Some\(sync_v1::DIRECT_ENVELOPE\)/);
+  assert.match(batch, /flush_prepared_conversation_group[\s\S]*migrate_legacy_document\(connection, credentials, gateway, account, document\)/);
+  assert.match(batch, /prepared_account_write_user_id|prepared_identity/);
+  assert.match(batch, /登录状态已变化，已停止读取/);
   assert.match(command, /fn restore_all_desktop_cloud_conversations\(/);
   assert.match(command, /restore_all_remote_conversations/);
   assert.match(app, /invoke\('restore_all_desktop_cloud_conversations'\)/);
   assert.match(permissions, /"restore_all_desktop_cloud_conversations"/);
   assert.match(app, /read_desktop_workspace.*read_desktop_favorite_conversation_ids/s);
-  assert.match(app, /cloudReadFeedback\(receipt\)/);
+  assert.match(app, /const feedback = cloudReadFeedback\(\{ \.\.\.receipt, projectionFailedCount \}\);/);
+  assert.match(app, /await completeAccountSyncProgress\(feedback\.message, feedback\.kind\);/);
   assert.doesNotMatch(owner, /云端尚未支持完整传输，未同步/);
   assert.match(owner, /Explicitly syncing this local conversation makes its complete current/);
   assert.match(owner, /known\.0 as u64 == current\.revision && known\.1 == current\.payload_hash/);
@@ -463,6 +505,7 @@ test('conversation context menu owns the selected direct sync entry and app uses
 
   const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   for (const command of ['sync_selected_desktop_conversation', 'reconcile_desktop_conversation_sync', 'restore_all_desktop_cloud_conversations']) assert.ok(source.includes(command));
+  assert.ok(!source.includes('create_desktop_recovery_rotation'));
   assert.ok(source.includes('云端提交正在后台核对；不会重复上传。'));
   assert.ok(source.includes('此 Desktop 尚未写入南枫云地址或公开访问密钥'));
   assert.ok(source.includes("'show-google-login-requirements', 'sign-in-google-account'"));
@@ -493,7 +536,8 @@ test('cloud conversation uses the same menu with a real cancel-sync action', asy
   ]);
   assert.match(rendered, /data-action="context-menu-cancel-sync"/);
   assert.match(rendered, /取消同步/);
-  assert.match(app, /invoke\('cancel_desktop_conversation_sync'/);
+  assert.match(app, /invokeForAuthorizedDataAreaOperation\(tauriBridge, 'cancel_desktop_conversation_sync'/);
+  assert.match(app, /receipt\?\.status !== 'CANCELLED'/);
   assert.match(owner, /pub fn cancel_remote_conversation/);
   assert.match(permissions, /"cancel_desktop_conversation_sync"/);
   assert.match(migration, /nanfeng_sync_delete_document/);
@@ -525,5 +569,5 @@ test('Desktop OAuth uses Supabase hosted Google PKCE without bundling a Google s
   assert.ok(signIn.indexOf('fetch_avatar') < signIn.indexOf('open_desktop_workspace_connection'));
   assert.ok(signIn.indexOf('persist_authenticated_session') > signIn.indexOf('open_desktop_workspace_connection'));
   assert.ok(app.includes('let accountSignInPending = false;'));
-  assert.ok(app.includes('Google 授权未完成；本机数据与云端均未改变，可检查配置后重试。'));
+  assert.ok(app.includes('Google 登录未完成；请查看错误说明，保留本机数据并核对账号状态后重试。'));
 });

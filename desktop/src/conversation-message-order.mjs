@@ -56,3 +56,12 @@ export function orderedConversationMessages(conversation) {
   messages.filter(message => !visited.has(message.id)).sort(messageSiblingOrder).forEach(visit);
   return ordered;
 }
+
+/** All switchable leaves, including a newly edited user message with no reply yet. */
+export function conversationBranchLeaves(conversation) {
+  const messages = Array.isArray(conversation?.messages) ? conversation.messages.filter(Boolean) : [];
+  const children = new Set(messages.map(message => message.parentId).filter(Boolean));
+  return messages.filter(message => typeof message.id === 'string' && message.id && !children.has(message.id))
+    .sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || ''))
+      || String(left.id).localeCompare(String(right.id)));
+}

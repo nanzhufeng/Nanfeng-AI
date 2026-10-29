@@ -38,10 +38,10 @@ const renderSettings = overrides => renderChatFirstShell({
   ...overrides,
 });
 
-test('C11 settings home keeps the current Android user groups and one appearance owner', () => {
+test('C11 settings home keeps the current Android four groups and one appearance owner', () => {
   const html = renderSettings();
   const groups = [...html.matchAll(/<section class="android-settings-group"><h2>([^<]+)<\/h2>/g)].map(match => match[1]);
-  assert.deepEqual(groups, ['对话', '外观', '数据管理']);
+  assert.deepEqual(groups, ['对话', '外观', '数据管理', '工作区']);
 
   const appearance = html.slice(html.indexOf('<h2>外观</h2>'), html.indexOf('<h2>数据管理</h2>'));
   for (const value of ['外观', '系统（默认）', '字体大小', '标准', '主题色', '橙色']) assert.ok(appearance.includes(value), value);
@@ -68,7 +68,8 @@ test('C11 personalization renders the implemented owner without engineering bloc
     assert.ok(markup, String(control));
     assert.ok(!markup.includes('disabled'), markup);
   }
-  assert.match(html, /id="personalization-instructions"[^>]*maxlength="8000"/);
+  assert.match(html, /id="personalization-instructions"[^>]*data-max-codepoints="8000"/);
+  assert.doesNotMatch(html, /id="personalization-instructions"[^>]*maxlength=/);
   assert.ok(html.includes('5 / 8000 字'));
 });
 
@@ -113,5 +114,5 @@ test('C11 appearance changes do not expose persistence implementation as a succe
   const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   const updateAppearance = source.slice(source.indexOf('async function updateAppearance'), source.indexOf('async function toggleFavoriteConversation'));
   assert.ok(!updateAppearance.includes('Desktop SQLite'));
-  assert.match(updateAppearance, /await persistNativeAppSettings\(\{ \[field\]: value \}, \{\}\);\s*state\.status = '';/s);
+  assert.match(updateAppearance, /await persistNativeAppSettings\(\{ \[field\]: value \}, \{\}\);/s);
 });

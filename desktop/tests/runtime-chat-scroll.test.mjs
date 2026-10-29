@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { renderChatFirstShell } from '../src/chat-shell.mjs';
@@ -61,11 +61,19 @@ test('stream updates and background title waits keep the live scroll owner, read
       const switched=commitRuntimeChatShell(app,${JSON.stringify(terminal.replaceAll('scroll-fixture','another-conversation'))});
       document.body.dataset.result=btoa(JSON.stringify({stable,position,horizontal,selectedStill,visibleTitle,newText,removals,switched,followsBottom,manualReadingWins,gentleScrollWins}));`;
     await writeFile(join(root, 'index.html'), `<!doctype html><meta charset="utf-8"><style>${css} .chat-scroll{height:400px;overflow:auto}</style><div id="app" class="app-shell chat-first">${first}</div><script type="module">${script}</script>`);
-    const result = spawnSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new', '--disable-gpu', '--no-default-browser-check', '--no-first-run', '--disable-background-networking', '--disable-sync', `--user-data-dir=${join(root, 'profile')}`, '--timeout=5000', '--virtual-time-budget=2000', '--dump-dom', pathToFileURL(join(root, 'index.html')).href], { encoding: 'utf8', timeout: 15000, maxBuffer: 4 * 1024 * 1024 });
+    const chrome = process.env.CHROME_PATH || (process.platform === 'win32'
+      ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+      : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+    const result = spawnSync(chrome, ['--headless=new', '--disable-gpu', '--no-default-browser-check', '--no-first-run', '--disable-background-networking', '--disable-sync', `--user-data-dir=${join(root, 'profile')}`, '--timeout=5000', '--virtual-time-budget=2000', '--dump-dom', pathToFileURL(join(root, 'index.html')).href], { encoding: 'utf8', timeout: 15000, maxBuffer: 4 * 1024 * 1024 });
     assert.equal(result.status, 0, `browser exit: ${result.error?.message || result.stderr?.slice(-150)}`);
     const encoded = result.stdout?.match(/data-result="([^"]+)"/)?.[1];
     assert.ok(encoded, `browser fixture did not finish: ${result.stderr?.slice(-300)}`);
     const facts = JSON.parse(Buffer.from(encoded, 'base64').toString());
     assert.deepEqual(facts, { stable: true, position: true, horizontal: true, selectedStill: true, visibleTitle: true, newText: true, removals: 0, switched: false, followsBottom: true, manualReadingWins: true, gentleScrollWins: true });
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally {
+    if (!resolve(root).startsWith(resolve(tmpdir()) + sep) || !basename(root).startsWith('nfai-runtime-scroll-')) {
+      throw new Error('runtime scroll fixture cleanup escaped its temp parent');
+    }
+    await rm(root, { recursive: true, force: true });
+  }
 });

@@ -19,7 +19,7 @@ test('settings rows use the current Android semantic icons from exact Android Ro
   for (const mapping of [
     "glyph: settingsIcons.appearance, title: '外观'",
     "glyph: settingsIcons.importExport, title: '导入与导出'",
-    "glyph: settingsIcons.info, title: '关于'",
+    "glyph: settingsIcons.tune, title: '开发与诊断'",
     "icon(icons.globe, '')}<strong>实时网页搜索</strong>",
   ]) assert.ok(settings.includes(mapping), mapping);
 });

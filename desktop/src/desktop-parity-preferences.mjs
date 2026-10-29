@@ -33,6 +33,7 @@ export function conversationToneDefinition(value) {
 
 export const DEFAULT_PRODUCT_SETTINGS = Object.freeze({
   memoryEnabled: true,
+  memoryRetrievalEnabled: true,
   historyLibraryEnabled: false,
   tone: 'default',
   nickname: '',
@@ -82,12 +83,23 @@ export function appearanceProjection(value = {}, prefersDark = false) {
   return { appearance, dark, fontScale: font.scale, theme };
 }
 
-const normalizedText = (value, limit) => String(value || '').replaceAll('\u0000', '').slice(0, limit);
+const normalizedText = (value, limit) => Array.from(String(value || '').replaceAll('\u0000', '')).slice(0, limit).join('');
 
-export function normalizeProductSettings(value = {}) {
+export function normalizeProductSettings(value = {}, { rejectInvalidText = false } = {}) {
+  if (rejectInvalidText) {
+    for (const [key, label, limit] of [
+      ['nickname', '昵称', 80], ['occupation', '职业', 120], ['interests', '兴趣', 500],
+      ['customInstructions', '自定义指令', CUSTOM_INSTRUCTIONS_MAX_LENGTH],
+    ]) {
+      const text = String(value[key] || '');
+      if (text.includes('\u0000')) throw new Error(`${label}含有无效字符，原文已保留。`);
+      if (Array.from(text).length > limit) throw new Error(`${label}最多 ${limit} 字，请缩短后再保存；原文已保留。`);
+    }
+  }
   const boolean = key => typeof value[key] === 'boolean' ? value[key] : DEFAULT_PRODUCT_SETTINGS[key];
   return {
     memoryEnabled: boolean('memoryEnabled'),
+    memoryRetrievalEnabled: boolean('memoryRetrievalEnabled'),
     historyLibraryEnabled: boolean('historyLibraryEnabled'),
     tone: value.tone === 'default' || CONVERSATION_TONES.some(item => item.id === value.tone) ? value.tone : DEFAULT_PRODUCT_SETTINGS.tone,
     nickname: normalizedText(value.nickname, 80),

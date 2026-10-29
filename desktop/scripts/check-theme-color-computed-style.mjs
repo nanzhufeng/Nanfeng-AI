@@ -2,14 +2,21 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { THEME_COLORS } from '../src/desktop-parity-preferences.mjs';
 import { renderAndroidSettingsShell } from '../src/android-settings-shell.mjs';
 
-const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-assert.ok(existsSync(chrome), '需要本机 Google Chrome 执行无窗口 computed-style 门禁');
+const chromeCandidates = process.platform === 'win32'
+  ? [
+      join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    ]
+  : ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
+const chrome = chromeCandidates.find(existsSync);
+assert.ok(chrome, '需要本机 Google Chrome 执行无窗口 computed-style 门禁');
 const root = resolve(import.meta.dirname, '..');
 const css = await readFile(resolve(root, 'src/chat-shell.css'), 'utf8');
 const rendered = renderAndroidSettingsShell({ page: 'appearance', picker: 'themeColor' });
@@ -38,5 +45,7 @@ try {
   assert.ok(actual.every(item => item.image === 'none'), '主题色预览不能被背景图覆盖');
   console.log(`theme computed styles passed: ${actual.map(item => item.color).join(' | ')}`);
 } finally {
+  assert.ok(resolve(temporaryRoot).startsWith(`${resolve(tmpdir())}${sep}`)
+    && basename(temporaryRoot).startsWith('nanfeng-ai-theme-computed-style.'), '临时验收根越界，拒绝清理');
   await rm(temporaryRoot, { recursive: true, force: true });
 }

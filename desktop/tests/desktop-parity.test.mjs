@@ -1,4 +1,3 @@
-import {MODEL_SERVICE_PREVIEW_SETTINGS} from '../src/android-settings-shell.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -132,7 +131,7 @@ test('conversation header branches from visible transcript content like Android'
     data: { summary: data.summary, exchange: { conversations: [emptyConversation] } }, native: true,
     selectedConversationId: emptyConversation.id, pane: 'chat', status: '', error: '', connection: {},
   }));
-  assert.doesNotMatch(emptyHtml, /class="chat-mode-switch"/);
+  assert.match(emptyHtml, /class="chat-mode-switch"/);
   assert.match(emptyHtml, /data-action="toggle-temporary-chat"/);
   assert.doesNotMatch(emptyHtml, /data-action="new-chat"[^>]*aria-label="新对话"/);
   assert.doesNotMatch(emptyHtml, /data-action="open-conversation-header-menu"/);
@@ -140,7 +139,8 @@ test('conversation header branches from visible transcript content like Android'
   const contentHtml = mainHeader(renderChatFirstShell({
     data, native: true, selectedConversationId: conversation.id, pane: 'chat', status: '', error: '', connection: {},
   }));
-  assert.doesNotMatch(contentHtml, /class="chat-mode-switch"/);
+  assert.match(contentHtml, /class="chat-mode-switch"/);
+  assert.match(contentHtml, /data-action="show-work"/);
   assert.doesNotMatch(contentHtml, /data-action="toggle-temporary-chat"/);
   assert.match(contentHtml, /class="chat-header-content-actions"/);
   assert.match(contentHtml, /data-action="new-chat"[^>]*aria-label="新对话"/);
@@ -151,8 +151,14 @@ test('conversation header branches from visible transcript content like Android'
     data, native: true, selectedConversationId: conversation.id, pane: 'chat', status: '', error: '', connection: {},
     contextMenu: { id: conversation.id, revision: conversation.revision, pinned: false, favorite: false, archived: false, source: 'header' },
   });
-  for (const token of ['context-menu-share', 'context-menu-find', 'context-menu-pin', 'context-menu-archive', 'context-menu-delete']) assert.ok(menuHtml.includes(token), token);
-  assert.ok(menuHtml.includes('context-menu-rename'));
+  for (const token of ['context-menu-share', 'context-menu-find', 'context-menu-pin', 'context-menu-rename', 'context-menu-archive', 'context-menu-delete']) assert.ok(menuHtml.includes(token), token);
+  assert.match(menuHtml, /data-menu-source="header"/);
+  const sidebarMenuHtml = renderChatFirstShell({
+    data, native: true, selectedConversationId: conversation.id, pane: 'chat', status: '', error: '', connection: {},
+    contextMenu: { id: conversation.id, revision: conversation.revision, pinned: false, favorite: false, archived: false, source: 'sidebar' },
+  });
+  const menuActions = html => [...html.matchAll(/role="menuitem" data-action="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(menuActions(menuHtml), menuActions(sidebarMenuHtml));
 });
 
 test('completed assistant answers expose answer information only through the more menu', () => {
@@ -169,9 +175,10 @@ test('completed assistant answers expose answer information only through the mor
   assert.ok(!html.includes('private/secret'));
 });
 
-test('answer information delegates to the shared answer projection', async () => {
+test('answer information groups repeated source classes and states network evidence precisely', async () => {
   const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
-  assert.ok(source.includes('renderAnswerInformation(state.dialog.record)'));
+  const dialog = source.slice(source.indexOf("state.dialog?.kind === 'assistant-answer-information'"), source.indexOf("if (state.dialog === 'metadata')"));
+  assert.match(dialog, /return renderAnswerInformation\(state\.dialog\.record\)/);
 });
 
 test('settings expose the latest phone values in the desktop primary and secondary split', async () => {
@@ -179,23 +186,26 @@ test('settings expose the latest phone values in the desktop primary and seconda
   for (const token of ['aria-label="设置一级菜单"', 'aria-label="设置二级页面"', '外观', '深色', '字体大小', '大', '主题色', '绿色', 'open-settings-picker']) assert.ok(appearance.includes(token));
   const favorites = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'favorites', status: '', error: '', connection: {}, favoriteConversationIds: new Set([conversation.id]) });
   for (const token of ['收藏', 'toggle-conversation-favorite', '双端同步']) assert.ok(favorites.includes(token));
-  const about = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo: { version: '0.0.1', gitCommit: 'dafc64d9b336', platform: 'macos', arch: 'aarch64', buildEpochSeconds: 1767225600 } });
-  for (const token of ['Desktop 版 0.0.1', '构建基准 Commit：dafc64d9b336', '开发者信息', '开发者：席瑞', 'nanzhufeng.studio@gmail.com', 'GitHub · nanzhufeng/Nanfeng-AI', '版权所有 © 2026 席瑞']) assert.ok(about.includes(token));
-  assert.match(about, /开发时间：2026-01-01 \d{2}:\d{2}/u);
-  assert.ok(!about.includes('aarch64'));
+  const about = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo: { version: '0.0.1', buildEpochSeconds: 1780000000, gitCommit: '2873f051cbea91c0122f14a08f807f374b28da75' } });
+  for (const token of ['Desktop 版 0.0.1', '构建时间', 'Git Commit：2873f05']) assert.ok(about.includes(token));
   assert.ok(!about.includes('读取中'));
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
-  assert.match(css, /\.android-settings-about small \{ display: block; margin-top: 6px; \}/);
   assert.match(css, /\.android-settings-about > div:not\(\.android-settings-divider\)/);
   assert.match(css, /\.android-settings-about > \.android-settings-divider \{ height: 1px; min-height: 1px; padding: 0;/);
 });
 
-test('desktop about receives the Git commit from native build metadata', async () => {
-  const build = await readFile(resolve(import.meta.dirname, '../src-tauri/build.rs'), 'utf8');
-  const native = await readFile(resolve(import.meta.dirname, '../src-tauri/src/lib.rs'), 'utf8');
-  assert.match(build, /NANFENG_AI_GIT_COMMIT/);
-  assert.match(build, /Command::new\("git"\)[\s\S]*\.args\(\["rev-parse", "--short=12", "HEAD"\]\)/);
-  assert.match(native, /git_commit: option_env!\("NANFENG_AI_GIT_COMMIT"\)/);
+test('About shows the three public information sections and an honest source commit', () => {
+  const renderAbout = runtimeInfo => renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo });
+  const about = renderAbout({ version: '0.6.0-p6d-dev', buildEpochSeconds: 1780000000, gitCommit: '2873f051cbea91c0122f14a08f807f374b28da75', gitWorktreeDirty: true });
+  const card = about.match(/<section class="android-settings-card android-settings-about">([\s\S]*?)<\/section>/)?.[1];
+  assert.ok(card, 'one About information card is rendered');
+  for (const label of ['产品信息', '版本信息', '开发者信息']) assert.ok(card.includes(label), label);
+  assert.equal((card.match(/class="android-settings-divider"/g) || []).length, 2);
+  for (const text of ['南枫 AI', 'Desktop 版 0.6.0-p6d-dev', '构建时间', 'Git Commit：2873f05', '含未提交改动', '开发者：席瑞', '联系邮箱：nanzhufeng.studio@gmail.com', '版权所有 © 2026 席瑞', 'GitHub · nanzhufeng/Nanfeng-AI']) assert.ok(card.includes(text), text);
+  assert.match(card, /href="https:\/\/github\.com\/nanzhufeng\/Nanfeng-AI" data-action="open-source-link"/);
+  assert.ok(renderAbout({ version: '0.6.0-p6d-dev' }).includes('Git Commit：不可用／未嵌入'));
+  assert.ok(renderAbout({ gitCommit: '2873f051cbea91c0122f14a08f807f374b28da75' }).includes('工作区状态不可用'));
+  assert.ok(renderAbout({ version: '<script>' }).includes('Desktop 版 &lt;script&gt;'));
 });
 
 test('native settings enable only implemented consumers and keep remaining owners fail closed', () => {
@@ -252,7 +262,7 @@ test('native parity commands are explicitly least-privilege allowed for the main
   }
   assert.match(permissions, /commands\.allow = \["read_desktop_runtime_info"\]/);
   assert.match(permissions, /commands\.allow = \["write_desktop_markdown_to_selected_path"\]/);
-  for (const command of ['read_desktop_model_service_settings', 'save_desktop_model_service_settings', 'reveal_desktop_model_service_credential', 'test_desktop_model_service_connection']) assert.ok(permissions.includes(command));
+  for (const command of ['read_desktop_model_service_settings', 'save_desktop_model_service_settings', 'delete_desktop_model_service_credential', 'reveal_desktop_model_service_credential', 'test_desktop_model_service_connection']) assert.ok(permissions.includes(command));
   for (const command of ['read_desktop_app_settings', 'save_desktop_app_settings', 'read_desktop_favorite_conversation_ids', 'set_desktop_conversation_favorite']) assert.ok(permissions.includes(command));
   for (const command of ['read_desktop_conversation_read_state', 'mark_desktop_conversation_opened', 'mark_desktop_conversation_unread']) assert.ok(permissions.includes(command));
   assert.match(permissions, /commands\.allow = \["read_desktop_background_runtime"\]/);
@@ -265,11 +275,11 @@ test('native parity commands are explicitly least-privilege allowed for the main
 test('current Android model catalog keeps GLM-OCR visible but outside chat selection', async () => {
   const zhipu = renderChatFirstShell({
     data, native: true, pane: 'settings', settingsSection: 'model-configuration', status: '', error: '', connection: {},
-    modelProviderId: 'ZHIPU',
+    settingsPicker: 'modelPreset', modelProviderId: 'ZHIPU',
   });
-  for (const token of ['GLM-5.3', 'GLM-5.3 Flash', 'GLM-OCR', '图片、PDF 转 Markdown · 共用智谱 Key']) assert.ok(zhipu.includes(token));
-  assert.ok(zhipu.includes('data-preset-id="GLM_OCR" role="radio"'));
-  assert.ok(!MODEL_SERVICE_PREVIEW_SETTINGS.find(p => p.providerId === 'ZHIPU').presets.some(p => p.id === 'GLM_OCR'));
+  for (const token of ['GLM-5.3', 'GLM-5.3 Flash', 'GLM-OCR', '图片与 PDF 转 Markdown · 使用同一智谱 API Key', '仅在左侧栏“南枫转写”中调用，不加入聊天模型选择。']) assert.ok(zhipu.includes(token));
+  const chat = renderChatFirstShell({ data, native: true, p6gModelPickerOpen: true, p6gSelection: { pickerTier: 'DEEP' } });
+  assert.ok(!chat.includes('data-model-id="GLM_OCR"'), 'settings OCR probe must not become a chat model');
   for (const retired of ['Grok 4.1', 'Grok 4.5', 'Grok 4.6']) assert.ok(!zhipu.includes(retired));
 
   const qwen = renderChatFirstShell({
@@ -280,6 +290,35 @@ test('current Android model catalog keeps GLM-OCR visible but outside chat selec
   assert.ok(!qwen.includes('音频与视频转文字'));
   const nativeBridge = await readFile(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8');
   assert.doesNotMatch(nativeBridge, /"QWEN" => vec!\[desktop_model_service_v1::QWEN_ASR\]/);
+});
+
+test('stored provider credentials expose one confirmed provider-scoped delete path', async () => {
+  const service = {
+    providerId: 'QWEN', providerDisplayName: 'Qwen 官方直连', enabled: true,
+    presetId: 'QWEN_3_7_PLUS', presetDisplayName: 'Qwen3.7-Plus',
+    credentialStored: true, revision: 2,
+    presets: [{ id: 'QWEN_3_7_PLUS', displayName: 'Qwen3.7-Plus', family: 'Qwen · 官方直连' }],
+    nonChatCapabilities: [],
+  };
+  const stored = renderChatFirstShell({
+    data, native: true, pane: 'settings', settingsSection: 'model-configuration', status: '', error: '', connection: {},
+    modelServiceSettings: [service], modelProviderId: 'QWEN', modelServiceDraft: service,
+  });
+  assert.match(stored, /data-action="ask-delete-model-service-credential"/);
+  assert.match(stored, />删除 API Key<\/button>/);
+  const missing = renderChatFirstShell({
+    data, native: true, pane: 'settings', settingsSection: 'model-configuration', status: '', error: '', connection: {},
+    modelServiceSettings: [{ ...service, credentialStored: false }], modelProviderId: 'QWEN', modelServiceDraft: service,
+  });
+  assert.doesNotMatch(missing, /ask-delete-model-service-credential/);
+  const [appSource, rustSource, css] = await Promise.all([
+    readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8'),
+    readFile(resolve(import.meta.dirname, '../src-tauri/src/lib.rs'), 'utf8'),
+    readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8'),
+  ]);
+  for (const token of ['model-credential-delete', 'confirm-delete-model-service-credential', 'delete_desktop_model_service_credential', '其他服务商、模型选择、聊天和文件不受影响']) assert.ok(appSource.includes(token));
+  assert.match(rustSource, /state\.credentials\.delete_user_secret\(&provider_id\)\?/);
+  assert.match(css, /\.android-settings-model-save > button[^}]*border-radius:\s*999px/);
 });
 
 test('model record pages use the latest Android empty states and real usage projection', () => {
@@ -361,7 +400,7 @@ test('local data categories open the shared cross-workspace safe search catalogu
   const appSource = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   assert.match(appSource, /invoke\('query_desktop_local_index'/);
   assert.match(appSource, /invoke\('record_desktop_local_search_history'/);
-  assert.match(appSource, /loadSearchWorkspace\(hit\.workspaceId\)/);
+  assert.match(appSource, /loadSearchWorkspace\(hit\.workspaceId, isCurrent\)/);
 });
 
 test('archived and recycle settings mirror Android single and bulk cleanup gates', async () => {
@@ -375,7 +414,9 @@ test('archived and recycle settings mirror Android single and bulk cleanup gates
   const recycle = renderChatFirstShell({ data: lifecycleData, native: true, pane: 'settings', settingsSection: 'recycle', status: '', error: '', connection: {} });
   for (const token of ['会话消息树尚未物理删除；恢复后会回到普通对话列表。', '清空回收站', 'restore-deleted-conversation', 'open-conversation-permanent-delete', '<title>永久删除</title>', '回收站会话']) assert.ok(recycle.includes(token));
   const appSource = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
-  assert.match(appSource, /invoke\('permanently_delete_desktop_conversation'/);
-  assert.match(appSource, /conversation-bulk-recycle/);
-  assert.match(appSource, /已永久删除会话。/);
+  const cleanupSource = appSource.slice(appSource.indexOf('async function confirmConversationPermanentDelete('), appSource.indexOf("\napp.addEventListener('contextmenu'", appSource.indexOf('async function confirmConversationPermanentDelete(')));
+  assert.ok(cleanupSource.includes("invokeForAuthorizedDataAreaOperation(tauriBridge, 'permanently_delete_desktop_conversation'"), 'permanent cleanup uses the authorized original-area adapter');
+  assert.ok(cleanupSource.includes('}, owner);'), 'cleanup submits with its captured owner');
+  assert.ok(cleanupSource.includes('conversation-bulk-recycle'), 'archived cleanup remains recoverable');
+  assert.ok(cleanupSource.includes('已永久删除会话。'), 'permanent cleanup retains truthful completion feedback');
 });

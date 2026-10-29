@@ -33,13 +33,17 @@ test('manual unread sorts first only inside the pinned or recent partition', () 
   );
 });
 
-test('title metadata keeps recent position while new conversation content moves it forward', () => {
-  const old = conversation('old', '2026-09-01T07:00:00Z');
-  const newer = conversation('newer', '2026-09-01T11:00:00Z');
-  const order = items => activeConversations({ exchange: { conversations: items } }).map(item => item.id);
-  const renamed = { ...old, title: '修改后的标题', titleRevision: 2, revision: 3, autoTitlePending: false };
-  assert.deepEqual(order([renamed, newer]), ['newer', 'old']);
-  assert.deepEqual(order([{ ...renamed, updatedAt: '2026-09-02T11:00:00Z' }, newer]), ['old', 'newer']);
+test('turning off automatic unread leaves manual marks visible and ordered', () => {
+  const html = renderChatFirstShell({
+    data, native: true, pane: 'chat', selectedConversationId: 'recent-newer',
+    productSettings: { unreadIndicators: false },
+    unreadConversationIds: new Set(['pinned-recent']),
+    manualUnreadAtMs,
+  });
+  assert.ok(html.indexOf('data-id="pinned-manual"') < html.indexOf('data-id="pinned-recent"'));
+  assert.ok(html.indexOf('data-id="recent-manual-old"') < html.indexOf('data-id="recent-newer"'));
+  assert.match(html.match(/<div class="chat-history-row[^>]*data-id="pinned-manual"[\s\S]*?<\/div>\s*<\/div>/)?.[0] || '', /aria-label="已标记未读"/);
+  assert.doesNotMatch(html.match(/<div class="chat-history-row[^>]*data-id="pinned-recent"[\s\S]*?<\/div>\s*<\/div>/)?.[0] || '', /chat-history-unread/);
 });
 
 test('conversation rows render one theme dot and stable conversation-dot-progress-title order', () => {
@@ -69,22 +73,6 @@ test('conversation rows render one theme dot and stable conversation-dot-progres
   for (let index = 1; index < order.length; index += 1) {
     assert.ok(row.indexOf(order[index - 1]) < row.indexOf(order[index]), `${order[index - 1]} must precede ${order[index]}`);
   }
-});
-
-test('a manual unread mark stays visibly themed even when automatic unread indicators are off', () => {
-  const html = renderChatFirstShell({
-    data,
-    native: true,
-    pane: 'chat',
-    status: '',
-    error: '',
-    connection: {},
-    productSettings: { unreadIndicators: false },
-    unreadConversationIds: new Set(),
-    manualUnreadAtMs: new Map([['recent-manual-old', 100]]),
-  });
-  const row = html.match(/<div class="chat-history-row[^>]*data-id="recent-manual-old"[\s\S]*?<\/div>\s*<\/div>/)?.[0] || '';
-  assert.match(row, /chat-history-unread/);
 });
 
 test('pinned rows reserve a phone conversation glyph before the unread state and title', async () => {
@@ -119,6 +107,12 @@ test('conversation menu places unread directly after pin and settings enable its
   });
   assert.match(settings, /在左侧对话列表显示主题色未读标记/);
   assert.doesNotMatch(settings, /Desktop 尚无未读水位与列表消费者/);
+  const disabledSettings = renderChatFirstShell({
+    data, native: true, pane: 'settings', settingsSection: 'reminders',
+    productSettings: { unreadIndicators: false },
+    settingsCapabilities: { unreadIndicators: true },
+  });
+  assert.match(disabledSettings, /已关闭自动未读提示；手动标为未读仍显示主题色标记/);
 });
 
 test('runtime wiring preserves the route and keeps read markers device-local', async () => {

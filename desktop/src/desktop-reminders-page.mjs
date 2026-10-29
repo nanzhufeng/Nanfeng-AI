@@ -45,14 +45,14 @@ function renderEditor(editor) {
     ${pageHeader(editor.mode === 'edit' ? '编辑计划' : '新建计划', 'cancel-reminder-editor', '取消并返回已计划')}
     <form class="desktop-reminder-editor-form" data-reminder-editor-mode="${escapeHtml(editor.mode)}">
       <p class="desktop-reminder-privacy">仅发送任务名称和监控要求，不发送完整对话或附件。</p>
-      <label><span>计划名称（20字内）</span><input id="reminder-title" maxlength="20" value="${escapeHtml(item.title || '新的监控')}" placeholder="例如：检查项目状态"></label>
+      <label><span>计划名称（20字内）</span><input id="reminder-title" maxlength="20" value="${escapeHtml(item.title ?? '新的监控')}" placeholder="例如：检查项目状态"></label>
       <label><span>监控要求</span><textarea id="reminder-instruction" maxlength="8000" rows="6" placeholder="写清要检查什么、何时算完成">${escapeHtml(item.instruction || '')}</textarea></label>
       <fieldset><legend>运行安排</legend><div class="desktop-reminder-mode"><button type="button" class="${once ? 'selected' : ''}" data-action="set-reminder-schedule-mode" data-mode="ONCE" aria-pressed="${once}">一次</button><button type="button" class="${once ? '' : 'selected'}" data-action="set-reminder-schedule-mode" data-mode="RECURRING" aria-pressed="${!once}">重复</button></div></fieldset>
       <label><span>运行时间</span><input id="reminder-anchor-local" type="datetime-local" value="${escapeHtml(item.anchorLocal || '')}"></label>
       <fieldset class="desktop-reminder-cadence" ${once ? 'hidden' : ''}><legend>重复频率</legend><div>${scheduleButton('HOURLY', '每小时', scheduleKind)}${scheduleButton('DAILY', '每天', scheduleKind)}${scheduleButton('WEEKLY', '每周', scheduleKind)}</div></fieldset>
       <div class="desktop-reminder-advanced"><label><span>时区</span><input id="reminder-timezone" maxlength="64" value="${escapeHtml(item.timezoneId || '')}" placeholder="Asia/Shanghai"></label><label><span>错过计划时间后</span><select id="reminder-missed-policy"><option value="RUN_ONCE" ${item.missedPolicy === 'RUN_ONCE' ? 'selected' : ''}>恢复后执行一次</option><option value="SKIP" ${item.missedPolicy === 'SKIP' ? 'selected' : ''}>跳过本次</option></select></label></div>
       <input id="reminder-schedule-kind" type="hidden" value="${escapeHtml(scheduleKind)}">
-      <div class="desktop-reminder-editor-actions"><button type="button" data-action="cancel-reminder-editor">取消</button><button type="button" class="primary" data-action="${saveAction}">${editor.mode === 'edit' ? '保存修改' : '保存并开始'}</button></div>
+      <div class="desktop-reminder-editor-actions"><button type="button" data-action="cancel-reminder-editor">取消</button><button type="button" class="primary" data-action="${saveAction}" ${editor.submitting ? 'disabled' : ''}>${editor.mode === 'edit' ? '保存修改' : '保存并开始'}</button></div>
     </form>
   </section>`;
 }
@@ -63,7 +63,9 @@ export function renderDesktopRemindersPage({ loading = false, projection = { dra
   const drafts = (projection?.drafts || []).filter(item => ['PENDING_REVIEW', 'FAILED', 'UNKNOWN'].includes(item.status));
   const permissionReady = ['granted', 'legacy'].includes(notificationPermission);
   const notificationHint = notificationEnabled
-    ? permissionReady ? '结果完成后可发送不含正文的系统通知。' : '计划仍会执行；系统通知尚未授权。'
+    ? permissionReady ? '结果完成后可发送不含正文的系统通知。'
+      : notificationPermission === 'unavailable' ? '计划仍会执行；暂时无法确认系统通知权限。'
+        : '计划仍会执行；系统通知尚未授权。'
     : '计划会照常执行，结果只保存在本机。';
   const createEnabled = native || previewInteractive;
   return `<section class="desktop-reminders-page" aria-label="定时任务" aria-busy="${loading}">

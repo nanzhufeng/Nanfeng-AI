@@ -73,7 +73,7 @@ test('FB-P6-079 routes Mac arrow keys and horizontal trackpad swipes through the
     'function consumeImagePreviewHorizontalSwipe(event, viewport)',
     'const MAX_IMAGE_PREVIEW_PAYLOAD_CACHE_ENTRIES = 2',
     'async function decodeImagePreviewPayload(dataUrl)',
-    'function warmImagePreviewNeighbors(preview)',
+    'function warmImagePreviewNeighbors(preview, owner)',
     'const imagePreviewHorizontalSwipeThreshold = 36',
     'const imagePreviewHorizontalSwipeAxisRatio = 1.25',
     'imagePreviewHorizontalSwipe.consumed = true',

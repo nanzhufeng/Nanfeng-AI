@@ -1,9 +1,21 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import vm from 'node:vm';
 
 const app = fs.readFileSync(new URL('../src/app.mjs', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../src/chat-shell.css', import.meta.url), 'utf8');
+const progressStart = app.indexOf('function accountSyncProgressDialog() {');
+const progressDialog = app.slice(progressStart, app.indexOf('\n}', progressStart) + 2);
+
+test('partial cloud read shows attention rather than failed-read heading', () => {
+  const render = kind => vm.runInNewContext(`${progressDialog}\naccountSyncProgressDialog()`, {
+    state: { accountSyncProgress: { operation: 'read', result: { kind, message: '已核对一项，另一项待处理。' } } },
+    icon: () => '<svg></svg>', icons: { check: '', info: '' }, escape: value => value,
+  });
+  assert.match(render('attention'), /<h2>读取需要核对<\/h2>/);
+  assert.match(render('error'), /<h2>读取失败<\/h2>/);
+});
 
 test('manual sync and cloud read paint progress then retain a clear quantified result', () => {
   const sync = app.slice(app.indexOf("action === 'context-menu-sync'"), app.indexOf("action === 'show-google-login-requirements'"));
@@ -12,8 +24,8 @@ test('manual sync and cloud read paint progress then retain a clear quantified r
   assert.match(app, /function accountSyncProgressDialog\(\)/);
   assert.match(app, /const ACCOUNT_SYNC_PROGRESS_MIN_VISIBLE_MS = 520/);
   assert.match(app, /function beginAccountSyncProgress\(operation\)/);
-  assert.match(app, /function waitForAccountSyncProgressPaint\(\) \{\n  return new Promise\(resolve => window\.requestAnimationFrame\(\(\) => window\.requestAnimationFrame\(resolve\)\)\);/);
-  assert.match(sync, /beginAccountSyncProgress\('sync'\);\n        await waitForAccountSyncProgressPaint\(\);/);
+  assert.match(app, /function waitForAccountSyncProgressPaint\(\) \{\r?\n  return new Promise\(resolve => window\.requestAnimationFrame\(\(\) => window\.requestAnimationFrame\(resolve\)\)\);/);
+  assert.match(sync, /beginAccountSyncProgress\('sync'\);\r?\n        await waitForAccountSyncProgressPaint\(\);/);
   assert.match(read, /beginAccountSyncProgress\('read'\);[\s\S]*await waitForAccountSyncProgressPaint\(\);/);
   assert.match(app, /async function completeAccountSyncProgress/);
   assert.match(app, /ACCOUNT_SYNC_PROGRESS_MIN_VISIBLE_MS - \(performance\.now\(\) - startedAt\)/);
@@ -24,7 +36,8 @@ test('manual sync and cloud read paint progress then retain a clear quantified r
   assert.match(app, /读取完成/);
   assert.match(sync, /await completeAccountSyncProgress\('', 'success'\);/);
   assert.doesNotMatch(app, /已同步 1 个对话/);
-  assert.match(app, /cloudReadFeedback\(receipt\)/);
+  assert.match(read, /const feedback = cloudReadFeedback\(\{ \.\.\.receipt, projectionFailedCount \}\);/);
+  assert.match(read, /await completeAccountSyncProgress\(feedback\.message, feedback\.kind\);/);
   assert.match(read, /正在读取云端列表/);
   assert.match(app, /请检查网络或登录后重试。/);
   assert.match(app, /accountSyncProgressDialog\(\) \|\| cameraCaptureDialog/);

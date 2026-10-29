@@ -13,7 +13,7 @@ const fixture = {
     messages: [
       { id: 'user-1', role: 'user', blocks: [{ kind: 'TEXT', text: 'compare this' }] },
       { id: 'assistant-chatgpt', parentId: 'user-1', role: 'assistant', delivery: 'PARTIAL', runtimeState: 'RUNNING', attemptId: 'attempt-chatgpt', compareExecutionId: 'execution-1', compareLogicalModel: 'CHATGPT', source: 'PROVIDER', modelSnapshot: { providerId: 'OPENROUTER', modelId: 'openai/gpt-5.6-terra', displayName: 'GPT-5.6 Terra' }, blocks: [{ kind: 'TEXT', text: 'partial' }] },
-      { id: 'assistant-claude', parentId: 'user-1', role: 'assistant', delivery: 'UNKNOWN', safeErrorCode: 'MISSING_COMPLETION', attemptId: 'attempt-claude', compareExecutionId: 'execution-1', compareLogicalModel: 'CLAUDE', source: 'PROVIDER', modelSnapshot: { providerId: 'OPENROUTER', modelId: 'anthropic/claude-sonnet-5', displayName: 'Claude Sonnet 5' }, chargeMicros: 7, currencyCode: 'USD', blocks: [{ kind: 'TEXT', text: 'uncertain' }] },
+      { id: 'assistant-claude', parentId: 'user-1', role: 'assistant', delivery: 'UNKNOWN', safeErrorCode: 'MISSING_COMPLETION', attemptId: 'attempt-claude', compareExecutionId: 'execution-1', compareLogicalModel: 'CLAUDE', source: 'PROVIDER', modelSnapshot: { providerId: 'OPENROUTER', modelId: 'anthropic/claude-sonnet-5', displayName: 'Claude Sonnet 5' }, chargeMicros: 7, blocks: [{ kind: 'TEXT', text: 'uncertain' }] },
     ],
   }] },
 };
@@ -34,8 +34,13 @@ test('Desktop Compare has no Composer entry or model-menu duplicate', async () =
 
 test('historical Compare branches remain readable and stoppable but cannot be retried', () => {
   const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'conversation-compare', composerDraft: '', composerAttachments: [], pane: 'chat', status: '', error: '', connection: {} });
-  for (const token of ['ChatGPT', 'Claude', 'OpenRouter · 独立分支', '5.6 Terra', 'Sonnet 5', 'stop-desktop-compare', 'data-execution-id="execution-1"', '连接结果未知，未自动重发', '历史 Compare 不再提供重试', '¥0.0000']) assert.ok(html.includes(token), token);
+  for (const token of ['ChatGPT', 'Claude', 'OpenRouter · 独立分支', '5.6 Terra', 'Sonnet 5', 'stop-desktop-compare', 'data-execution-id="execution-1"', '连接结果未知，未自动重发', '历史 Compare 不再提供重试', '金额未知']) assert.ok(html.includes(token), token);
   assert.ok(!html.includes('retry-desktop-compare-branch'));
+  const settled = structuredClone(fixture);
+  settled.exchange.conversations[0].messages.find(message => message.id === 'assistant-claude').currencyCode = 'USD';
+  const settledHtml = renderChatFirstShell({ data: settled, native: true, selectedConversationId: 'conversation-compare', composerDraft: '', composerAttachments: [], pane: 'chat', status: '', error: '', connection: {} });
+  assert.ok(settledHtml.includes('¥0.0000'), 'known legacy settlement keeps its own frozen currency');
+
 });
 
 test('build and native permissions expose the real Compare owner without the retired JS and mock-only Rust owners', async () => {

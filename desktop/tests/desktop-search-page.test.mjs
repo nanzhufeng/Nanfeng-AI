@@ -1,3 +1,4 @@
+import { attachmentPreviewKey } from '../src/attachment-preview-key.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -131,7 +132,7 @@ test('image search cards copy the mobile hierarchy: dominant preview, name, cont
   const html = renderDesktopSearchPage({
     category: 'image',
     page: { hits: [imageAttachmentHit], textCount: 0, attachmentCount: 1, truncated: false },
-    thumbnails: { 'attachment-image-facts': { dataUrl: 'data:image/png;base64,AA==' } },
+    thumbnails: { [attachmentPreviewKey(imageAttachmentHit.workspaceId, 'attachment-image-facts')]: { dataUrl: 'data:image/png;base64,AA==' } },
   });
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
 
@@ -177,7 +178,7 @@ test('audio search cards use the same shared media canvas as video with real dur
   const html = renderDesktopSearchPage({
     category: 'audio',
     page: { hits: [audioAttachmentHit], textCount: 0, attachmentCount: 1, truncated: false },
-    attachmentPreviews: { 'attachment-audio-facts': { durationMillis: 932_911 } },
+    attachmentPreviews: { [attachmentPreviewKey(audioAttachmentHit.workspaceId, 'attachment-audio-facts')]: { durationMillis: 932_911 } },
   });
 
   assert.match(html, /desktop-search-audio-preview/);
@@ -198,8 +199,8 @@ test('file search cards preview verified file content instead of index snippets'
     category: 'file',
     page: { hits: [markdownAttachmentHit, attachmentHit], textCount: 0, attachmentCount: 2, truncated: false },
     attachmentPreviews: {
-      'attachment-markdown-facts': { text: '# 真实复盘\n这里是文件开头' },
-      'attachment-real-facts': { dataUrl: 'data:image/png;base64,PDF=' },
+      [attachmentPreviewKey(markdownAttachmentHit.workspaceId, 'attachment-markdown-facts')]: { text: '# 真实复盘\n这里是文件开头' },
+      [attachmentPreviewKey(attachmentHit.workspaceId, 'attachment-real-facts')]: { dataUrl: 'data:image/png;base64,PDF=' },
     },
   });
 
@@ -210,6 +211,35 @@ test('file search cards preview verified file content instead of index snippets'
   assert.doesNotMatch(html, /这不是文件正文预览/);
   assert.match(html, /复盘记录\.md/);
   assert.match(html, /隐藏分支会话/);
+});
+
+test('Office search cards show the actual format and locally extracted text', () => {
+  for (const [extension, mimeType] of [
+    ['DOCX', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ['XLSX', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    ['PPTX', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  ]) {
+    const hit = { ...attachmentHit, entryId: `office-${extension}`, attachmentId: `attachment-${extension}`,
+      displayName: `资料.${extension.toLowerCase()}`, mimeType, fileType: 'other' };
+    const html = renderDesktopSearchPage({
+      category: 'file', page: { hits: [hit], textCount: 0, attachmentCount: 1, truncated: false },
+      attachmentPreviews: { [attachmentPreviewKey(hit.workspaceId, hit.attachmentId)]: { text: `${extension} 本机正文` } },
+    });
+    assert.match(html, new RegExp(`<b>${extension}</b><pre>${extension} 本机正文</pre>`));
+  }
+});
+
+test('same attachment ID in two workspaces renders only its own cached content', () => {
+  const other = { ...markdownAttachmentHit, entryId: 'other-workspace-entry', workspaceId: 'other-workspace' };
+  const previews = {
+    [attachmentPreviewKey(markdownAttachmentHit.workspaceId, markdownAttachmentHit.attachmentId)]: { text: 'FIRST WORKSPACE ONLY' },
+    [attachmentPreviewKey(other.workspaceId, other.attachmentId)]: { text: 'SECOND WORKSPACE ONLY' },
+  };
+  const render = hit => renderDesktopSearchPage({ category: 'file', page: { hits: [hit], textCount: 0, attachmentCount: 1 }, attachmentPreviews: previews });
+  assert.match(render(markdownAttachmentHit), /FIRST WORKSPACE ONLY/);
+  assert.doesNotMatch(render(markdownAttachmentHit), /SECOND WORKSPACE ONLY/);
+  assert.match(render(other), /SECOND WORKSPACE ONLY/);
+  assert.doesNotMatch(render(other), /FIRST WORKSPACE ONLY/);
 });
 
 test('attachment catalogue copies mobile total and month counts', () => {

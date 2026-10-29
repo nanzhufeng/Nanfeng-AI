@@ -57,6 +57,25 @@ test('a newer cloud row selection supersedes a late older read', async () => {
   assert.deepEqual(opened, ['newer']);
 });
 
+test('leaving a pending cloud row prevents its late workspace read from reopening it', async () => {
+  const read = deferred();
+  const events = [];
+  const open = createCloudConversationOpenRoute({
+    load: () => read.promise,
+    loadPreferences: async () => null,
+    onPending: () => events.push('pending'),
+    onOpened: () => events.push('opened'),
+    onPreferences: () => events.push('preferences'),
+    onPreferencesFailure: () => events.push('preferences-failed'),
+    onFailure: () => events.push('failed'),
+  });
+  const opening = open({ workspaceId: 'cloud-workspace', conversationId: 'cloud-conversation' });
+  open.cancel();
+  read.resolve({ current: { summary: { id: 'cloud-workspace' } } });
+  assert.equal((await opening).status, 'SUPERSEDED');
+  assert.deepEqual(events, ['pending']);
+});
+
 test('an already loaded cloud workspace switches conversations without reopening it', async () => {
   const events = [];
   const open = createCloudConversationOpenRoute({

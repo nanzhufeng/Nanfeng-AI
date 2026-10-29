@@ -1,0 +1,10 @@
+[
+ {"name":"all","enabled":["OPENROUTER","RELAYCORE_CLAUDE","RELAYCORE_GPT","RELAYCORE_GEMINI","DEEPSEEK","QWEN","ZHIPU"],"ordinary":"RELAYCORE_GPT_6_1_SOL","complex":"RELAYCORE_GPT_6_ASTRA","attachment":"QWEN_3_7_PLUS"},
+ {"name":"rc-without-gpt","enabled":["RELAYCORE_CLAUDE","RELAYCORE_GEMINI","DEEPSEEK","QWEN","ZHIPU","OPENROUTER"],"ordinary":"RELAYCORE_GEMINI_3_8_FLASH","complex":"RELAYCORE_OPUS_5_5","attachment":"QWEN_3_7_PLUS"},
+ {"name":"rc-claude","enabled":["RELAYCORE_CLAUDE","OPENROUTER"],"ordinary":"RELAYCORE_SONNET_5_5","complex":"RELAYCORE_OPUS_5_5","attachment":"GEMINI_3_8_FLASH"},
+ {"name":"rc-gemini","enabled":["RELAYCORE_GEMINI","OPENROUTER"],"ordinary":"RELAYCORE_GEMINI_3_8_FLASH","complex":"RELAYCORE_GEMINI_3_1_PRO","attachment":"GEMINI_3_8_FLASH"},
+ {"name":"domestic","enabled":["DEEPSEEK","QWEN","ZHIPU","OPENROUTER"],"ordinary":"DEEPSEEK_V4_FLASH","complex":"DEEPSEEK_V4_PRO","attachment":"QWEN_3_7_PLUS"},
+ {"name":"qwen","enabled":["QWEN","ZHIPU","OPENROUTER"],"ordinary":"QWEN_3_7_PLUS","complex":"QWEN_3_8_MAX","attachment":"QWEN_3_7_PLUS"},
+ {"name":"zhipu","enabled":["ZHIPU","OPENROUTER"],"ordinary":"GLM_5_3_FLASH","complex":"GLM_5_3","attachment":"GLM_5_3_FLASH"},
+ {"name":"openrouter","enabled":["OPENROUTER"],"ordinary":"CLAUDE_SONNET_5_5","complex":"CLAUDE_OPUS_5_5","attachment":"GEMINI_3_8_FLASH"}
+]

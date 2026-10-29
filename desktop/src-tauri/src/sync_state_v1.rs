@@ -1,6 +1,6 @@
 //! P7-B local key/state foundation. It deliberately has no Tauri command, account UI, HTTP or cloud payload.
 use aes_gcm::aead::{rand_core::RngCore, OsRng};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
@@ -63,8 +63,22 @@ pub fn account_ref(verified_opaque_id: &str) -> Result<String, String> {
 }
 
 pub trait CredentialStore {
+    /// Non-authoritative operation identity for preparing an account-owned write.
+    /// Return Some only when with_account_write checks the latest private session
+    /// under its authentication lock before running the callback. Never use this
+    /// hint as authentication proof or for reading secrets; unbound stores return None.
+    fn prepared_account_write_user_id(&self) -> Option<&str> { None }
+    /// Serialize a local account write with authentication changes. The callback
+    /// must not access credentials or perform network requests.
+    fn with_account_write<T>(&self, write: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        write()
+    }
     fn save(&self, service: &str, account: &str, secret: &[u8]) -> Result<(), String>;
     fn read(&self, service: &str, account: &str) -> Result<Vec<u8>, String>;
+    /// Absence is a value; unreadable or corrupt credentials remain errors.
+    fn read_optional(&self, service: &str, account: &str) -> Result<Option<Vec<u8>>, String> {
+        self.read(service, account).map(Some)
+    }
     fn delete(&self, service: &str, account: &str) -> Result<(), String>;
 }
 pub struct SqliteMetadataStore<'a> {
@@ -140,12 +154,24 @@ pub fn authenticate<C: CredentialStore>(
     store.save(&metadata, &receipt)?;
     Ok(receipt)
 }
-/// Direct account sync needs an authenticated identity, never a data-encryption key.
+/// Direct account sync uses authenticated identity without requiring a data-encryption key.
 pub fn authenticate_direct(
     store: &mut SqliteMetadataStore<'_>,
     intent_id: &str,
     expected_revision: Option<u64>,
     verified_opaque_id: &str,
+) -> Result<Receipt, String> {
+    authenticate_direct_with_account_update(store, intent_id, expected_revision, verified_opaque_id, |_| Ok(()), || Ok(()))
+}
+
+/// Keep the Desktop account projection and shared state receipt in one SQL commit.
+pub(crate) fn authenticate_direct_with_account_update(
+    store: &mut SqliteMetadataStore<'_>,
+    intent_id: &str,
+    expected_revision: Option<u64>,
+    verified_opaque_id: &str,
+    update_account: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<(), String>,
+    before_commit: impl FnOnce() -> Result<(), String>,
 ) -> Result<Receipt, String> {
     let account = account_ref(verified_opaque_id)?;
     if let Some(replay) = store.receipt(intent_id)? {
@@ -198,7 +224,7 @@ pub fn authenticate_direct(
         revision: metadata.revision,
         state: metadata.state,
     };
-    store.save(&metadata, &receipt)?;
+    store.save_with_account_update(&metadata, &receipt, update_account, before_commit)?;
     Ok(receipt)
 }
 
@@ -302,6 +328,30 @@ pub fn sign_out_keep_local(
         },
     )
 }
+
+pub(crate) fn sign_out_keep_local_with_account_update(
+    store: &mut SqliteMetadataStore<'_>,
+    intent_id: &str,
+    account: &str,
+    update_account: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<(), String>,
+    before_commit: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    if let Some(current) = store.metadata(account)? {
+        let expected_revision = current.revision;
+        let revision = if matches!(current.state, State::SignedOut | State::SignedOutKeepLocal) {
+            current.revision
+        } else { current.revision + 1 };
+        let metadata = Metadata { state: State::SignedOutKeepLocal, revision, ..current };
+        let receipt = Receipt { intent_id: intent_id.into(), account_ref: account.into(),
+            expected_revision: Some(expected_revision), revision, state: State::SignedOutKeepLocal };
+        store.save_with_account_update(&metadata, &receipt, update_account, before_commit)
+    } else {
+        let transaction = store.connection.transaction().map_err(|_| err())?;
+        update_account(&transaction)?;
+        before_commit()?;
+        transaction.commit().map_err(|_| err())
+    }
+}
 fn transition(
     store: &mut SqliteMetadataStore<'_>,
     intent_id: &str,
@@ -341,7 +391,7 @@ impl<'a> SqliteMetadataStore<'a> {
                         .map_err(|_| rusqlite::Error::InvalidQuery)?,
                 })
             })
-            .ok();
+            .optional().map_err(|_| err())?;
         Ok(row)
     }
     pub fn metadata(&self, account: &str) -> Result<Option<Metadata>, String> {
@@ -360,13 +410,22 @@ impl<'a> SqliteMetadataStore<'a> {
                     last_error: r.get(6)?,
                 })
             })
-            .ok();
+            .optional().map_err(|_| err())?;
         Ok(row)
     }
     pub fn save(&mut self, meta: &Metadata, receipt: &Receipt) -> Result<(), String> {
+        self.save_with_account_update(meta, receipt, |_| Ok(()), || Ok(()))
+    }
+    fn save_with_account_update(
+        &mut self, meta: &Metadata, receipt: &Receipt,
+        update_account: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<(), String>,
+        before_commit: impl FnOnce() -> Result<(), String>,
+    ) -> Result<(), String> {
         let tx = self.connection.transaction().map_err(|_| err())?;
+        update_account(&tx)?;
         tx.execute("INSERT OR REPLACE INTO sync_account_metadata(account_ref,state,revision,key_alias_ref,wrapped_key_ref,wrapped_key_sha256,direction_fact,last_error,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,'2026-08-13T00:00:00Z')",params![meta.account_ref,meta.state.as_str(),meta.revision as i64,meta.key_alias_ref,meta.wrapped_key_ref,meta.wrapped_key_sha256,meta.direction_fact,meta.last_error]).map_err(|_|err())?;
         tx.execute("INSERT INTO sync_intents(intent_id,account_ref,expected_revision,resulting_revision,resulting_state,created_at) VALUES(?1,?2,?3,?4,?5,'2026-08-13T00:00:00Z')",params![receipt.intent_id,receipt.account_ref,receipt.expected_revision.map(|value| value as i64),receipt.revision as i64,receipt.state.as_str()]).map_err(|_|err())?;
+        before_commit()?;
         tx.commit().map_err(|_| err())
     }
 }
@@ -403,6 +462,30 @@ pub fn with_key<C: CredentialStore, T>(
 mod tests {
     use super::*;
     use std::{cell::RefCell, collections::BTreeMap};
+
+    #[test]
+    fn direct_auth_needs_no_key_and_repairs_only_retired_key_failure() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch("CREATE TABLE sync_account_metadata (account_ref TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL, key_alias_ref TEXT, wrapped_key_ref TEXT, wrapped_key_sha256 TEXT, direction_fact TEXT, last_error TEXT, updated_at TEXT NOT NULL); CREATE TABLE sync_intents (intent_id TEXT PRIMARY KEY NOT NULL, account_ref TEXT NOT NULL, expected_revision INTEGER, resulting_revision INTEGER NOT NULL, resulting_state TEXT NOT NULL, created_at TEXT NOT NULL);").unwrap();
+        let mut store = SqliteMetadataStore { connection: &mut connection };
+        let first = authenticate_direct(&mut store, "direct-first", None, "direct-user").unwrap();
+        assert_eq!(first.state, State::Ready);
+        let metadata = store.metadata(&first.account_ref).unwrap().unwrap();
+        assert!(metadata.key_alias_ref.is_none());
+        assert_eq!(authenticate_direct(&mut store, "direct-first", None, "direct-user").unwrap(), first);
+
+        store.connection.execute("UPDATE sync_account_metadata SET state='FAILED',last_error='KEY_MATERIAL_UNAVAILABLE' WHERE account_ref=?1", [&first.account_ref]).unwrap();
+        let repaired = authenticate_direct(&mut store, "direct-repair", Some(1), "direct-user").unwrap();
+        assert_eq!(repaired.state, State::Ready);
+        assert_eq!(repaired.revision, 2);
+        assert!(store.metadata(&first.account_ref).unwrap().unwrap().last_error.is_none());
+
+        store.connection.execute("UPDATE sync_account_metadata SET state='FAILED',last_error='REMOTE_CONFLICT' WHERE account_ref=?1", [&first.account_ref]).unwrap();
+        let preserved = authenticate_direct(&mut store, "direct-real-failure", Some(2), "direct-user").unwrap();
+        assert_eq!(preserved.state, State::Failed);
+        assert_eq!(preserved.revision, 2);
+        assert_eq!(store.metadata(&first.account_ref).unwrap().unwrap().last_error.as_deref(), Some("REMOTE_CONFLICT"));
+    }
     struct Mem(RefCell<BTreeMap<(String, String), Vec<u8>>>);
     impl CredentialStore for Mem {
         fn save(&self, s: &str, a: &str, k: &[u8]) -> Result<(), String> {

@@ -1,19 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { renderAndroidSettingsShell } from '../src/android-settings-shell.mjs';
 
 const root = new URL('../', import.meta.url);
 
 test('P8-C inspect page is reachable and only calls the read-only command', async () => {
-  const [app, settings, page, rust, capability, permissions] = await Promise.all([
+  const [app, page, rust, capability, permissions] = await Promise.all([
     readFile(new URL('src/app.mjs', root), 'utf8'),
-    readFile(new URL('src/android-settings-shell.mjs', root), 'utf8'),
     readFile(new URL('src/p8-inspect.mjs', root), 'utf8'),
     readFile(new URL('src-tauri/src/lib.rs', root), 'utf8'),
     readFile(new URL('src-tauri/capabilities/default.json', root), 'utf8'),
     readFile(new URL('src-tauri/permissions/default.toml', root), 'utf8'),
   ]);
-  assert.match(settings, /show-p8-inspect/);
+  const settings = renderAndroidSettingsShell({ page: 'development', native: true });
+  assert.match(settings, /data-action="show-p8-inspect"/);
+  assert.match(settings, /离线评测/);
   assert.match(app, /invoke\('inspect_p8_agent_runs'\)/);
   assert.match(page, /READ_ONLY · LOCAL_READ · NONE/);
   assert.match(page, /未连接模型与外部工具/);

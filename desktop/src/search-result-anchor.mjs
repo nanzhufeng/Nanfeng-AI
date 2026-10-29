@@ -10,10 +10,13 @@ function escapeAttributeValue(value) {
  * rendered surface. The attachment is preferred; message-level text and title hits fall back to
  * their message container.
  */
-export function resolveSearchResultAnchor(documentRoot, { messageId, attachmentId } = {}) {
+export function resolveSearchResultAnchor(documentRoot, { conversationId, messageId, attachmentId } = {}) {
   const safeMessageId = String(messageId || '');
   if (!documentRoot || !safeMessageId) return { message: null, attachment: null, target: null };
-  const message = documentRoot.querySelector?.(`[data-message-id="${escapeAttributeValue(safeMessageId)}"]`) || null;
+  const scope = conversationId
+    ? documentRoot.querySelector?.(`.chat-scroll[data-conversation-id="${escapeAttributeValue(conversationId)}"]`)
+    : documentRoot;
+  const message = scope?.querySelector?.(`.chat-message[data-message-id="${escapeAttributeValue(safeMessageId)}"]`) || null;
   if (!message) return { message: null, attachment: null, target: null };
   const safeAttachmentId = String(attachmentId || '');
   const attachment = safeAttachmentId

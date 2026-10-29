@@ -1,0 +1,282 @@
+{
+  "format": "nfai.portable-model-identity.fixture",
+  "version": 2,
+  "valid": [
+    {
+      "name": "legacy-unknown-returned",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "actualModelId": null,
+      "factsVersion": 1
+    },
+    {
+      "name": "different-returned",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2,
+        "actualModelId": "returned-model"
+      },
+      "actualModelId": "returned-model",
+      "factsVersion": 2
+    },
+    {
+      "name": "same-returned",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2,
+        "actualModelId": "requested-model"
+      },
+      "actualModelId": "requested-model",
+      "factsVersion": 2
+    },
+    {
+      "name": "unknown-returned",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2,
+        "actualModelId": null
+      },
+      "actualModelId": null,
+      "factsVersion": 2
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unversioned-field",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "actualModelId": "returned-model"
+      }
+    },
+    {
+      "name": "unsupported-version",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 3,
+        "actualModelId": "returned-model"
+      }
+    },
+    {
+      "name": "string-version",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": "2",
+        "actualModelId": "returned-model"
+      }
+    },
+    {
+      "name": "fractional-version",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2.5,
+        "actualModelId": "returned-model"
+      }
+    },
+    {
+      "name": "missing-returned",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2
+      }
+    },
+    {
+      "name": "blank-returned",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2,
+        "actualModelId": ""
+      }
+    },
+    {
+      "name": "oversize-returned",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2,
+        "actualModelId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    },
+    {
+      "name": "unicode-byte-limit",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2,
+        "actualModelId": "模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模模"
+      }
+    },
+    {
+      "name": "non-string-returned",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2,
+        "actualModelId": 42
+      }
+    },
+    {
+      "name": "secret-field",
+      "wire": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Original requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": "PROVIDER_RESPONSE",
+        "factsVersion": 2,
+        "actualModelId": "returned-model",
+        "apiKey": "synthetic-disallowed"
+      }
+    }
+  ],
+  "legacyProjectionUpgrades": {
+    "local returned model identity survives a remote estimate": {
+      "modelId": "deepseek-flash",
+      "modelDisplayName": "DeepSeek Flash",
+      "inputTokens": 5083,
+      "outputTokens": 3361,
+      "totalTokens": 8444,
+      "cachedInputTokens": 0,
+      "reasoningTokens": null,
+      "costTotalMicros": 17,
+      "costCurrencyCode": "USD",
+      "costPriceVersion": "provider-v1",
+      "costSource": "PROVIDER_RESPONSE",
+      "factsVersion": 2,
+      "actualModelId": "deepseek-flash-synthetic-returned"
+    }
+  }
+}

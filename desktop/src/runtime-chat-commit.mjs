@@ -26,7 +26,8 @@ export function installRuntimeChatScrolling(app) {
 }
 
 // The runtime refresh boundary. Only the current conversation can be patched.
-export function commitRuntimeChatShell(app, html) {
+export function commitRuntimeChatShell(app, html, preview = null) {
+  if (preview && (!preview.isConnected || !app.contains(preview))) return false;
   const template = document.createElement('template');
   template.innerHTML = html;
   const previous = app.querySelector('.chat-scroll[data-conversation-id]');
@@ -34,7 +35,9 @@ export function commitRuntimeChatShell(app, html) {
   if (!previous || !next || previous.dataset.conversationId !== next.dataset.conversationId) return false;
   const top = previous.scrollTop;
   const followLatest = !pausedFollow.has(previous) && previous.scrollHeight - top - previous.clientHeight <= 24;
-  patchChildren(app, template.content);
+  const retained = new Map();
+  if (preview) retainPreviewSlot(template, preview, retained);
+  patchChildren(app, template.content, retained);
   const target = followLatest ? previous.scrollHeight - previous.clientHeight : top;
   // Do not assign unchanged offsets: WebKit cancels wheel momentum on writes.
   if (Math.abs(previous.scrollTop - target) > 1) previous.scrollTop = target;
@@ -43,20 +46,31 @@ export function commitRuntimeChatShell(app, html) {
 
 // Menus, selection and confirmation dialogs change the surrounding shell, not the
 // transcript. Resolve retention slots to the connected owners without detaching them.
-export function commitRetainedChatShell(app, html, transcript, sidebar = null) {
-  if (!transcript?.isConnected || !app.contains(transcript)) return false;
+export function commitRetainedChatShell(app, html, transcript, sidebar = null, preview = null) {
+  if (transcript && (!transcript.isConnected || !app.contains(transcript))) return false;
+  if (preview && (!preview.isConnected || !app.contains(preview))) return false;
+  if (!transcript && !preview) return false;
   const template = document.createElement('template');
   template.innerHTML = html;
   const slot = template.content.querySelector('[data-preserved-transcript-slot]');
-  if (!slot) return false;
-  const retained = new Map([[slot, transcript]]);
+  if (Boolean(slot) !== Boolean(transcript)) return false;
+  const retained = new Map(transcript ? [[slot, transcript]] : []);
   const sidebarSlot = template.content.querySelector('[data-preserved-sidebar-slot]');
   if (sidebarSlot) {
     if (!sidebar?.isConnected || !app.contains(sidebar)) return false;
     retained.set(sidebarSlot, sidebar);
   }
+  if (preview) retainPreviewSlot(template, preview, retained);
   patchChildren(app, template.content, retained);
   return true;
+}
+
+// Retained previews remain connected: detaching even the same node clears
+// browser ranges, focused controls and an open native popover.
+function retainPreviewSlot(template, preview, retained) {
+  const slot = document.createComment('retained-attachment-preview');
+  template.content.append(slot);
+  retained.set(slot, preview);
 }
 
 function key(node) {

@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {conversationFindTarget} from '../src/conversation-find-interaction.mjs';
+const marks=[0,1,2].map(id=>({id,getClientRects:()=>[{}]}));
+const message={dataset:{messageId:'long'},querySelector:()=>marks[0],querySelectorAll:()=>marks};
+const matches=[{messageId:'earlier',index:0},{messageId:'long',index:20},{messageId:'long',index:3000},{messageId:'long',index:6000},{messageId:'later',index:0}];
+test('each occurrence within the same message selects its own rendered mark in source order',()=>{assert.equal(conversationFindTarget(message,matches,1),marks[0]);assert.equal(conversationFindTarget(message,matches,2),marks[1]);assert.equal(conversationFindTarget(message,matches,3),marks[2])});
+test('a different message, invalid index or missing DOM does not guess a target',()=>{assert.equal(conversationFindTarget(message,matches,0),null);assert.equal(conversationFindTarget(message,matches,-1),null);assert.equal(conversationFindTarget(null,matches,1),null)});
+test('unrepresented source occurrences fall back to their message instead of selecting another occurrence',()=>{const partial={...message,querySelectorAll:()=>marks.slice(0,2)};assert.equal(conversationFindTarget(partial,matches,2),partial)});
+test('a hidden selected mark falls back without jumping to the first visible occurrence',()=>{const hidden=[marks[0],{getClientRects:()=>[]},marks[2]],node={...message,querySelectorAll:()=>hidden};assert.equal(conversationFindTarget(node,matches,2),node)});

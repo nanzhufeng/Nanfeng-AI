@@ -30,6 +30,18 @@ test('text and stale attachment hits fall back to the exact message instead of a
   assert.equal(resolveSearchResultAnchor(root, { messageId: 'missing', attachmentId: 'image-b' }).target, null);
 });
 
+test('search drill-down resolves inside the selected conversation when another surface reuses the message ID', () => {
+  const decoy = messageWith('asset-a', { id: 'wrong-area' });
+  const actualAttachment = { id: 'right-area' };
+  const actual = messageWith('asset-a', actualAttachment);
+  const transcript = { querySelector: () => actual };
+  const root = { querySelector: selector => selector.includes('data-conversation-id="conversation-b"') ? transcript : decoy };
+  const resolved = resolveSearchResultAnchor(root, { conversationId: 'conversation-b', messageId: 'message-a', attachmentId: 'asset-a' });
+  assert.equal(resolved.message, actual);
+  assert.equal(resolved.target, actualAttachment);
+  assert.equal(resolveSearchResultAnchor(root, { conversationId: 'missing', messageId: 'message-a' }).target, null);
+});
+
 test('search drill-down selects a matching gallery image then scrolls and flashes the exact resolved target', async () => {
   const source = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const owner = source.slice(source.indexOf('async function locateSearchHit('), source.indexOf('async function openSearchAttachment('));

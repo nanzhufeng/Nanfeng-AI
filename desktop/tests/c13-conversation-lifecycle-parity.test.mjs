@@ -98,7 +98,8 @@ test('C13 and memory transient menus reset browser Popover viewport geometry bef
     readFile(new URL('../src/chat-shell.css', import.meta.url), 'utf8'),
   ]);
   for (const token of [
-    "const selector = '.conversation-lifecycle-actions, .memory-reference-menu'",
+    "const actionMenuSelector = '.conversation-lifecycle-actions, .memory-reference-menu, .text-preview-menu'",
+    'const selector = actionMenuSelector',
     "panel.style.inset = 'auto'",
     "panel.style.bottom = 'auto'",
     "panel.style.height = 'fit-content'",

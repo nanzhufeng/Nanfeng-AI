@@ -1,0 +1,1515 @@
+{
+  "format": "nfai.answer-model-facts.fixture.v1",
+  "version": 1,
+  "factKeys": [
+    "modelSnapshot",
+    "actualModelId",
+    "usage",
+    "estimatedUsage",
+    "chargeMicros",
+    "currencyCode",
+    "costPriceVersion",
+    "costSource"
+  ],
+  "cases": [
+    {
+      "name": "local estimate keeps all original counters and unknown tariff",
+      "local": {
+        "modelSnapshot": {
+          "providerId": "OPENROUTER",
+          "modelId": "google/gemini-4-argon",
+          "displayName": "Gemini 4 Argon"
+        },
+        "estimatedUsage": {
+          "inputTokens": 1000,
+          "outputTokens": 100,
+          "totalTokens": 1100,
+          "cachedInputTokens": 500,
+          "reasoningTokens": 23
+        },
+        "chargeMicros": 2050,
+        "currencyCode": "USD",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "providerId": "OPENROUTER",
+          "modelId": "google/gemini-4-argon",
+          "displayName": "Gemini 4 Argon"
+        },
+        "estimatedUsage": {
+          "inputTokens": 1000,
+          "outputTokens": 100,
+          "totalTokens": 1100,
+          "cachedInputTokens": 500,
+          "reasoningTokens": 23
+        },
+        "chargeMicros": 2050,
+        "currencyCode": "USD",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedPortable": {
+        "modelId": "google/gemini-4-argon",
+        "modelDisplayName": "Gemini 4 Argon",
+        "inputTokens": 1000,
+        "outputTokens": 100,
+        "totalTokens": 1100,
+        "cachedInputTokens": 500,
+        "reasoningTokens": 23,
+        "costPriceVersion": null,
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 2050,
+        "costSource": "LOCAL_ESTIMATE"
+      }
+    },
+    {
+      "name": "local provider unknown counters cannot acquire remote estimates",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": null,
+        "reasoningTokens": null,
+        "costPriceVersion": "desktop-provider-reported-v1",
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 7,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "remote provider settlement outranks local estimate",
+      "local": {
+        "modelSnapshot": {
+          "providerId": "OPENROUTER",
+          "modelId": "google/gemini-4-argon",
+          "displayName": "Gemini 4 Argon"
+        },
+        "estimatedUsage": {
+          "inputTokens": 1000,
+          "outputTokens": 100,
+          "totalTokens": 1100,
+          "cachedInputTokens": 500,
+          "reasoningTokens": 23
+        },
+        "chargeMicros": 2050,
+        "currencyCode": "USD",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "google/gemini-4-argon",
+          "displayName": "Gemini 4 Argon"
+        },
+        "usage": {
+          "inputTokens": 1024,
+          "outputTokens": 112,
+          "totalTokens": 1136,
+          "cachedInputTokens": 400,
+          "reasoningTokens": 20
+        },
+        "chargeMicros": 4000,
+        "currencyCode": "USD",
+        "costPriceVersion": "fixture-provider-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "google/gemini-4-argon",
+          "displayName": "Gemini 4 Argon"
+        },
+        "usage": {
+          "inputTokens": 1024,
+          "outputTokens": 112,
+          "totalTokens": 1136,
+          "cachedInputTokens": 400,
+          "reasoningTokens": 20
+        },
+        "chargeMicros": 4000,
+        "currencyCode": "USD",
+        "costPriceVersion": "fixture-provider-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "google/gemini-4-argon",
+        "modelDisplayName": "Gemini 4 Argon",
+        "inputTokens": 1024,
+        "outputTokens": 112,
+        "totalTokens": 1136,
+        "cachedInputTokens": 400,
+        "reasoningTokens": 20,
+        "costPriceVersion": "fixture-provider-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 4000,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "partial provider input and cache survive sync without fabricated output",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6,
+          "cachedInputTokens": 1
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6,
+          "cachedInputTokens": 1
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": 6,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": 1,
+        "reasoningTokens": null,
+        "costPriceVersion": "desktop-provider-reported-v1",
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 7,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "known zero output",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "outputTokens": 0
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "outputTokens": 0
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": null,
+        "outputTokens": 0,
+        "totalTokens": null,
+        "cachedInputTokens": null,
+        "reasoningTokens": null,
+        "costPriceVersion": "desktop-provider-reported-v1",
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 7,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "known zero cache",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "desktop-provider-reported-v1",
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 7,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "only reasoning",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": null,
+        "reasoningTokens": 2,
+        "costPriceVersion": "desktop-provider-reported-v1",
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 7,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "only total",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "totalTokens": 9
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "totalTokens": 9
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": 9,
+        "cachedInputTokens": null,
+        "reasoningTokens": null,
+        "costPriceVersion": "desktop-provider-reported-v1",
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 7,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "partial reported counters outrank conflicting estimates",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE",
+        "estimatedUsage": {
+          "inputTokens": 999,
+          "outputTokens": 888
+        }
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": "PROVIDER_RESPONSE",
+        "estimatedUsage": {
+          "inputTokens": 999,
+          "outputTokens": 888
+        }
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": 6,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": null,
+        "reasoningTokens": null,
+        "costPriceVersion": "desktop-provider-reported-v1",
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 7,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "legacy unknown source USD amount",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 1000000,
+        "currencyCode": "USD"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 1000000,
+        "currencyCode": "USD"
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": 6,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": null,
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 1000000,
+        "costSource": null
+      }
+    },
+    {
+      "name": "legacy null source CNY zero",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 0,
+        "currencyCode": "CNY",
+        "costSource": null
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 0,
+        "currencyCode": "CNY",
+        "costSource": null
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": 6,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": null,
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 0,
+        "costSource": null
+      }
+    },
+    {
+      "name": "legacy unknown source retains price version",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": null,
+        "costPriceVersion": "legacy-tariff-v1"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "CNY",
+        "costPriceVersion": "foreign-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "qwen3.7-plus",
+          "displayName": "Qwen3.7 Plus"
+        },
+        "usage": {
+          "inputTokens": 6,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 7,
+        "currencyCode": "CNY",
+        "costSource": null,
+        "costPriceVersion": "legacy-tariff-v1"
+      },
+      "expectedPortable": {
+        "modelId": "qwen3.7-plus",
+        "modelDisplayName": "Qwen3.7 Plus",
+        "inputTokens": 6,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "legacy-tariff-v1",
+        "costCurrencyCode": "CNY",
+        "costTotalMicros": 7,
+        "costSource": null
+      }
+    },
+    {
+      "name": "provider basis and currency survive an unknown total",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "USD",
+        "costPriceVersion": "remote-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "deepseek-flash",
+        "modelDisplayName": "DeepSeek Flash",
+        "inputTokens": 5083,
+        "outputTokens": 3361,
+        "totalTokens": 8444,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costTotalMicros": null,
+        "costCurrencyCode": "USD",
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "explicit estimate metadata survives an unknown total",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": null,
+        "currencyCode": "CNY",
+        "costPriceVersion": "partial-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "USD",
+        "costPriceVersion": "remote-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": null,
+        "currencyCode": "CNY",
+        "costPriceVersion": "partial-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedPortable": {
+        "modelId": "deepseek-flash",
+        "modelDisplayName": "DeepSeek Flash",
+        "inputTokens": 5083,
+        "outputTokens": 3361,
+        "totalTokens": 8444,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costTotalMicros": null,
+        "costCurrencyCode": "CNY",
+        "costPriceVersion": "partial-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      }
+    },
+    {
+      "name": "unknown source keeps unpriced historical metadata",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": null,
+        "currencyCode": "EUR",
+        "costPriceVersion": "historical-unpriced-v1",
+        "costSource": null
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "USD",
+        "costPriceVersion": "remote-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": null,
+        "currencyCode": "EUR",
+        "costPriceVersion": "historical-unpriced-v1",
+        "costSource": null
+      },
+      "expectedPortable": {
+        "modelId": "deepseek-flash",
+        "modelDisplayName": "DeepSeek Flash",
+        "inputTokens": 5083,
+        "outputTokens": 3361,
+        "totalTokens": 8444,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costTotalMicros": null,
+        "costCurrencyCode": "EUR",
+        "costPriceVersion": "historical-unpriced-v1",
+        "costSource": null
+      }
+    },
+    {
+      "name": "explicit zero keeps unknown currency and tariff",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": 0,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "USD",
+        "costPriceVersion": "remote-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": 0,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "deepseek-flash",
+        "modelDisplayName": "DeepSeek Flash",
+        "inputTokens": 5083,
+        "outputTokens": 3361,
+        "totalTokens": 8444,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costTotalMicros": 0,
+        "costCurrencyCode": null,
+        "costPriceVersion": null,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "known amount keeps unknown source currency and tariff",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": 7,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "USD",
+        "costPriceVersion": "remote-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": 7,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "expectedPortable": {
+        "modelId": "deepseek-flash",
+        "modelDisplayName": "DeepSeek Flash",
+        "inputTokens": 5083,
+        "outputTokens": 3361,
+        "totalTokens": 8444,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costTotalMicros": 7,
+        "costCurrencyCode": null,
+        "costPriceVersion": null,
+        "costSource": null
+      }
+    },
+    {
+      "name": "local returned model identity survives a remote estimate",
+      "local": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": 17,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-v1",
+        "costSource": "PROVIDER_RESPONSE",
+        "actualModelId": "deepseek-flash-synthetic-returned"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 9,
+          "outputTokens": 11,
+          "totalTokens": 20,
+          "cachedInputTokens": 1,
+          "reasoningTokens": 2
+        },
+        "chargeMicros": 99,
+        "currencyCode": "USD",
+        "costPriceVersion": "remote-estimate-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "deepseek-flash",
+          "displayName": "DeepSeek Flash"
+        },
+        "usage": {
+          "inputTokens": 5083,
+          "outputTokens": 3361,
+          "totalTokens": 8444,
+          "cachedInputTokens": 0,
+          "reasoningTokens": null
+        },
+        "chargeMicros": 17,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-v1",
+        "costSource": "PROVIDER_RESPONSE",
+        "actualModelId": "deepseek-flash-synthetic-returned"
+      },
+      "expectedPortable": {
+        "modelId": "deepseek-flash",
+        "modelDisplayName": "DeepSeek Flash",
+        "inputTokens": 5083,
+        "outputTokens": 3361,
+        "totalTokens": 8444,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costTotalMicros": 17,
+        "costCurrencyCode": "USD",
+        "costPriceVersion": "provider-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "unpriced provider metadata fills an existing unknown record",
+      "unpricedMetadata": true,
+      "local": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73
+        },
+        "chargeMicros": null,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-pending-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": null,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "unpriced compatible currency and tariff facts complement each other",
+      "unpricedMetadata": true,
+      "local": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": null,
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": null,
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "provider-pending-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": null,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "unpriced conflicting currency keeps the original basis",
+      "unpricedMetadata": true,
+      "local": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "original-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "CNY",
+        "costPriceVersion": "original-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "original-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedPortable": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": "original-v1",
+        "costCurrencyCode": "USD",
+        "costTotalMicros": null,
+        "costSource": "PROVIDER_RESPONSE"
+      }
+    },
+    {
+      "name": "unpriced conflicting reported counts keep their original report",
+      "unpricedMetadata": true,
+      "local": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73
+        },
+        "chargeMicros": null,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 74,
+          "outputTokens": 19,
+          "totalTokens": 93
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73
+        },
+        "chargeMicros": null,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "expectedPortable": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Requested model",
+        "inputTokens": 73,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": null,
+        "reasoningTokens": null,
+        "costPriceVersion": null,
+        "costCurrencyCode": null,
+        "costTotalMicros": null,
+        "costSource": null
+      }
+    },
+    {
+      "name": "unpriced estimates do not relabel unknown provider facts",
+      "unpricedMetadata": true,
+      "local": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73
+        },
+        "chargeMicros": null,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "CNY",
+        "costPriceVersion": "estimate-pending-v1",
+        "costSource": "LOCAL_ESTIMATE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73
+        },
+        "chargeMicros": null,
+        "currencyCode": null,
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "expectedPortable": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Requested model",
+        "inputTokens": 73,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cachedInputTokens": null,
+        "reasoningTokens": null,
+        "costPriceVersion": null,
+        "costCurrencyCode": null,
+        "costTotalMicros": null,
+        "costSource": null
+      }
+    },
+    {
+      "name": "known money is not relabeled by unpriced metadata",
+      "unpricedMetadata": true,
+      "local": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 630,
+        "currencyCode": "USD",
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "remote": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": null,
+        "currencyCode": "USD",
+        "costPriceVersion": "provider-pending-v1",
+        "costSource": "PROVIDER_RESPONSE"
+      },
+      "expectedFacts": {
+        "modelSnapshot": {
+          "modelId": "requested-model",
+          "displayName": "Requested model"
+        },
+        "usage": {
+          "inputTokens": 73,
+          "outputTokens": 19,
+          "totalTokens": 92,
+          "cachedInputTokens": 0
+        },
+        "chargeMicros": 630,
+        "currencyCode": "USD",
+        "costPriceVersion": null,
+        "costSource": null
+      },
+      "expectedPortable": {
+        "modelId": "requested-model",
+        "modelDisplayName": "Requested model",
+        "inputTokens": 73,
+        "outputTokens": 19,
+        "totalTokens": 92,
+        "cachedInputTokens": 0,
+        "reasoningTokens": null,
+        "costPriceVersion": null,
+        "costCurrencyCode": "USD",
+        "costTotalMicros": 630,
+        "costSource": null
+      }
+    }
+  ],
+  "forbiddenPortableFields": [
+    "contextWindowTokens",
+    "serviceId",
+    "providerId",
+    "rawProviderPayload",
+    "actualModelId"
+  ]
+}

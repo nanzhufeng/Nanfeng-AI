@@ -1,20 +1,29 @@
-import { createAttachmentReadingGrant } from './attachment-input-policy.mjs';
-import { modelSettingsProviderTarget, installModelSettingsKeyboardNavigation } from './model-settings-browser.mjs';
-import { autoCandidate, conversationAutoMimeTypes } from "./auto-chat-routing.mjs";
-import { RELAYCORE_MODELS, relayCoreEgressVersion, relayCoreNeedsCompanion, createLunaRetrievalGrant } from './relaycore-models.mjs';
-import { usesIndependentSearch, createSearchServiceGrant, retrySearchMaterial } from './independent-web-search.mjs';
-import { WORKSPACES_VISIBLE, canOpenDataArea } from './product-scope.mjs';
+import { createInlineTitleEditor } from './inline-conversation-title.mjs';
+import {RELAYCORE_MODELS,relayCoreModel,relayCoreFooterName} from './relaycore-models.mjs';
 import { DesktopAppEntry } from './desktop-app-entry.mjs';
 import { generationRefreshInterval, hasRunningGeneration } from './generation-continuity.mjs';
-import { createUtilityPageNavigation } from './utility-page-navigation.mjs';
-import { commitRetainedChatShell, commitRuntimeChatShell, installRuntimeChatScrolling } from './runtime-chat-commit.mjs';
+import { createModelSettingsController } from './model-settings-controller.mjs';
+import { modelSettingsProviderTarget, installModelSettingsKeyboardNavigation, preserveModelSettingsFocus } from './model-settings-browser.mjs';
+import { workspaceUiEnabled, chatUiActionAllowed, chatUiRoute } from './chat-ui-policy.mjs';
+import { recordDomainConflict, renderDomainConflict, reloadDomainEditor, memorySummaryValue, updateMemorySummaryDraft } from './domain-editor-conflict.mjs';
+import { readKnowledgeDuplicates, renderKnowledgeDuplicates } from './knowledge-duplicates.mjs';
+import { preserveSettingsPickerFocus, installModalLayerOwner, installActionMenuLayerOwner, installComposerTransientLayerOwner, installMessageMenuLayerOwner } from './modal-layer-owner.mjs';
+import { resizeComposer } from './composer-size.mjs';
+import { readComposerDraftRoute, createDraftCloseGuard, transitionComposerDraftRoute, retainNewerConversationSelection } from './composer-draft-recovery.mjs';
+import { createLocalWriteBarrier } from './local-write-barrier.mjs';
+import { createDraftWriteQueue } from './draft-write-queue.mjs';
+import { renderSafeMarkdown } from './safe-markdown.mjs';
+import { createPdfKnowledgeController } from './pdf-knowledge-tasks.mjs';
+import { createWebKnowledgeController } from './web-knowledge-tasks.mjs';
 import { renderAnswerInformation } from './answer-information.mjs';
 import { cloudReadFeedback } from './cloud-read-feedback.mjs';
-import { installModalLayerOwner, installActionMenuLayerOwner } from './modal-layer-owner.mjs';
-import { resizeComposer } from './composer-size.mjs';
-import { renderSafeMarkdown } from './safe-markdown.mjs';
+import { createUtilityPageNavigation } from './utility-page-navigation.mjs';
+import { installRuntimeChatScrolling, commitRuntimeChatShell, commitRetainedChatShell } from './runtime-chat-commit.mjs';
 import { sourceDisplayTitle } from './source-link-presentation.mjs';
 import { createSearchResultCache } from './search-result-cache.mjs';
+import { attachmentPreviewKey } from './attachment-preview-key.mjs';
+import { conversationBranchLeaves } from './conversation-message-order.mjs';
+import { memorySummarySuggestion } from './memory-summary-policy.mjs';
 import { mergeCloudConversationList } from './cloud-conversation-list-merge.mjs';
 import { createCloudConversationOpenRoute } from './cloud-conversation-open-route.mjs';
 import { syncSelectedContinuation } from './selected-conversation-continuation.mjs';
@@ -43,15 +52,21 @@ import { renderDesktopTranscriptionPage, TRANSCRIPTION_PREVIEW_STATE } from './d
 import { renderDesktopRemindersPage } from './desktop-reminders-page.mjs';
 import { reminderNotificationAction, reminderNotificationExtra } from './reminder-notification-routing.mjs';
 import { createConversationLongPressController } from './conversation-long-press.mjs';
-import { conversationFindScrollTop, createConversationFindInputController } from './conversation-find-interaction.mjs';
+import { conversationFindScrollTop, conversationFindTarget, createConversationFindInputController } from './conversation-find-interaction.mjs';
 import { isWorkspaceRoot, resolveWorkConversationState } from './workspace-view.mjs';
+import { invokeForDataArea, invokeForAuthorizedDataAreaOperation } from './data-area-invoke.mjs';
 
 const app = document.querySelector('#app');
 installModalLayerOwner(app);
 installActionMenuLayerOwner(app);
+installComposerTransientLayerOwner(app, ({ navigateBack = false } = {}) => closeTopOverlay({ navigateComposerLayerBack: navigateBack }));
+installMessageMenuLayerOwner(app, () => closeTopOverlay());
 installRuntimeChatScrolling(app);
 window.addEventListener('error', event => { console.error('Desktop runtime error', event.error || event.message); });
-window.addEventListener('unhandledrejection', event => { console.error('Desktop async runtime error', event.reason); });
+window.addEventListener('unhandledrejection', event => {
+  if (event.reason?.code === 'STALE_DATA_AREA') { event.preventDefault(); return; }
+  console.error('Desktop async runtime error', event.reason);
+});
 const tauriBridge = window.__TAURI__?.core ?? window.__TAURI_INTERNALS__;
 const native = Boolean(tauriBridge?.invoke);
 const c09ReminderPreview = native ? '' : new URLSearchParams(window.location.search).get('c09ReminderPreview') || '';
@@ -84,13 +99,30 @@ const fixture = {
 };
 const previewConnection = { connection: 'ONLINE_CONFIGURATION_REQUIRED', providerConfiguration: 'NOT_CONFIGURED', credentialPresence: 'MISSING', catalogFreshness: 'NOT_AVAILABLE', egressConsent: 'REQUIRED_PER_INTENT', syncCapability: 'ENCRYPTED_SYNC_NOT_CONFIGURED', degradedReasons: ['NO_CREDENTIAL', 'CATALOG_UNAVAILABLE', 'NETWORK_UNVERIFIED', 'EGRESS_CONSENT_REQUIRED', 'SYNC_NOT_CONFIGURED'] };
 const settingsLocalKey = 'nanfeng-ai.desktop.settings.sidebar-width.v1';
+// The selected settings tab is a view preference; service configuration and
+// credentials remain owned by native SQLite and the private credential store.
+const modelProviderTabKey = 'nanfeng-ai.desktop.settings.model-provider-tab.v1';
 // This stores only local workspace/conversation IDs. Row content remains in
 // Rust-owned SQLite, so the list can return after restart without a network read.
 const cloudConversationCacheKey = 'nanfeng-ai.desktop.sync-cloud-list.v1';
+function areaCloudConversationCacheKey(owner = state) {
+  return owner.dataArea === 'WORK' ? `${cloudConversationCacheKey}.WORK` : cloudConversationCacheKey;
+}
 const parityPreferences = new DesktopParityPreferences(window.localStorage);
 const systemDarkQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
 function readSidebarWidth() { try { return clampDesktopSidebarWidth(Number(localStorage.getItem(settingsLocalKey)), window.innerWidth); } catch { return 256; } }
 function persistSidebarWidth(width) { try { localStorage.setItem(settingsLocalKey, String(width)); } catch { /* browser preview may deny local storage */ } }
+function readModelProviderTab() {
+  try {
+    const saved = localStorage.getItem(modelProviderTabKey);
+    if (MODEL_SERVICE_PREVIEW_SETTINGS.some(item => item.providerId === saved)) return saved;
+  } catch { /* browser preview may deny local storage */ }
+  return 'OPENROUTER';
+}
+function persistModelProviderTab(providerId) {
+  if (!MODEL_SERVICE_PREVIEW_SETTINGS.some(item => item.providerId === providerId)) return;
+  try { localStorage.setItem(modelProviderTabKey, providerId); } catch { /* browser preview may deny local storage */ }
+}
 function dedupeCloudConversationEntries(entries) {
   const seen = new Set();
   return (Array.isArray(entries) ? entries : []).filter(item => {
@@ -103,13 +135,14 @@ function dedupeCloudConversationEntries(entries) {
     return true;
   });
 }
-function readCloudConversationCache() {
+const cloudConversationEntryLimit = 10_000;
+function readCloudConversationCache(owner = state) {
   try {
-    const cached = JSON.parse(window.localStorage.getItem(cloudConversationCacheKey) || 'null');
+    const cached = JSON.parse(window.localStorage.getItem(areaCloudConversationCacheKey(owner)) || 'null');
     if (![1, 2].includes(cached?.version) || typeof cached.email !== 'string' || !Array.isArray(cached.entries)) return null;
     return {
       email: cached.email,
-      entries: dedupeCloudConversationEntries(cached.entries).slice(0, 200).map(item => ({
+      entries: dedupeCloudConversationEntries(cached.entries).map(item => ({
         workspaceId: item.workspaceId,
         conversationId: item.conversationId ?? item.id,
         // This is presentation state for the cloud list only. It must never
@@ -119,33 +152,111 @@ function readCloudConversationCache() {
     };
   } catch { return null; }
 }
-function persistCloudConversationCache(rows = state.cloudConversations) {
-  const email = state.accountSync?.email;
+function persistCloudConversationCache(rows = state.cloudConversations, owner = state) {
+  const email = owner.accountSync?.email;
   if (!email) return;
   const entries = dedupeCloudConversationEntries(rows).map(item => ({ workspaceId: item.workspaceId, conversationId: item.id, cloudPinned: Boolean(item.cloudPinned) }));
-  try { window.localStorage.setItem(cloudConversationCacheKey, JSON.stringify({ version: 2, email, entries })); } catch { /* cache is optional */ }
+  try { window.localStorage.setItem(areaCloudConversationCacheKey(owner), JSON.stringify({ version: 2, email, entries })); } catch { /* cache is optional */ }
 }
 function clearCloudConversationCache() {
-  try { window.localStorage.removeItem(cloudConversationCacheKey); } catch { /* cache is optional */ }
+  try {
+    window.localStorage.removeItem(cloudConversationCacheKey);
+    window.localStorage.removeItem(`${cloudConversationCacheKey}.WORK`);
+  } catch { /* cache is optional */ }
 }
 const initialProductSettings = parityPreferences.readProductSettings();
-function createAreaState(dataArea = 'CHAT') { return { dataArea, workspaces: [], current: null, pane: 'chat', selectedConversationId: null, sidebarConversationList: 'recent', cloudConversations: [], batchEditing: false, batchSelectedConversationKeys: new Set(), chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', accountSyncProgress: null, scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchRevealTarget: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构', buildEpochSeconds: 0 } }; }
-let state = createAreaState();
-state.inlineConversationRename = null;
+function createAreaState(dataArea = 'CHAT') { return { dataArea, workspaces: [], current: null, pane: 'chat', selectedConversationId: null, sidebarConversationList: 'recent', cloudConversations: [], batchEditing: false, batchSelectedConversationKeys: new Set(), chatgptTask: null, claudeTask: null, p6kTask: null, markdownKnowledgeTask: null, markdownKnowledgeTasks: [], markdownKnowledgeHasMore: false, jsonKnowledgeTask: null, jsonKnowledgeTasks: [], jsonKnowledgeHasMore: false, pdfKnowledgeTask: null, pdfKnowledgeTasks: [], pdfKnowledgeHasMore: false, webKnowledgeTask: null, webKnowledgeTasks: [], webKnowledgeHasMore: false, jsonKnowledgeExportReceipt: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: readModelProviderTab(), modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', accountSyncProgress: null, scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchRevealTarget: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构' } }; }
+function initializeAreaState(areaState) {
+  areaState.selectedWorkProjectId = null;
+  areaState.assistantMessageMenu = null;
+  areaState.cloudConversationOpening = null;
+  areaState.pendingNewConversationModelId = undefined;
+  areaState.p6gModelPickerTier = null;
+  areaState.modelCredentialDraft = '';
+  areaState.transcription = { settings: { ...TRANSCRIPTION_PREVIEW_STATE.settings }, tasks: [] };
+  areaState.transcriptionMode = 'document';
+  areaState.selectedTranscriptionTaskId = null;
+  areaState.transcriptionBusyTaskId = null;
+  areaState.searchLocatedArchivedConversationId = null;
+  areaState.searchReturnActive = false;
+  areaState.appSettingsRevision = 0;
+  areaState.settingsCapabilities = { ...DESKTOP_SETTINGS_CAPABILITIES };
+  areaState.accountSync = { configured: false, state: 'NOT_CONFIGURED', recoveryState: 'UNAVAILABLE', periodicEnabled: false, rotationPending: false, selectedConversationCount: 0, diagnostics: [], notifications: [] };
+  areaState.accountRecovery = null;
+  areaState.historyKnowledge = { enabled: false, paused: true, lastDispatchedAtMs: null, nextEligibleAtMs: null, candidates: [] };
+  areaState.settingsScrollPositions = new Map();
+  areaState.settingsConversationReturn = null;
+  areaState.workspaceReturn = null;
+  areaState.memorySummaryNotice = '';
+  areaState.sidebarScrollTop = 0;
+  areaState.reminders = { drafts: [], plans: [], diagnostics: [] };
+  areaState.reminderEditor = null;
+  areaState.reminderNotificationPermission = 'default';
+  areaState.reminderNotificationBridge = { supported: false, initialized: false, listenerReady: false, safeCode: 'NOT_READ', pendingActionCount: 0 };
+  areaState.selectedReminderPlanId = null;
+  areaState.backgroundRuntime = { desiredEnabled: false, installed: false, safeCode: 'NOT_READ', label: '', updatedAtMs: 0 };
+  areaState.conversationReadState = { workspaceId: null, conversations: [] };
+  areaState.unreadConversationIds = new Set();
+  areaState.manualUnreadAtMs = new Map();
+  areaState.pendingCreatedConversationRouteWorkspaceId = null;
+  areaState.pendingChatSubmission = null;
+  areaState.localBackupArea = areaState.dataArea;
+  areaState.archivePreview = null;
+  areaState.v2CommittedExchanges = [];
+  areaState.nanfengKnowledgeTask = null;
+  areaState.chatSearch = '';
+  return areaState;
+}
+let state = initializeAreaState(createAreaState());
 const dataAreaStates = new Map([['CHAT', state]]);
-const desktopAppEntry = new DesktopAppEntry(window.localStorage);
-let desktopWorkspaceRefreshGeneration = 0;
-
-state.selectedWorkProjectId = null;
-state.assistantMessageMenu = null;
-state.cloudConversationOpening = null;
+function invalidateAccountCloudLists() {
+  for (const owner of dataAreaStates.values()) {
+    advanceCloudListRead(owner);
+    cloudListReadPending.delete(owner);
+    owner.cloudConversations = [];
+    owner.accountRecovery = null;
+    owner.accountSyncProgress = null;
+  }
+}
+function selectedBackupAreaState() {
+  const area = state.runtimeInfo?.dataAreasReady && ['CHAT', 'WORK'].includes(state.localBackupArea)
+    ? state.localBackupArea : state.dataArea;
+  if (area === state.dataArea) return state;
+  let owner = dataAreaStates.get(area);
+  if (!owner) {
+    owner = initializeAreaState(createAreaState(area));
+    dataAreaStates.set(area, owner);
+  }
+  return owner;
+}
+const invokeSelectedBackup = (owner, command, args = {}) => invokeForDataArea(tauriBridge, command, args, owner, selectedBackupAreaState);
+let areaSwitchPending = false;
+let areaReferencePending = false;
+let startupUiStage = native ? 'pending' : 'ready';
+let queuedStartupAreaRoute = null;
 globalThis.__nanfengDesktopWorkState = state;
+// Presentation policy intercepts retired routes before any business handler.
+app.addEventListener('click', event => {
+  const control = event.target.closest?.('[data-action]');
+  if (control && !chatUiActionAllowed(control.dataset.action, control.dataset, state.runtimeInfo)) {
+    event.preventDefault(); event.stopImmediatePropagation();
+  }
+}, true);
+
 let transientToast = null;
 let transientToastTimer = null;
 let accountSyncProgressResultTimer = null;
-let cloudListReadGeneration = 0;
-let cloudListReadPending = false;
+const cloudListReadGenerations = new WeakMap();
+const cloudListReadPending = new WeakMap();
+function advanceCloudListRead(owner = state) {
+  const generation = (cloudListReadGenerations.get(owner) || 0) + 1;
+  cloudListReadGenerations.set(owner, generation);
+  return generation;
+}
+function currentCloudListRead(owner) { return cloudListReadGenerations.get(owner) || 0; }
+let cloudOpenAreaGeneration = 0;
 const pendingSyncReconciliations = new Set();
+const accountSyncReadGenerations = new WeakMap();
 
 const openCloudConversationRoute = createCloudConversationOpenRoute({
   reuse: ({ workspaceId, conversationId }) => {
@@ -154,13 +265,13 @@ const openCloudConversationRoute = createCloudConversationOpenRoute({
     return {
       current,
       history: state.history,
-      alreadySelected: !state.cloudConversationOpening && state.pane === 'chat' && state.selectedConversationId === conversationId,
+      alreadySelected: !state.cloudConversationOpening && state.pane === (state.dataArea === 'WORK' ? 'work' : 'chat') && state.selectedConversationId === conversationId,
     };
   },
-  load: async ({ workspaceId, conversationId }) => {
+  load: async ({ workspaceId, conversationId, areaOwner }) => {
     const [current, history] = await Promise.all([
-      invoke('read_desktop_workspace', { workspaceId }),
-      invoke('read_desktop_workbench_history', { workspaceId }),
+      invoke('read_desktop_workspace', { workspaceId }, areaOwner),
+      invoke('read_desktop_workbench_history', { workspaceId }, areaOwner),
     ]);
     if (!resolveConversation(current, conversationId)) throw new Error('云端会话详情暂不可用，请先读取云端列表后重试。');
     return { current, history };
@@ -168,7 +279,10 @@ const openCloudConversationRoute = createCloudConversationOpenRoute({
   // Model preferences decorate the composer only. They are intentionally read
   // after the selected conversation is on screen, so a short SQLite delay can
   // never leave a cloud click looking like an empty new conversation.
-  loadPreferences: ({ workspaceId, conversationId }) => invoke('read_desktop_p6g_selection', { workspaceId, conversationId }),
+  loadPreferences: ({ workspaceId, conversationId, areaOwner, areaGeneration }) => {
+    if (areaOwner !== state || areaGeneration !== cloudOpenAreaGeneration) return null;
+    return invoke('read_desktop_p6g_selection', { workspaceId, conversationId }, areaOwner);
+  },
   onPending: route => {
     state.cloudConversationOpening = route;
     state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
@@ -179,8 +293,13 @@ const openCloudConversationRoute = createCloudConversationOpenRoute({
     render();
   },
   onOpened: (route, { current, history }) => {
+    if (route.areaOwner !== state || route.areaGeneration !== cloudOpenAreaGeneration) return;
     state.current = current;
     state.history = history;
+    if (state.dataArea === 'WORK') {
+      const opened = (current?.exchange?.conversations || []).find(item => item.id === route.conversationId);
+      state.selectedWorkProjectId = opened?.projectId || null;
+    }
     state.selectedConversationId = route.conversationId;
     state.cloudConversationOpening = null;
     state.p6gSelection = null;
@@ -193,39 +312,32 @@ const openCloudConversationRoute = createCloudConversationOpenRoute({
     render();
   },
   onPreferences: (route, selection) => {
+    if (route.areaOwner !== state || route.areaGeneration !== cloudOpenAreaGeneration) return;
     if (state.current?.summary?.id !== route.workspaceId || state.selectedConversationId !== route.conversationId) return;
-    state.p6gSelection = selection;
-    state.conversationPreferences = selection?.conversationOverride || { revision: 0, toneOverride: null, webSearchOverride: null };
+    state.p6gSelection = retainNewerConversationSelection(state.p6gSelection, selection, route.conversationId);
+    state.conversationPreferences = state.p6gSelection?.conversationOverride || { revision: 0, toneOverride: null, webSearchOverride: null };
     render();
   },
   onPreferencesFailure: () => {
     // The transcript is already visible. Preference reads may retry naturally
     // on the next selection; never replace content with a secondary failure.
   },
-  onFailure: (_route, error) => {
+  onFailure: (route, error) => {
+    if (route.areaOwner !== state || route.areaGeneration !== cloudOpenAreaGeneration) return;
     state.cloudConversationOpening = null;
     state.error = `云端会话未打开：${String(error)}`;
     render();
   },
 });
 
-const foregroundToastHost = document.createElement('div');
-document.body.append(foregroundToastHost);
-window.addEventListener('blur', () => {
-  transientToast = null;
-  window.clearTimeout(transientToastTimer);
-  foregroundToastHost.innerHTML = '';
-});
-
 function showTransientToast(message, kind = 'success') {
-  if (!message || !document.hasFocus() || document.visibilityState !== 'visible') return;
   transientToast = { message, kind };
   window.clearTimeout(transientToastTimer);
-  foregroundToastHost.innerHTML = transientToastMarkup();
+  render();
   transientToastTimer = window.setTimeout(() => {
     transientToast = null;
-    foregroundToastHost.innerHTML = '';
-  }, kind === 'error' ? 8000 : 2600);
+    render();
+  }, 2600);
 }
 
 const ACCOUNT_SYNC_PROGRESS_MIN_VISIBLE_MS = 520;
@@ -243,27 +355,26 @@ function waitForAccountSyncProgressPaint() {
   return new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
 }
 
-async function completeAccountSyncProgress(message, kind = 'success') {
-  const startedAt = state.accountSyncProgress?.startedAt;
+async function completeAccountSyncProgress(message, kind = 'success', owner = state) {
+  const progressOwner = owner.accountSyncProgress;
+  const startedAt = progressOwner?.startedAt;
   if (Number.isFinite(startedAt)) {
     const remaining = ACCOUNT_SYNC_PROGRESS_MIN_VISIBLE_MS - (performance.now() - startedAt);
     if (remaining > 0) await new Promise(resolve => window.setTimeout(resolve, remaining));
   }
-  const completedProgress = { ...state.accountSyncProgress, result: { message, kind } };
-  state.accountSyncProgress = completedProgress;
+  if (state !== owner || owner.accountSyncProgress !== progressOwner) return;
+  const completedProgress = { ...owner.accountSyncProgress, result: { message, kind } };
+  owner.accountSyncProgress = completedProgress;
   window.clearTimeout(accountSyncProgressResultTimer);
   render();
   accountSyncProgressResultTimer = window.setTimeout(() => {
-    if (state.accountSyncProgress === completedProgress) {
-      state.accountSyncProgress = null;
+    if (state === owner && owner.accountSyncProgress === completedProgress) {
+      owner.accountSyncProgress = null;
       render();
     }
-  }, kind === 'success' ? ACCOUNT_SYNC_RESULT_VISIBLE_MS : 8000);
+  }, ACCOUNT_SYNC_RESULT_VISIBLE_MS);
 }
 let composerModelPricingRefreshTimer = null;
-state.pendingNewConversationModelId = undefined;
-state.p6gModelPickerTier = null;
-
 if (c16PreviewState) {
   state.appearance = {
     mode: c16PreviewState.appearance.mode,
@@ -272,62 +383,88 @@ if (c16PreviewState) {
   };
 }
 
-state.modelCredentialDraft = '';
-state.transcription = { settings: { ...TRANSCRIPTION_PREVIEW_STATE.settings }, tasks: [] };
-state.transcriptionMode = 'document';
-state.selectedTranscriptionTaskId = null;
-state.transcriptionBusyTaskId = null;
-state.searchLocatedArchivedConversationId = null;
-state.searchReturnActive = false;
-state.appSettingsRevision = 0;
-state.settingsCapabilities = { ...DESKTOP_SETTINGS_CAPABILITIES };
-state.accountSync = { configured: false, state: 'NOT_CONFIGURED', recoveryState: 'UNAVAILABLE', periodicEnabled: false, rotationPending: false, selectedConversationCount: 0, diagnostics: [], notifications: [] };
-state.accountRecovery = null;
 let accountSignInPending = false;
-state.historyKnowledge = { enabled: false, paused: true, lastDispatchedAtMs: null, nextEligibleAtMs: null, candidates: [] };
-state.settingsScrollPositions = new Map();
-state.settingsConversationReturn = null;
-state.workspaceReturn = null;
-state.memorySummaryNotice = '';
-state.sidebarScrollTop = 0;
-state.reminders = { drafts: [], plans: [], diagnostics: [] };
-state.reminderEditor = null;
-state.reminderNotificationPermission = 'default';
-state.reminderNotificationBridge = { supported: false, initialized: false, listenerReady: false, safeCode: 'NOT_READ', pendingActionCount: 0 };
-state.selectedReminderPlanId = null;
-state.backgroundRuntime = { desiredEnabled: false, installed: false, safeCode: 'NOT_READ', label: '', updatedAtMs: 0 };
-state.conversationReadState = { workspaceId: null, conversations: [] };
-state.unreadConversationIds = new Set();
-state.manualUnreadAtMs = new Map();
-state.pendingCreatedConversationRouteWorkspaceId = null;
+let accountSignInToken = 0;
 // A submitted message may move the viewport to its freshly-created reply once.
 // It is deliberately a content-free client receipt. Runtime events also fire for
 // every streaming checkpoint, accounting update and title update, so a workspace
 // or conversation ID alone is not sufficient to identify the originating Send.
-state.pendingChatSubmission = null;
 
+const ordinaryStopRequests = new WeakMap();
 let ordinaryChatRuntimeRefreshPending = null;
 let ordinaryChatRuntimeRefreshTimer = null;
 let ordinaryChatRuntimeRefreshInFlight = false;
+let ordinaryChatRuntimeVisibilityReadPending = false;
+// Share one advisory query and detach expired waits, bounding IPC and observers.
+let ordinaryChatRuntimeVisibilityQuery = null;
 
-function scheduleOrdinaryChatRuntimeRefresh() {
+async function scheduleOrdinaryChatRuntimeRefresh() {
+  if (ordinaryChatRuntimeRefreshTimer !== null || ordinaryChatRuntimeRefreshInFlight || ordinaryChatRuntimeVisibilityReadPending) return;
+  ordinaryChatRuntimeVisibilityReadPending = true;
+  let nativeHidden = false;
+  let visibilityDeadline = null;
+  try {
+    const nativeWindow = window.__TAURI__?.window?.getCurrentWindow?.();
+    if (nativeWindow) {
+      if (ordinaryChatRuntimeVisibilityQuery === null) {
+        const query = { waiters: new Set() };
+        ordinaryChatRuntimeVisibilityQuery = query;
+        const settleQuery = (succeeded, result) => {
+          if (ordinaryChatRuntimeVisibilityQuery === query) ordinaryChatRuntimeVisibilityQuery = null;
+          for (const receive of [...query.waiters]) receive(succeeded, result);
+          query.waiters.clear();
+        };
+        void Promise.all([
+          Promise.resolve().then(() => nativeWindow.isVisible()),
+          Promise.resolve().then(() => nativeWindow.isMinimized()),
+        ]).then(result => settleQuery(true, result), error => settleQuery(false, error));
+      }
+      const query = ordinaryChatRuntimeVisibilityQuery;
+      const [visible, minimized] = await new Promise((resolve, reject) => {
+        const receive = (succeeded, result) => {
+          query.waiters.delete(receive);
+          if (succeeded) resolve(result); else reject(result);
+        };
+        query.waiters.add(receive);
+        // A display deadline releases its waiter even if native IPC never settles.
+        visibilityDeadline = setTimeout(() => receive(true, [true, false]), 50);
+      });
+      nativeHidden = visible === false || minimized === true;
+    }
+  } catch {
+    // Window teardown or unavailable native reads must not block persisted updates.
+  } finally {
+    if (visibilityDeadline !== null) clearTimeout(visibilityDeadline);
+    ordinaryChatRuntimeVisibilityReadPending = false;
+  }
   if (ordinaryChatRuntimeRefreshTimer !== null || ordinaryChatRuntimeRefreshInFlight) return;
   ordinaryChatRuntimeRefreshTimer = window.setTimeout(() => {
     ordinaryChatRuntimeRefreshTimer = null;
     void flushOrdinaryChatRuntimeRefresh();
-  }, generationRefreshInterval(state, document.hidden));
+  }, generationRefreshInterval(state, document.hidden || nativeHidden));
 }
 
-async function syncPersistedConversationContinuation(workspaceId, conversationId) {
+async function syncPersistedConversationContinuation(workspaceId, conversationId, owner = state,
+  selection = { email: owner.accountSync?.email || null, keys: [...(owner.accountSync?.syncedConversationKeys || [])] }) {
   try {
-    const receipt = await syncSelectedContinuation({ invoke, workspaceId, conversationId,
-      syncedConversationKeys: state.accountSync?.syncedConversationKeys || [] });
+    const invokeOwner = (command, args) => invokeForAuthorizedDataAreaOperation(tauriBridge, command, args, owner);
+    if (!selection.email || !selection.keys.includes(`${workspaceId}:${conversationId}`)) return;
+    // The visible area's account cache can lag a sign-out or an A→B switch.
+    // Check the active native session before continuing the original selection.
+    const currentAccount = await invokeOwner('read_desktop_account_sync', {});
+    if (currentAccount?.email !== selection.email) return;
+    const receipt = await syncSelectedContinuation({ invoke: invokeOwner, workspaceId, conversationId,
+      syncedConversationKeys: selection.keys });
+    if (state !== owner || owner.current?.summary?.id !== workspaceId
+        || owner.selectedConversationId !== conversationId) return;
     if (receipt?.status === 'UNKNOWN') {
       state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
       scheduleUnknownSyncReconciliation(workspaceId, conversationId);
       state.error = '回复已保存在本机；云端提交结果正在核对，尚未确认同步完成。';
     }
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
+    if (state !== owner || owner.current?.summary?.id !== workspaceId
+        || owner.selectedConversationId !== conversationId) return;
     // A failed cloud write must never turn a completed provider request into
     // "message not submitted" or restore its draft for accidental resending.
     state.error = `回复已保存在本机，但云端续同步未完成：${String(error)}`;
@@ -335,8 +472,16 @@ async function syncPersistedConversationContinuation(workspaceId, conversationId
 }
 
 function queueOrdinaryChatRuntimeRefresh(payload) {
-  if (!payload?.workspaceId || state.current?.summary?.id !== payload.workspaceId) return;
-  ordinaryChatRuntimeRefreshPending = payload;
+  if (!payload?.workspaceId || (payload.dataArea || 'CHAT') !== state.dataArea
+    || state.current?.summary?.id !== payload.workspaceId) return;
+  // Submission acknowledgement is identity-bound, unlike coalesced display
+  // updates. Consume it before another conversation replaces the refresh slot.
+  claimSubmittedChatRoute(payload);
+  // Keep the accounting invalidation when another conversation replaces the display slot.
+  ordinaryChatRuntimeRefreshPending = { ...payload,
+    refreshUsageLedger: Boolean(ordinaryChatRuntimeRefreshPending?.refreshUsageLedger)
+      || ['COMPLETED', 'RESPONSE_COMMITTED', 'COMPLETED_ACCOUNTING_PENDING', 'FAILED', 'CANCELLED', 'UNKNOWN'].includes(payload.state),
+  };
   scheduleOrdinaryChatRuntimeRefresh();
 }
 
@@ -350,46 +495,59 @@ function createChatSubmissionId() {
   return `desktop-send-${Date.now().toString(36)}-${filled ? suffix : Math.random().toString(36).slice(2)}`;
 }
 
-function claimSubmittedChatRoute(payload) {
+function claimSubmittedChatRoute(payload, owner = state) {
   const conversationId = payload?.conversationId || null;
-  const pending = state.pendingChatSubmission;
+  const pending = owner.pendingChatSubmission;
   if (!conversationId || !pending
     || pending.workspaceId !== payload?.workspaceId
     || pending.clientSubmissionId !== payload?.clientSubmissionId) return false;
   if (pending.conversationId && pending.conversationId !== conversationId) {
-    state.pendingChatSubmission = null;
+    owner.pendingChatSubmission = null;
     return false;
   }
   if (!pending.conversationId
-    && !state.selectedConversationId
-    && state.pendingCreatedConversationRouteWorkspaceId === payload.workspaceId) {
-    state.selectedConversationId = conversationId;
-    state.pendingCreatedConversationRouteWorkspaceId = null;
+    && !owner.selectedConversationId
+    && owner.pendingCreatedConversationRouteWorkspaceId === payload.workspaceId) {
+    owner.selectedConversationId = conversationId;
+    owner.pendingCreatedConversationRouteWorkspaceId = null;
   }
-  const ownsSubmittedRoute = state.selectedConversationId === conversationId;
-  state.pendingChatSubmission = null;
+  const ownsSubmittedRoute = owner.selectedConversationId === conversationId;
+  owner.pendingChatSubmission = null;
   if (ownsSubmittedRoute) {
-    state.pendingChatSendScrollToLatestId = conversationId;
+    owner.pendingChatSendScrollToLatestId = conversationId;
   }
   return ownsSubmittedRoute;
 }
 
 async function flushOrdinaryChatRuntimeRefresh() {
   if (ordinaryChatRuntimeRefreshInFlight) return;
+  const owner = state;
   const payload = ordinaryChatRuntimeRefreshPending;
   ordinaryChatRuntimeRefreshPending = null;
   if (!payload) return;
+  if (state.dataArea && (payload.dataArea || 'CHAT') !== state.dataArea) return;
   if (state.current?.summary?.id !== payload.workspaceId) return;
   ordinaryChatRuntimeRefreshInFlight = true;
+  const navigationGeneration = desktopEntryRouteGeneration;
+  let snapshot = owner.current;
+  const ownsRead = () => state === owner && desktopEntryRouteGeneration === navigationGeneration
+    && owner.current === snapshot && snapshot?.summary?.id === payload.workspaceId;
   try {
     const current = await invoke('read_desktop_workspace', { workspaceId: payload.workspaceId });
-    if (state.current?.summary?.id !== payload.workspaceId) return;
-    state.current = current;
+    if (!ownsRead()) return;
+    owner.current = current;
+    snapshot = current;
     claimSubmittedChatRoute(payload);
     await loadConversationReadState({ observeSelected: true });
-    state.error = '';
+    if (!ownsRead()) return;
+    if (payload.refreshUsageLedger) {
+      await loadDesktopUsageLedger({ owner, isCurrent: ownsRead });
+      if (!ownsRead()) return;
+    }
+    owner.error = '';
     render({ runtimeRefresh: true });
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
+    if (!ownsRead() || error?.code === 'STALE_DATA_AREA') return;
     state.error = `聊天增量已持久化，但界面刷新失败：${String(error)}`;
     render({ runtimeRefresh: true });
   } finally {
@@ -398,29 +556,73 @@ async function flushOrdinaryChatRuntimeRefresh() {
   }
 }
 
+async function openGenerationIslandTask(task) {
+  if (!native || !['CHAT', 'WORK'].includes(task?.dataArea) || !task.workspaceId || !task.conversationId || !task.assistantMessageId) return;
+  if (task.dataArea === 'WORK' && !workspaceUiEnabled(state.runtimeInfo)) {
+    showTransientToast('工作区查看入口已隐藏，任务和数据仍保留。', 'error');
+    return;
+  }
+  const generation = ++desktopEntryRouteGeneration;
+  const ownsEntry = () => generation === desktopEntryRouteGeneration;
+  desktopAppEntry.enter(true);
+  openCloudConversationRoute.cancel();
+  try {
+    await flushOrdinaryComposerDraft();
+    if (state.temporaryConversation) await flushTemporaryDraft();
+    if (!ownsEntry()) return;
+    const pane = task.dataArea === 'WORK' ? 'work' : 'chat';
+    if (state.dataArea !== task.dataArea) await switchDataArea(task.dataArea, pane);
+    if (!ownsEntry() || state.dataArea !== task.dataArea) return;
+    const owner = state;
+    const areaGeneration = cloudOpenAreaGeneration;
+    const ownsRoute = () => ownsEntry() && state === owner && areaGeneration === cloudOpenAreaGeneration;
+    const projection = await invoke('read_desktop_workspace', { workspaceId: task.workspaceId }, owner);
+    if (!ownsRoute()) return;
+    const target = projection?.exchange?.conversations?.find(c => c.id === task.conversationId);
+    if (!target || target.deleted || !target.messages?.some(m => m.id === task.assistantMessageId)) throw new Error('任务对应的回答已不存在');
+    await flushOrdinaryComposerDraft();
+    if (!ownsRoute()) return;
+    composerDraftRouteGeneration += 1;
+    owner.current = projection;
+    owner.selectedConversationId = task.conversationId;
+    owner.temporaryConversation = null;
+    owner.entryResolved = true;
+    owner.pane = pane;
+    owner.profileOpen = false;
+    owner.p6gSelection = null;
+    owner.contextMenu = null;
+    owner.assistantMessageMenu = null;
+    resetComposerPresentation();
+    const selection = ++conversationSelectionGeneration;
+    await Promise.all([
+      loadConversationReadState({ observeSelected: true, isCurrent: ownsRoute }),
+      loadOrdinaryComposerDraft(),
+      loadConversationSelectionProjection(owner, task.workspaceId, task.conversationId, selection),
+    ]);
+    if (ownsRoute()) render();
+  } catch {
+    if (ownsEntry()) showTransientToast('对话未打开，请从历史列表查看。', 'error');
+  }
+}
+
 const tauriEvents = window.__TAURI__?.event;
-const ordinaryChatAttemptRegistry = new Set();
 if (native && tauriEvents?.listen) {
-  void tauriEvents.listen('nanfeng-island-open-v1', async event => {
-    const task=event.payload;
-    if (!task?.workspaceId || !task?.conversationId) return;
-    if (task.dataArea !== state.dataArea) { await switchDataArea(task.dataArea, 'chat'); if(task.dataArea !== state.dataArea) return; }
-    try {
-      await flushOrdinaryComposerDraft();
-      state.current=await invoke('read_desktop_workspace',{workspaceId:task.workspaceId});
-      state.selectedConversationId=task.conversationId;state.pane='chat';state.profileOpen=false;
-      await loadConversationReadState({observeSelected:true});await loadOrdinaryComposerDraft();render();
-    } catch {showTransientToast('对话未打开，请从历史列表查看。','error');}
+  void tauriEvents.listen('nanfeng-island-open-v1', event => { void openGenerationIslandTask(event?.payload); });
+  void tauriEvents.listen('desktop-ordinary-chat-runtime-v1', event => {
+    const payload = event?.payload || {};
+    if ((payload.dataArea || 'CHAT') === state.dataArea) queueOrdinaryChatRuntimeRefresh(payload);
   });
-  void tauriEvents.listen('desktop-ordinary-chat-runtime-v1', event => { if ((event?.payload?.dataArea || 'CHAT') === state.dataArea) queueOrdinaryChatRuntimeRefresh(event?.payload || {}); });
   void tauriEvents.listen('desktop-reminder-runtime-v1', async event => {
     if ((event?.payload?.dataArea || 'CHAT') !== state.dataArea) return;
+    const owner = state;
     try {
       await loadDesktopReminders();
       await loadDesktopUsageLedger();
       await flushReminderNotifications();
+      if (state !== owner) return;
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    } catch (error) {
+      if (state !== owner || error?.code === 'STALE_DATA_AREA') return;
       state.error = `提醒运行结果已保存在本机，但界面或通知回执未刷新：${String(error)}`;
     }
     render();
@@ -457,15 +659,20 @@ function applyC16Preview(surface = 'Browser') {
   applyAppearance();
 }
 
-function reloadFavoriteConversationIds() {
-  const runtimeRefresh = arguments[0]?.runtimeRefresh === true;
+function reloadFavoriteConversationIds({ runtimeRefresh = false } = {}) {
+  const owner = state;
   const workspaceId = state.current?.summary?.id;
   if (!workspaceId) { state.favoriteConversationIds = new Set(); return; }
   if (!native) { state.favoriteConversationIds = parityPreferences.readFavoriteConversationIds(workspaceId); return; }
+  const generation = advanceFavoriteRead(owner);
   void invoke('read_desktop_favorite_conversation_ids', { workspaceId }).then(ids => {
+    if (state !== owner || state.current?.summary?.id !== workspaceId
+        || favoriteReadGenerations.get(owner) !== generation) return;
     state.favoriteConversationIds = new Set(ids);
     render({ runtimeRefresh });
-  }).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
+  }).catch(error => {
+    if (state !== owner || state.current?.summary?.id !== workspaceId || error?.code === 'STALE_DATA_AREA'
+        || favoriteReadGenerations.get(owner) !== generation) return;
     state.error = `收藏会话读取失败：${String(error)}`;
     render({ runtimeRefresh });
   });
@@ -487,13 +694,26 @@ function activeRuntimeConversation(data, preferredConversationId = null) {
 async function refreshDesktopRuntimeWhilePending(workspaceId, preferredConversationId, isSettled) {
   const owner = state;
   while (!isSettled()) {
-    await new Promise(resolve => window.setTimeout(resolve, 1200));
-    if (isSettled() || state !== owner || state.current?.summary?.id !== workspaceId) continue;
-    // Backstop only: share the event queue so two reads cannot paint stale snapshots
-    // over one another. Polling has no submission receipt and cannot claim navigation.
-    if (ordinaryChatRuntimeRefreshInFlight || ordinaryChatRuntimeRefreshPending) continue;
-    ordinaryChatRuntimeRefreshPending = { workspaceId };
-    await flushOrdinaryChatRuntimeRefresh();
+    await new Promise(resolve => window.setTimeout(resolve, 120));
+    if (state !== owner) return;
+    if (isSettled() || state.current?.summary?.id !== workspaceId) continue;
+    // Runtime events and this polling backstop share one snapshot reader.
+    // A queued event will get a fresh read after this one finishes.
+    if (ordinaryChatRuntimeRefreshInFlight) continue;
+    ordinaryChatRuntimeRefreshInFlight = true;
+    const snapshot = owner.current;
+    const navigationGeneration = desktopEntryRouteGeneration;
+    try {
+      const current = await invoke('read_desktop_workspace', { workspaceId });
+      if (isSettled() || state !== owner || state.current !== snapshot
+        || desktopEntryRouteGeneration !== navigationGeneration || state.current?.summary?.id !== workspaceId) continue;
+      state.current = current;
+      render({ runtimeRefresh: true });
+    } catch { /* final command result owns user-visible errors */ }
+    finally {
+      ordinaryChatRuntimeRefreshInFlight = false;
+      if (ordinaryChatRuntimeRefreshPending) scheduleOrdinaryChatRuntimeRefresh();
+    }
   }
 }
 
@@ -505,8 +725,12 @@ function recomputeConversationFind({ resetIndex = false } = {}) {
 
 function focusCurrentFindMatch() {
   const query = state.conversationFindQuery;
+  const route = { owner: state, pane: state.pane, workspaceId: state.current?.summary?.id,
+    conversationId: state.selectedConversationId, index: state.conversationFindIndex };
   requestAnimationFrame(() => {
-    if (!state.conversationFindOpen || state.conversationFindQuery !== query) return;
+    if (state !== route.owner || state.pane !== route.pane || state.current?.summary?.id !== route.workspaceId
+        || state.selectedConversationId !== route.conversationId || state.conversationFindIndex !== route.index
+        || !state.conversationFindOpen || state.conversationFindQuery !== query) return;
     const input = document.querySelector('#conversation-find-input');
     if (input && document.activeElement !== input) {
       input.focus({ preventScroll: true });
@@ -515,7 +739,13 @@ function focusCurrentFindMatch() {
     const match = state.conversationFindMatches[state.conversationFindIndex];
     const message = match ? document.querySelector(`[data-message-id="${CSS.escape(match.messageId)}"]`) : null;
     const owner = message?.closest('.chat-scroll[data-scroll-owner="message-list"]');
-    const target = message?.querySelector('.chat-message-body mark') || message;
+    const target = conversationFindTarget(message, state.conversationFindMatches, state.conversationFindIndex);
+    for (const mark of document.querySelectorAll('.chat-message-body mark[data-conversation-find-current]')) {
+      mark.removeAttribute('data-conversation-find-current'); mark.removeAttribute('aria-current');
+    }
+    if (target?.tagName === 'MARK') {
+      target.setAttribute('data-conversation-find-current', 'true'); target.setAttribute('aria-current', 'true');
+    }
     if (!owner || !target) return;
     const ownerBounds = owner.getBoundingClientRect();
     const targetBounds = target.getBoundingClientRect();
@@ -528,7 +758,7 @@ function focusCurrentFindMatch() {
         targetTop: targetBounds.top,
         targetHeight: targetBounds.height,
       }),
-      behavior: 'smooth',
+      behavior: globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
     });
   });
 }
@@ -537,6 +767,210 @@ function safeMarkdownName(value) {
   const clean = String(value || '南枫 AI 会话').replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
   return `${clean.slice(0, 80) || '南枫 AI 会话'}.md`;
 }
+
+// All Markdown task requests capture the area/workspace before awaiting picker or IPC.
+async function loadMarkdownKnowledgeTask(owner = state) {
+  const workspaceId = owner.current?.summary?.id;
+  if (!native || !workspaceId) return;
+  const generation = owner.markdownKnowledgeReadGeneration = (owner.markdownKnowledgeReadGeneration || 0) + 1;
+  const [task, page] = await Promise.all([invoke('read_latest_desktop_markdown_knowledge', { workspaceId }, owner), invoke('list_desktop_markdown_knowledge_tasks', { workspaceId, offset: 0 }, owner)]);
+  if (owner.current?.summary?.id !== workspaceId || owner.markdownKnowledgeReadGeneration !== generation) return;
+  owner.markdownKnowledgeTask = task; owner.markdownKnowledgeTasks = page.tasks; owner.markdownKnowledgeHasMore = page.hasMore;
+  if (state === owner && owner.pane === 'knowledge') render();
+}
+function markdownKnowledgeTaskCard(task) {
+  if (!task) return '';
+  const labels = { SELECTED: '正在复制', AWAITING_CONFIRMATION: '等待逐项确认', PARTIALLY_COMPLETED: '部分已处理', COMPLETED: '已处理', FAILED: '导入失败', CANCELLED: '已取消' };
+  return `<section class="memory-rail markdown-knowledge-task" data-task-id="${escape(task.id)}"><div class="section-head"><h2>Markdown 导入 · ${escape(labels[task.status] || '待核对')}</h2></div><label>导入任务<select data-action="select-markdown-knowledge-task">${(state.markdownKnowledgeTasks || []).map(item => `<option value="${escape(item.id)}" ${item.id === task.id ? 'selected' : ''}>${escape(item.displayName)} · ${escape(labels[item.status] || item.status)}</option>`).join('')}</select></label>${state.markdownKnowledgeHasMore ? '<button data-action="more-markdown-knowledge-tasks">读取更多导入任务</button>' : ''}<p>${escape(task.displayName)} · 文件只保存在本机，确认前不会写入知识。</p>${task.safeErrorCode ? '<p class="security-note">文件未通过格式或安全校验。原任务已保留，可取消或从私有副本重新检查。</p>' : ''}<ul>${task.items.map(item => `<li><span>${escape(item.candidate.title)} · ${escape({ PENDING_CONFIRMATION: '待确认', CONFIRMED: '已保存', SKIPPED: '已跳过' }[item.status] || item.status)}</span>${item.status === 'PENDING_CONFIRMATION' && !['CANCELLED', 'FAILED'].includes(task.status) ? `<button data-action="review-markdown-knowledge" data-ordinal="${item.ordinal}">审阅并保存</button><button data-action="skip-markdown-knowledge" data-ordinal="${item.ordinal}">跳过</button>` : ''}</li>`).join('')}</ul><div class="item-actions">${task.status === 'FAILED' ? '<button data-action="retry-markdown-knowledge">重新检查私有副本</button>' : ''}${!['CANCELLED', 'COMPLETED'].includes(task.status) ? '<button data-action="cancel-markdown-knowledge">取消此导入</button>' : ''}</div></section>`;
+}
+async function handleMarkdownKnowledgeAction(event) {
+  const target = event.target.closest?.('[data-action]');
+  const action = target?.dataset.action;
+  if (action === 'select-markdown-knowledge-task' && event.type === 'click') return;
+  if (!['select-markdown-knowledge', 'review-markdown-knowledge', 'confirm-markdown-knowledge', 'skip-markdown-knowledge', 'cancel-markdown-knowledge', 'retry-markdown-knowledge', 'select-markdown-knowledge-task', 'more-markdown-knowledge-tasks'].includes(action)) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  const owner = state, workspaceId = owner.current?.summary?.id, dialog = owner.dialog;
+  const current = () => state === owner && owner.current?.summary?.id === workspaceId;
+  if (!native || !workspaceId) { owner.error = '请在本机应用中选择当前工作区后导入。'; render(); return; }
+  let startingTaskId = null;
+  try {
+    if (action === 'select-markdown-knowledge-task') {
+      const generation = owner.markdownKnowledgeReadGeneration = (owner.markdownKnowledgeReadGeneration || 0) + 1;
+      const task = await invoke('read_desktop_markdown_knowledge', { workspaceId, taskId: target.value }, owner);
+      if (!current() || owner.markdownKnowledgeReadGeneration !== generation) return; owner.markdownKnowledgeTask = task;
+    } else if (action === 'more-markdown-knowledge-tasks') {
+      const page = await invoke('list_desktop_markdown_knowledge_tasks', { workspaceId, offset: owner.markdownKnowledgeTasks.length }, owner);
+      if (!current()) return; owner.markdownKnowledgeTasks.push(...page.tasks); owner.markdownKnowledgeHasMore = page.hasMore;
+    } else if (action === 'select-markdown-knowledge') {
+      const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'Markdown 知识', extensions: ['md', 'markdown'] }] });
+      if (!selectedPath || !current() || owner.dialog !== dialog) return;
+      const task = await invoke('stage_desktop_markdown_knowledge', { workspaceId, selectedPath }, owner);
+      if (!current() || owner.dialog !== dialog) return;
+      owner.markdownKnowledgeTask = task; owner.dialog = null; owner.pane = 'knowledge';
+      await loadMarkdownKnowledgeTask(owner); if (!current()) return;
+      owner.status = task.status === 'FAILED' ? 'Markdown 未通过校验；失败任务已保留。' : 'Markdown 已在本机解析；请逐项审阅后保存。';
+    } else {
+      const task = owner.markdownKnowledgeTask; startingTaskId = task?.id || null;
+      if (!task || task.workspaceId !== workspaceId) throw new Error('当前工作区没有可处理的 Markdown 任务。');
+      if (target.closest?.('[data-task-id]')?.dataset.taskId !== task.id) throw new Error('导入任务已变化，请重新读取。');
+      const ordinal = Number(target.dataset.ordinal ?? dialog?.ordinal);
+      if (action === 'review-markdown-knowledge') {
+        const item = task.items.find(item => item.ordinal === ordinal && item.status === 'PENDING_CONFIRMATION');
+        if (!item) throw new Error('待确认条目已变化，请重新读取。');
+        owner.dialog = { kind: 'markdown-knowledge-review', taskId: task.id, ordinal, item: item.candidate, draft: {} };
+      } else {
+        let updated;
+        if (action === 'confirm-markdown-knowledge') {
+          if (dialog?.kind !== 'markdown-knowledge-review' || dialog.taskId !== task.id) throw new Error('请先审阅当前条目。');
+          const candidate = { title: document.querySelector('#markdown-knowledge-title')?.value || '', body: document.querySelector('#markdown-knowledge-body')?.value || '', tags: (document.querySelector('#markdown-knowledge-tags')?.value || '').split(',').map(v => v.trim()).filter(Boolean) };
+          const projectId = document.querySelector('#markdown-knowledge-project')?.value || null;
+          updated = await invoke('confirm_desktop_markdown_knowledge_item', { args: { workspaceId, taskId: task.id, ordinal, candidate, projectId } }, owner);
+        } else {
+          const command = { 'skip-markdown-knowledge': 'skip_desktop_markdown_knowledge_item', 'cancel-markdown-knowledge': 'cancel_desktop_markdown_knowledge', 'retry-markdown-knowledge': 'retry_desktop_markdown_knowledge' }[action];
+          updated = await invoke(command, { workspaceId, taskId: task.id, ...(action === 'skip-markdown-knowledge' ? { ordinal } : {}) }, owner);
+        }
+        if (!current() || owner.markdownKnowledgeTask?.id !== task.id) return;
+        owner.markdownKnowledgeTask = updated;
+        if (owner.dialog === dialog && dialog?.kind === 'markdown-knowledge-review') owner.dialog = null;
+        if (action === 'confirm-markdown-knowledge') { owner.status = '已保存为本机知识，原文件与来源回执保留。'; await refresh(); if (!current()) return; }
+      }
+    }
+    owner.error = ''; if (current()) render();
+  } catch (error) { if (!current() || (startingTaskId && owner.markdownKnowledgeTask?.id !== startingTaskId) || error?.code === 'STALE_DATA_AREA') return; owner.error = 'Markdown 处理未完成。请检查格式、正文长度、标签或敏感内容后再试；没有自动保存或联网。'; render(); }
+}
+app.addEventListener('click', event => { void handleMarkdownKnowledgeAction(event); }, true);
+app.addEventListener('click', event => {
+  const target=event.target.closest?.('[data-action="reload-domain-editor"]');
+  if (!target) return;
+  event.preventDefault();event.stopImmediatePropagation();
+  void reloadDomainEditor({getState:()=>state,invoke,render});
+},true);
+
+app.addEventListener('click', event => {
+  const target=event.target.closest?.('[data-action="read-knowledge-duplicates"]');
+  if (!target) return;
+  event.preventDefault();event.stopImmediatePropagation();
+  void readKnowledgeDuplicates({getState:()=>state,invoke,render});
+},true);
+
+app.addEventListener('change', event => { if (event.target.matches?.('[data-action=select-markdown-knowledge-task]')) void handleMarkdownKnowledgeAction(event); }, true);
+
+async function loadJsonKnowledgeTask(owner = state) {
+  const workspaceId = owner.current?.summary?.id;
+  if (!native || !workspaceId) return;
+  const generation = owner.jsonKnowledgeReadGeneration = (owner.jsonKnowledgeReadGeneration || 0) + 1;
+  const [task, page] = await Promise.all([invoke('read_latest_desktop_json_knowledge', { workspaceId }, owner), invoke('list_desktop_json_knowledge_tasks', { workspaceId, offset: 0 }, owner)]);
+  if (owner.current?.summary?.id !== workspaceId || owner.jsonKnowledgeReadGeneration !== generation) return;
+  owner.jsonKnowledgeTask = task; owner.jsonKnowledgeTasks = page.tasks; owner.jsonKnowledgeHasMore = page.hasMore;
+  if (state === owner && owner.pane === 'knowledge') render();
+}
+function jsonKnowledgeTaskCard(task) {
+  if (!task) return '';
+  const labels = { SELECTED: '正在复制', AWAITING_CONFIRMATION: '等待逐项确认', PARTIALLY_COMPLETED: '部分已处理', COMPLETED: '已处理', FAILED: '导入失败', CANCELLED: '已取消' };
+  return `<section class="memory-rail json-knowledge-task" data-task-id="${escape(task.id)}"><div class="section-head"><h2>JSON 导入 · ${escape(labels[task.status] || '待核对')}</h2></div><label>导入任务<select data-action="select-json-knowledge-task">${(state.jsonKnowledgeTasks || []).map(item => `<option value="${escape(item.id)}" ${item.id === task.id ? 'selected' : ''}>${escape(item.displayName)} · ${escape(labels[item.status] || item.status)}</option>`).join('')}</select></label>${state.jsonKnowledgeHasMore ? '<button data-action="more-json-knowledge-tasks">读取更多导入任务</button>' : ''}<p>${escape(task.displayName)} · 文件只保存在本机，确认前不会写入知识。</p>${task.safeErrorCode ? '<p class="security-note">文件未通过格式或安全校验。原任务已保留，可取消或从私有副本重新检查。</p>' : ''}<ul>${task.items.map(item => `<li><span>${escape(item.candidate.content.title)} · ${escape({ PENDING_CONFIRMATION: '待确认', CONFIRMED: '已保存', SKIPPED: '已跳过' }[item.status] || item.status)}</span>${item.status === 'PENDING_CONFIRMATION' && !['CANCELLED', 'FAILED'].includes(task.status) ? `<button data-action="review-json-knowledge" data-ordinal="${item.ordinal}">审阅并保存</button><button data-action="skip-json-knowledge" data-ordinal="${item.ordinal}">跳过</button>` : ''}</li>`).join('')}</ul><div class="item-actions">${task.status === 'FAILED' ? '<button data-action="retry-json-knowledge">重新检查私有副本</button>' : ''}${!['CANCELLED', 'COMPLETED'].includes(task.status) ? '<button data-action="cancel-json-knowledge">取消此导入</button>' : ''}</div></section>`;
+}
+async function handleJsonKnowledgeAction(event) {
+  const target = event.target.closest?.('[data-action]');
+  const action = target?.dataset.action;
+  if (action === 'select-json-knowledge-task' && event.type === 'click') return;
+  if (!['select-json-knowledge', 'review-json-knowledge', 'confirm-json-knowledge', 'skip-json-knowledge', 'cancel-json-knowledge', 'retry-json-knowledge', 'select-json-knowledge-task', 'more-json-knowledge-tasks'].includes(action)) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  const owner = state, workspaceId = owner.current?.summary?.id, dialog = owner.dialog;
+  const current = () => state === owner && owner.current?.summary?.id === workspaceId;
+  if (!native || !workspaceId) { owner.error = '请在本机应用中选择当前工作区后导入。'; render(); return; }
+  let startingTaskId = null;
+  try {
+    if (action === 'select-json-knowledge-task') {
+      const generation = owner.jsonKnowledgeReadGeneration = (owner.jsonKnowledgeReadGeneration || 0) + 1;
+      const task = await invoke('read_desktop_json_knowledge', { workspaceId, taskId: target.value }, owner);
+      if (!current() || owner.jsonKnowledgeReadGeneration !== generation) return; owner.jsonKnowledgeTask = task;
+    } else if (action === 'more-json-knowledge-tasks') {
+      const page = await invoke('list_desktop_json_knowledge_tasks', { workspaceId, offset: owner.jsonKnowledgeTasks.length }, owner);
+      if (!current()) return; owner.jsonKnowledgeTasks.push(...page.tasks); owner.jsonKnowledgeHasMore = page.hasMore;
+    } else if (action === 'select-json-knowledge') {
+      const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'JSON 知识', extensions: ['json'] }] });
+      if (!selectedPath || !current() || owner.dialog !== dialog) return;
+      const task = await invoke('stage_desktop_json_knowledge', { workspaceId, selectedPath }, owner);
+      if (!current() || owner.dialog !== dialog) return;
+      owner.jsonKnowledgeTask = task; owner.dialog = null; owner.pane = 'knowledge';
+      await loadJsonKnowledgeTask(owner); if (!current()) return;
+      owner.status = task.status === 'FAILED' ? 'JSON 未通过校验；失败任务已保留。' : 'JSON 已在本机解析；请逐项审阅后保存。';
+    } else {
+      const task = owner.jsonKnowledgeTask; startingTaskId = task?.id || null;
+      if (!task || task.workspaceId !== workspaceId) throw new Error('当前工作区没有可处理的 JSON 任务。');
+      if (target.closest?.('[data-task-id]')?.dataset.taskId !== task.id) throw new Error('导入任务已变化，请重新读取。');
+      const ordinal = Number(target.dataset.ordinal ?? dialog?.ordinal);
+      if (action === 'review-json-knowledge') {
+        const item = task.items.find(item => item.ordinal === ordinal && item.status === 'PENDING_CONFIRMATION');
+        if (!item) throw new Error('待确认条目已变化，请重新读取。');
+        owner.dialog = { kind: 'json-knowledge-review', taskId: task.id, ordinal, item: item.candidate.content, source: item.candidate.source, draft: {} };
+      } else {
+        let updated;
+        if (action === 'confirm-json-knowledge') {
+          if (dialog?.kind !== 'json-knowledge-review' || dialog.taskId !== task.id) throw new Error('请先审阅当前条目。');
+          const candidate = { title: document.querySelector('#json-knowledge-title')?.value || '', body: document.querySelector('#json-knowledge-body')?.value || '', tags: (document.querySelector('#json-knowledge-tags')?.value || '').split(',').map(v => v.trim()).filter(Boolean) };
+          const projectId = document.querySelector('#json-knowledge-project')?.value || null;
+          updated = await invoke('confirm_desktop_json_knowledge_item', { args: { workspaceId, taskId: task.id, ordinal, candidate, projectId } }, owner);
+        } else {
+          const command = { 'skip-json-knowledge': 'skip_desktop_json_knowledge_item', 'cancel-json-knowledge': 'cancel_desktop_json_knowledge', 'retry-json-knowledge': 'retry_desktop_json_knowledge' }[action];
+          updated = await invoke(command, { workspaceId, taskId: task.id, ...(action === 'skip-json-knowledge' ? { ordinal } : {}) }, owner);
+        }
+        if (!current() || owner.jsonKnowledgeTask?.id !== task.id) return;
+        owner.jsonKnowledgeTask = updated;
+        if (owner.dialog === dialog && dialog?.kind === 'json-knowledge-review') owner.dialog = null;
+        if (action === 'confirm-json-knowledge') { owner.status = '已保存为本机知识，原文件与来源回执保留。'; await refresh(); if (!current()) return; }
+      }
+    }
+    owner.error = ''; if (current()) render();
+  } catch (error) { if (!current() || (startingTaskId && owner.jsonKnowledgeTask?.id !== startingTaskId) || error?.code === 'STALE_DATA_AREA') return; owner.error = 'JSON 处理未完成。请检查格式、正文长度、标签或敏感内容后再试；没有自动保存或联网。'; render(); }
+}
+app.addEventListener('click', event => { void handleJsonKnowledgeAction(event); }, true);
+app.addEventListener('change', event => { if (event.target.matches?.('[data-action=select-json-knowledge-task]')) void handleJsonKnowledgeAction(event); }, true);
+
+async function handleJsonKnowledgeExportAction(event) {
+  const target = event.target.closest?.('[data-action]'), action = target?.dataset.action;
+  if (!['open-json-knowledge-export', 'toggle-json-knowledge-export', 'save-json-knowledge-export'].includes(action)) return;
+  if (action === 'toggle-json-knowledge-export' && event.type === 'click') return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  const owner = state, workspaceId = owner.current?.summary?.id, dialog = owner.dialog;
+  let generation;
+  const current = () => state === owner && owner.current?.summary?.id === workspaceId && owner.dialog === dialog && (generation === undefined || dialog.exportGeneration === generation);
+  try {
+    if (!native || !workspaceId) throw new Error('本机工作区尚未就绪。');
+    if (action === 'open-json-knowledge-export') {
+      const eligible = (owner.current?.exchange?.knowledge || []).filter(item => item.status === 'ACTIVE').map(({ id, title }) => ({ id, title }));
+      const id = target.dataset.id;
+      if (dialog?.kind !== 'knowledge' || dialog.item?.id !== id || !eligible.some(item => item.id === id)) throw new Error('条目已变化。');
+      owner.dialog = { kind: 'json-knowledge-export', workspaceId, eligible, selectedIds: [id], exportGeneration: 0, busy: false };
+      render(); return;
+    }
+    if (dialog?.kind !== 'json-knowledge-export' || dialog.workspaceId !== workspaceId) throw new Error('请重新选择导出条目。');
+    if (action === 'toggle-json-knowledge-export') {
+      if (dialog.busy || !dialog.eligible.some(item => item.id === target.dataset.id)) return;
+      const selected = new Set(dialog.selectedIds);
+      if (target.checked) selected.add(target.dataset.id); else selected.delete(target.dataset.id);
+      dialog.selectedIds = [...selected]; dialog.exportGeneration++; render(); return;
+    }
+    if (dialog.busy) return;
+    const knowledgeIds = [...dialog.selectedIds];
+    if (!knowledgeIds.length || knowledgeIds.length > 100 || new Set(knowledgeIds).size !== knowledgeIds.length || knowledgeIds.some(id => !dialog.eligible.some(item => item.id === id))) throw new Error('选择无效。');
+    generation = ++dialog.exportGeneration; dialog.busy = true; render();
+    const selectedPath = await dialogInvoke('save', { defaultPath: `knowledge-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'Knowledge JSON', extensions: ['json'] }] });
+    if (!current() || !selectedPath) return;
+    const receipt = await invoke('export_desktop_json_knowledge', { workspaceId, knowledgeIds, selectedPath }, owner);
+    if (!current()) return;
+    if (receipt?.manifest?.itemCount !== knowledgeIds.length || receipt?.manifest?.format !== 'nfai.knowledge.json' || receipt?.manifest?.schemaVersion !== '1' || !/^[a-f0-9]{64}$/.test(receipt?.sha256 || '') || !(receipt.byteCount > 0)) throw new Error('导出回执无效。');
+    owner.jsonKnowledgeExportReceipt = receipt; owner.dialog = null; owner.error = ''; owner.status = `已导出 ${knowledgeIds.length} 条已保存知识，文件回读校验通过。`; render();
+  } catch (error) {
+    if (!current() || error?.code === 'STALE_DATA_AREA') return;
+    owner.error = '导出未完成。请确认选择的是已保存且有效的知识，并选择应用私有目录之外的 JSON 目标；超出格式上限或来源校验失败时不会报告成功。'; render();
+  } finally {
+    if (owner.dialog === dialog && generation !== undefined && dialog.exportGeneration === generation) { dialog.busy = false; if (current()) render(); }
+  }
+}
+app.addEventListener('click', event => { void handleJsonKnowledgeExportAction(event); }, true);
+app.addEventListener('change', event => { if (event.target.matches?.('[data-action=toggle-json-knowledge-export]')) void handleJsonKnowledgeExportAction(event); }, true);
+
 
 async function saveMarkdown(markdown, defaultPath, label) {
   if (!native) { state.status = 'Web 预览不会写文件；请在 Desktop 应用中使用系统保存窗口。'; render(); return; }
@@ -547,102 +981,150 @@ async function saveMarkdown(markdown, defaultPath, label) {
     const receipt = await invoke('write_desktop_markdown_to_selected_path', { args: { selectedPath, markdown } });
     state.status = `${label}已导出并回读校验：${bytes(receipt.byteCount)} · ${short(receipt.sha256)}`;
     state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
     state.error = `${label}导出失败：${String(error)}`;
   }
   render();
 }
 
 let appSettingsSaveQueue = Promise.resolve();
+const localSettingsWrites = createLocalWriteBarrier();
+const pendingAppSettingsPatches = [];
 function persistNativeAppSettings(appearance, product) {
-  const appearancePatch = { ...appearance };
-  const productPatch = { ...product };
-  const save = appSettingsSaveQueue.catch(() => {}).then(() => persistAppSettingsPatch(appearancePatch, productPatch));
+  const request = { appearance: { ...appearance }, product: { ...product } };
+  pendingAppSettingsPatches.push(request);
+  const save = appSettingsSaveQueue.catch(() => {}).then(() => persistAppSettingsPatch(request)).finally(() => {
+    const index = pendingAppSettingsPatches.indexOf(request);
+    if (index >= 0) pendingAppSettingsPatches.splice(index, 1);
+  });
   appSettingsSaveQueue = save;
-  return save;
+  return localSettingsWrites.track(save, 'app-settings');
 }
-async function persistAppSettingsPatch(appearance, product) {
+function applyAppSettingsProjection(projection, request) {
+  // A completed earlier write cannot repaint over a later local selection.
+  const later = pendingAppSettingsPatches.slice(pendingAppSettingsPatches.indexOf(request) + 1);
+  state.appearance = normalizeAppearance(Object.assign({}, projection.appearance, ...later.map(item => item.appearance)));
+  state.productSettings = normalizeProductSettings(Object.assign({}, projection.product, ...later.map(item => item.product)));
+  state.appSettingsRevision = Number(projection.revision || 0);
+  state.settingsCapabilities = projection.capabilities || state.settingsCapabilities;
+}
+async function persistAppSettingsPatch(request) {
+  const { appearance, product } = request;
+  normalizeProductSettings(product, { rejectInvalidText: true });
   if (!native) {
     state.appearance = parityPreferences.writeAppearance({ ...state.appearance, ...appearance });
     state.productSettings = parityPreferences.writeProductSettings({ ...state.productSettings, ...product });
     return;
   }
-  const current = await invoke('read_desktop_app_settings');
-  const projection = await invoke('save_desktop_app_settings', { args: { appearance: normalizeAppearance({ ...current.appearance, ...appearance }), product: normalizeProductSettings({ ...current.product, ...product }), expectedRevision: current.revision } });
-  state.appearance = normalizeAppearance(projection.appearance);
-  state.productSettings = normalizeProductSettings(projection.product);
-  state.appSettingsRevision = Number(projection.revision || 0);
-  state.settingsCapabilities = projection.capabilities || state.settingsCapabilities;
+  let projection;
+  try {
+    const current = await invoke('read_desktop_app_settings');
+    projection = await invoke('save_desktop_app_settings', { args: { appearance: normalizeAppearance({ ...current.appearance, ...appearance }), product: normalizeProductSettings({ ...current.product, ...product }), expectedRevision: current.revision } });
+  } catch (error) {
+    // Read the committed revision after an ambiguous save failure. Keep newer
+    // local choices visible while their queued writes are still outstanding.
+    try {
+      applyAppSettingsProjection(await invoke('read_desktop_app_settings'), request);
+      if (!state.personalizationDirty) state.personalizationDraft = { ...state.productSettings };
+    } catch (readError) {
+      throw Object.assign(new Error(`设置保存结果无法回读确认：${String(readError)}`), { code: 'APP_SETTINGS_COMMIT_UNKNOWN', cause: error });
+    }
+    throw error;
+  }
+  applyAppSettingsProjection(projection, request);
   parityPreferences.clearNativeAppSettingsMigrationSource();
 }
 
+const appearanceFeedbackRequests = new WeakMap();
 async function updateAppearance(field, value) {
-  const previous = state.appearance;
-  const next = normalizeAppearance({ ...previous, [field]: value });
-  state.appearance = next;
+  const owner = state, request = {};
+  const pane = owner.pane, page = owner.settingsSection, visit = owner.settingsReadGeneration;
+  appearanceFeedbackRequests.set(owner, request);
+  const ownsFeedback = () => state === owner && appearanceFeedbackRequests.get(owner) === request
+    && owner.pane === pane && owner.settingsSection === page && owner.settingsReadGeneration === visit;
+  const next = normalizeAppearance({ ...owner.appearance, [field]: value });
+  owner.appearance = next;
   applyAppearance();
   render();
   try {
     await persistNativeAppSettings({ [field]: value }, {});
-    state.status = '';
-    showTransientToast('外观设置已保存。');
-    state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.appearance = previous;
-    applyAppearance();
-    state.error = `外观偏好未保存：${String(error)}`;
-    showTransientToast(state.error, 'error');
+    if (ownsFeedback()) {
+      owner.status = '';
+      owner.error = '';
+    }
+  } catch (error) {
+    if (ownsFeedback()) {
+      owner.error = error?.code === 'APP_SETTINGS_COMMIT_UNKNOWN'
+        ? `外观偏好保存结果未确认，当前选择保留在界面：${String(error)}`
+        : `外观偏好未保存：${String(error)}`;
+    }
   }
-  render();
+  // The shared preference projection may have reconciled a failed save; apply
+  // its current theme without rebuilding a later page or taking its feedback.
+  applyAppearance();
+  if (ownsFeedback()) render();
 }
 
+const favoriteReadGenerations = new WeakMap();
+function advanceFavoriteRead(owner) {
+  const generation = (favoriteReadGenerations.get(owner) || 0) + 1;
+  favoriteReadGenerations.set(owner, generation);
+  return generation;
+}
 async function toggleFavoriteConversation(conversationId, { renderAfter = true } = {}) {
-  const workspaceId = state.current?.summary?.id;
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
   if (!workspaceId || !conversationId) return;
-  const next = new Set(state.favoriteConversationIds);
+  advanceFavoriteRead(owner);
+  const next = new Set(owner.favoriteConversationIds);
   const wasFavorite = next.delete(conversationId);
   if (!wasFavorite) next.add(conversationId);
   try {
     const ids = native
-      ? await invoke('set_desktop_conversation_favorite', { workspaceId, conversationId, favorite: !wasFavorite })
+      ? await invoke('set_desktop_conversation_favorite', { workspaceId, conversationId, favorite: !wasFavorite }, owner)
       : [...parityPreferences.writeFavoriteConversationIds(workspaceId, next)];
-    state.favoriteConversationIds = new Set(ids);
-    state.status = wasFavorite ? '会话已取消收藏。' : '会话已收藏；归档或删除时会自动取消。';
-    state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `会话收藏状态未更新：${String(error)}`;
+    advanceFavoriteRead(owner);
+    if (state !== owner || owner.current?.summary?.id !== workspaceId) return;
+    owner.favoriteConversationIds = new Set(ids);
+    owner.status = wasFavorite ? '会话已取消收藏。' : '会话已收藏；归档或删除时会自动取消。';
+    owner.error = '';
+  } catch (error) {
+    if (state !== owner || owner.current?.summary?.id !== workspaceId || error?.code === 'STALE_DATA_AREA') return;
+    owner.error = `会话收藏状态未更新：${String(error)}`;
   }
-  state.contextMenu = null;
+  owner.contextMenu = null;
   if (renderAfter) render();
 }
 
 function removeFavoriteConversation(conversationId) {
-  if (!state.favoriteConversationIds.has(conversationId) || !state.current?.summary?.id) return;
-  const next = new Set(state.favoriteConversationIds);
+  const owner = state;
+  if (!owner.favoriteConversationIds.has(conversationId) || !owner.current?.summary?.id) return;
+  const next = new Set(owner.favoriteConversationIds);
   next.delete(conversationId);
-  const workspaceId = state.current.summary.id;
-  state.favoriteConversationIds = next;
+  const workspaceId = owner.current.summary.id;
+  advanceFavoriteRead(owner);
+  owner.favoriteConversationIds = next;
   if (native) {
-    void invoke('set_desktop_conversation_favorite', { workspaceId, conversationId, favorite: false }).then(ids => {
-      state.favoriteConversationIds = new Set(ids);
+    void invoke('set_desktop_conversation_favorite', { workspaceId, conversationId, favorite: false }, owner).then(ids => {
+      advanceFavoriteRead(owner);
+      if (state !== owner || owner.current?.summary?.id !== workspaceId) return;
+      owner.favoriteConversationIds = new Set(ids);
       render();
-    }).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
-      state.error = `会话取消收藏未完成：${String(error)}`;
+    }).catch(error => {
+      if (state !== owner || owner.current?.summary?.id !== workspaceId || error?.code === 'STALE_DATA_AREA') return;
+      owner.error = `会话取消收藏未完成：${String(error)}`;
       render();
     });
   } else {
-    state.favoriteConversationIds = parityPreferences.writeFavoriteConversationIds(workspaceId, next);
+    owner.favoriteConversationIds = parityPreferences.writeFavoriteConversationIds(workspaceId, next);
   }
 }
 
-state.archivePreview = null;
 applyAppearance();
 systemDarkQuery?.addEventListener?.('change', () => { if (state.appearance.mode === 'system') { applyAppearance(); render(); } });
-state.v2CommittedExchanges = [];
 globalThis.__nanfengV2CommittedExchanges = state.v2CommittedExchanges;
-let p6kManualLink = { assetOrdinal: null, conversationId: null, messageId: null };
+let p6kManualLink = { taskId: null, assetOrdinal: null, conversationId: null, messageId: null };
 globalThis.__nanfengP6kManualLink = p6kManualLink;
-state.nanfengKnowledgeTask = null;
 let p6hDiagnosticsEnabled = false;
 function p6hDiagnosticMarker(event) {
   if (!p6hDiagnosticsEnabled) return;
@@ -658,7 +1140,6 @@ function p6hDiagnosticMarker(event) {
 app.addEventListener('pointerdown', p6hDiagnosticMarker, true);
 app.addEventListener('click', p6hDiagnosticMarker, true);
 app.addEventListener('keydown', p6hDiagnosticMarker, true);
-state.chatSearch = '';
 let overlayFocusReturn = null;
 function rememberOverlayTrigger(target) {
   overlayFocusReturn = target ? ['action', 'messageId', 'entryId', 'id', 'attachmentId']
@@ -694,8 +1175,8 @@ function closeTopOverlay({ restoreFocus = true, navigateComposerLayerBack = fals
   else if (state.profileOpen) state.profileOpen = false;
   else if (state.dialog) state.dialog = null;
   else if (state.imagePreview) { cancelImagePreviewLoad(); state.imagePreview = null; }
-  else if (state.pdfPreview) state.pdfPreview = null;
-  else if (state.archivePreview) state.archivePreview = null;
+  else if (state.pdfPreview) cancelPdfPreviewLoad();
+  else if (state.archivePreview) cancelArchivePreviewLoad();
   else if (state.previewBoundary) state.previewBoundary = null;
   else if (state.sidebarOpen) state.sidebarOpen = false;
   else return false;
@@ -719,16 +1200,40 @@ function openTransientOverlay(kind, target, value = true) {
 app.addEventListener('click', event => {
   const target = event.target.closest('[data-action]');
   const action = target?.dataset.action;
-  const workspaceAction = ['show-work', 'show-workspace', 'show-projects'].includes(action);
-  if (!WORKSPACES_VISIBLE && ['show-work', 'show-workspace', 'show-projects', 'show-knowledge', 'show-memory', 'reference-message-to-other-area'].includes(action)) {
-    event.preventDefault(); event.stopImmediatePropagation(); return;
-  }
+  const workspaceAction = ['show-work', 'show-workspace', 'show-projects', 'show-knowledge', 'show-memory'].includes(action);
   const returningToChat = ['return-workspace-origin', 'show-chat'].includes(action) && state.dataArea === 'WORK';
-  if ((workspaceAction && state.dataArea === 'CHAT') || returningToChat) {
-    event.preventDefault(); event.stopImmediatePropagation();
-    const area = returningToChat ? 'CHAT' : 'WORK';
-    const pane = returningToChat ? (action === 'return-workspace-origin' ? (dataAreaStates.get('CHAT')?.pane || 'chat') : 'chat') : ({ 'show-projects': 'projects', 'show-knowledge': 'knowledge', 'show-memory': 'memory' }[action] || 'work');
-    void switchDataArea(area, pane).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = String(error); render(); });
+  const reopeningWork = action === 'show-work' && state.dataArea === 'WORK';
+  if (native && startupUiStage !== 'ready' && (workspaceAction || returningToChat)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (startupUiStage === 'pending') {
+      queuedStartupAreaRoute = {
+        area: returningToChat ? 'CHAT' : 'WORK',
+        pane: returningToChat
+          ? (action === 'return-workspace-origin' ? dataAreaStates.get('CHAT')?.pane || 'chat' : 'chat')
+          : ({ 'show-projects': 'projects', 'show-knowledge': 'knowledge', 'show-memory': 'memory' }[action] || 'work'),
+      };
+      state.status = '正在完成本地启动；完成后进入所选数据区。';
+    } else {
+      state.error = '本地启动读取未完成；请重新打开应用后再试。';
+    }
+    render();
+    return;
+  }
+  if (native && startupUiStage === 'pending' && ['show-chat', 'new-chat'].includes(action)) queuedStartupAreaRoute = null;
+  if (areaSwitchPending) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+  if (state.runtimeInfo?.dataAreasReady && ((workspaceAction && state.dataArea === 'CHAT') || returningToChat || reopeningWork)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const nextArea = returningToChat ? 'CHAT' : 'WORK';
+    const nextPane = returningToChat
+      ? (action === 'return-workspace-origin' ? dataAreaStates.get('CHAT')?.pane || 'chat' : 'chat')
+      : ({ 'show-projects': 'projects', 'show-knowledge': 'knowledge', 'show-memory': 'memory' }[action] || 'work');
+    void switchDataArea(nextArea, nextPane).catch(error => {
+      if (error?.code === 'STALE_DATA_AREA') return;
+      state.error = `切换数据区失败：${String(error)}`;
+      render();
+    });
     return;
   }
   if (workspaceAction && target.closest('.android-settings-main')) state.workspaceReturn = { pane: 'settings', settingsSection: state.settingsSection, label: '返回' };
@@ -747,6 +1252,9 @@ app.addEventListener('click', event => {
   if (!messageId || !attachmentId) return;
   state.assistantImageSelections.set(messageId, attachmentId);
   setAssistantGallerySelection(target, attachmentId);
+  // The gallery already changed on its connected owner. Keep the rendered
+  // snapshot aligned so the next shell-only interaction retains that owner.
+  if (renderedTranscriptRetention) renderedTranscriptRetention.gallerySelection = assistantGallerySelectionKey();
 }, true);
 
 function setAssistantGallerySelection(target, attachmentId) {
@@ -790,38 +1298,52 @@ app.addEventListener('click', event => {
     render();
     return;
   }
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const dialog = owner.dialog;
+  const currentRoute = () => state === owner && owner.current?.summary?.id === workspaceId;
   void (async () => {
     try {
       if (action === 'accept-history-knowledge') {
         const tags = (document.querySelector('#history-candidate-tags')?.value || '').split(',').map(value => value.trim()).filter(Boolean);
-        state.historyKnowledge = await invoke('accept_desktop_history_knowledge', {
+        const receipt = await invoke('accept_desktop_history_knowledge', {
           candidateId,
           title: document.querySelector('#history-candidate-title')?.value || '',
           body: document.querySelector('#history-candidate-body')?.value || '',
           tags,
-        });
-        state.dialog = null;
-        state.status = '资料候选已按当前编辑内容保存为本地 Knowledge。';
+        }, owner);
+        if (!currentRoute()) return;
+        owner.historyKnowledge = receipt;
+        if (owner.dialog === dialog) owner.dialog = null;
+        owner.status = '资料候选已按当前编辑内容保存为本地 Knowledge。';
         await refresh();
       } else if (action === 'reject-history-knowledge') {
-        state.historyKnowledge = await invoke('reject_desktop_history_knowledge', { candidateId });
-        state.dialog = null;
-        state.status = '资料候选已驳回；不会进入长期 Memory 或 Knowledge。';
+        const receipt = await invoke('reject_desktop_history_knowledge', { candidateId }, owner);
+        if (!currentRoute()) return;
+        owner.historyKnowledge = receipt;
+        if (owner.dialog === dialog) owner.dialog = null;
+        owner.status = '资料候选已驳回；不会进入长期 Memory 或 Knowledge。';
       } else if (action === 'retry-history-knowledge') {
-        state.status = '正在按显式操作重试；UNKNOWN 不会由后台自动重发。';
+        owner.status = '正在按显式操作重试；UNKNOWN 不会由后台自动重发。';
         render();
-        state.historyKnowledge = await invoke('retry_desktop_history_knowledge', { candidateId });
-        state.status = '历史资料库显式重试已结束，请核对当前状态。';
+        const receipt = await invoke('retry_desktop_history_knowledge', { candidateId }, owner);
+        if (!currentRoute()) return;
+        owner.historyKnowledge = receipt;
+        owner.status = '历史资料库显式重试已结束，请核对当前状态。';
       } else {
-        state.historyKnowledge = await invoke('delete_desktop_history_knowledge', { candidateId });
-        state.dialog = null;
-        state.status = '历史资料库候选记录已删除；已采纳的 Knowledge 不会被连带删除。';
+        const receipt = await invoke('delete_desktop_history_knowledge', { candidateId }, owner);
+        if (!currentRoute()) return;
+        owner.historyKnowledge = receipt;
+        if (owner.dialog === dialog) owner.dialog = null;
+        owner.status = '历史资料库候选记录已删除；已采纳的 Knowledge 不会被连带删除。';
       }
-      state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-      state.error = `历史资料库操作未完成：${String(error)}`;
+      if (!currentRoute()) return;
+      owner.error = '';
+    } catch (error) {
+      if (!currentRoute() || error?.code === 'STALE_DATA_AREA') return;
+      owner.error = `历史资料库操作未完成：${String(error)}`;
     }
-    render();
+    if (currentRoute()) render();
   })();
 }, true);
 
@@ -845,8 +1367,47 @@ app.addEventListener('click', event => {
   const action = target?.dataset.action;
   const actions = ['generate-reminder-draft', 'create-manual-reminder-draft', 'review-reminder-draft', 'retry-reminder-draft', 'confirm-reminder-draft', 'reject-reminder-draft', 'edit-reminder-plan', 'confirm-edit-reminder-plan', 'set-reminder-paused', 'retry-reminder-plan', 'delete-reminder-plan', 'confirm-delete-reminder-plan', 'request-reminder-notification-permission', 'cancel-reminder-editor', 'set-reminder-schedule-mode', 'set-reminder-cadence'];
   if (!actions.includes(action)) return;
+  const owner = state;
   event.preventDefault();
   event.stopImmediatePropagation();
+  const creatingManualDraft = action === 'create-manual-reminder-draft';
+  if (creatingManualDraft && owner.reminderDraftPreparing) return;
+  const draftPreparation = creatingManualDraft ? { pane: owner.pane, editor: owner.reminderEditor,
+    generation: desktopEntryRouteGeneration, areaGeneration: cloudOpenAreaGeneration,
+    workspaceId: owner.current?.summary?.id } : null;
+  if (draftPreparation) { owner.reminderDraftPreparing = draftPreparation; target.disabled = true; }
+  const manualDraftRouteCurrent = () => state === owner && owner.reminderDraftPreparing === draftPreparation
+    && owner.pane === draftPreparation.pane && owner.reminderEditor === draftPreparation.editor
+    && desktopEntryRouteGeneration === draftPreparation.generation && cloudOpenAreaGeneration === draftPreparation.areaGeneration
+    && (!draftPreparation.workspaceId || owner.current?.summary?.id === draftPreparation.workspaceId);
+  const saveAction = ['confirm-reminder-draft', 'confirm-edit-reminder-plan'].includes(action);
+  const saveEditor = saveAction ? owner.reminderEditor : null;
+  const editorKey = editor => editor?.item ? `${editor.item.planId ? 'edit' : 'create'}:${editor.item.planId || editor.item.draftId}` : null;
+  const saveKey = editorKey(saveEditor);
+  let savePending = null;
+  if (saveEditor?.item) {
+    if (owner.reminderEditorSavePending?.key === saveKey) return;
+    savePending = { key: saveKey };
+    owner.reminderEditorSavePending = savePending;
+    saveEditor.submitting = true;
+    saveEditor.pendingSaveBinding = savePending;
+    target.disabled = true;
+  }
+  const adoptSavedReminderForContinuedDraft = projection => {
+    const current = owner.reminderEditor;
+    if (!savePending || current === saveEditor || current?.pendingSaveBinding !== savePending
+        || owner.reminderEditorSavePending !== savePending) return;
+    const matches = (projection?.plans || []).filter(plan => saveEditor.item.planId
+      ? plan.planId === saveEditor.item.planId : plan.sourceDraftId === saveEditor.item.draftId);
+    if (matches.length !== 1 || !matches[0].planId || !Number.isSafeInteger(matches[0].updatedAtMs)) return;
+    const fields = Object.fromEntries(['title', 'instruction', 'scheduleKind', 'anchorLocal', 'timezoneId', 'missedPolicy']
+      .filter(key => Object.hasOwn(current.item, key)).map(key => [key, current.item[key]]));
+    current.item = { ...matches[0], ...fields };
+    current.mode = 'edit';
+    current.discardOnCancel = false;
+    current.pendingSaveBinding = null;
+    savePending.key = editorKey(current);
+  };
   if (action === 'cancel-reminder-editor') {
     const editor = state.reminderEditor;
     if (!editor?.discardOnCancel || !editor.item?.draftId) {
@@ -861,10 +1422,11 @@ app.addEventListener('click', event => {
         state.reminderEditor = null;
         state.status = native ? '已取消手工新建；未创建计划。' : 'Web 只读交互样本已返回列表；未写入 Desktop SQLite。';
         state.error = '';
-      } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+      } catch (error) {
+        if (state !== owner || error?.code === 'STALE_DATA_AREA') return;
         state.error = `手工提醒草案未取消：${String(error)}`;
       }
-      render();
+      if (state === owner) render();
     })();
     return;
   }
@@ -883,8 +1445,12 @@ app.addEventListener('click', event => {
       if (!native && !c09ReminderPreview) throw new Error('Web 预览不会创建、执行或通知提醒计划');
       if (action === 'request-reminder-notification-permission') {
         if (!native) throw new Error('Web 只读交互样本不会请求系统通知');
-        const granted = await requestReminderNotificationPermission();
-        state.status = granted ? '系统通知权限已授予；后续成功监控可发送不含结果正文的通知。' : '系统未授予通知权限；监控结果仍只保存在本机。';
+        const granted = await requestReminderNotificationPermission(owner);
+        if (state !== owner) return;
+        state.status = granted ? '系统通知权限已授予；后续成功监控可发送不含结果正文的通知。'
+          : owner.reminderNotificationPermission === 'unavailable'
+            ? '暂时无法确认系统通知权限；监控结果仍会保存在本机。'
+            : '系统未授予通知权限；监控结果仍只保存在本机。';
       } else if (action === 'generate-reminder-draft') {
         if (!native) throw new Error('Web 只读交互样本不调用模型');
         const workspaceId = state.current?.summary?.id;
@@ -894,7 +1460,9 @@ app.addEventListener('click', event => {
         render();
         try {
           state.reminders = await invoke('generate_desktop_reminder_draft', { args: { workspaceId, conversationId, userMessageId: target.dataset.userMessageId, assistantMessageId: target.dataset.assistantMessageId, timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai' } });
-        } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; await loadDesktopReminders(); throw error; }
+        } catch (error) { if (state !== owner || error?.code === 'STALE_DATA_AREA') return; await loadDesktopReminders(owner); throw error; }
+        if (state !== owner) return;
+        state.pane = 'reminders';
         const draft = state.reminders.drafts.find(item => item.sourceAssistantMessageId === target.dataset.assistantMessageId);
         if (draft?.status === 'PENDING_REVIEW') state.reminderEditor = { kind: 'reminder-editor', mode: 'create', item: draft };
         state.status = draft?.status === 'NOT_ELIGIBLE' ? '模型判断该对话不构成明确提醒；未创建计划。' : '提醒草案已生成，请核对编辑后再确认。';
@@ -903,9 +1471,19 @@ app.addEventListener('click', event => {
         if (!native) {
           state.reminderEditor = { kind: 'reminder-editor', mode: 'create', discardOnCancel: true, item: createC09ReminderPreviewDraft(timezoneId) };
         } else {
-          const workspaceId = state.current?.summary?.id;
-          if (!workspaceId) throw new Error('请先打开一个本地工作区');
-          state.reminders = await invoke('create_desktop_manual_reminder_draft', { args: { workspaceId, conversationId: state.selectedConversationId || null, timezoneId } });
+          let workspaceId = owner.current?.summary?.id;
+          if (!workspaceId) {
+            const projection = await invoke('ensure_desktop_local_workspace', {}, owner);
+            if (!manualDraftRouteCurrent()) return;
+            if (owner.current && owner.current.summary?.id !== projection.summary.id) return;
+            owner.current = projection;
+            owner.workspaces = [...(owner.workspaces || []).filter(item => item.id !== projection.summary.id), projection.summary];
+            workspaceId = projection.summary.id;
+            draftPreparation.workspaceId = workspaceId;
+          }
+          const reminders = await invoke('create_desktop_manual_reminder_draft', { args: { workspaceId, conversationId: owner.selectedConversationId || null, timezoneId } }, owner);
+          if (!manualDraftRouteCurrent()) return;
+          state.reminders = reminders;
           const draft = state.reminders.drafts.find(item => item.status === 'PENDING_REVIEW');
           state.reminderEditor = { kind: 'reminder-editor', mode: 'create', discardOnCancel: true, item: draft };
         }
@@ -917,11 +1495,11 @@ app.addEventListener('click', event => {
         state.status = '正在按显式操作重试草案 refinement；UNKNOWN 不会自动重发。';
         render();
         try { state.reminders = await invoke('retry_desktop_reminder_draft', { draftId: target.dataset.id }); }
-        catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; await loadDesktopReminders(); throw error; }
+        catch (error) { if (state !== owner || error?.code === 'STALE_DATA_AREA') return; await loadDesktopReminders(owner); throw error; }
         const draft = state.reminders.drafts.find(item => item.draftId === target.dataset.id);
         if (draft?.status === 'PENDING_REVIEW') state.reminderEditor = { kind: 'reminder-editor', mode: 'create', item: draft };
       } else if (action === 'confirm-reminder-draft') {
-        const item = state.reminderEditor?.item;
+        const item = saveEditor?.item;
         if (!item) throw new Error('提醒草案已变化');
         const values = reminderFormValues();
         if (!native) {
@@ -930,9 +1508,10 @@ app.addEventListener('click', event => {
           state.status = 'Web 只读交互样本已演示返回列表；未写入 Desktop SQLite，未启动 scheduler。';
         } else {
           state.reminders = await invoke('confirm_desktop_reminder_draft', { args: { draftId: item.draftId, ...values } });
-          state.status = '提醒计划已确认并持久化；到期后由本机 scheduler 执行。';
+          state.status = '提醒计划已确认并持久化。';
         }
-        state.reminderEditor = null;
+        adoptSavedReminderForContinuedDraft(state.reminders);
+        if (state.reminderEditor === saveEditor) state.reminderEditor = null;
       } else if (action === 'reject-reminder-draft') {
         if (!native) state.reminders = { ...state.reminders, drafts: state.reminders.drafts.filter(item => item.draftId !== target.dataset.id) };
         else state.reminders = await invoke('reject_desktop_reminder_draft', { draftId: target.dataset.id });
@@ -942,12 +1521,13 @@ app.addEventListener('click', event => {
         const plan = state.reminders.plans.find(item => item.planId === target.dataset.id);
         if (plan) state.reminderEditor = { kind: 'reminder-editor', mode: 'edit', item: plan };
       } else if (action === 'confirm-edit-reminder-plan') {
-        const item = state.reminderEditor?.item;
+        const item = saveEditor?.item;
         if (!item) throw new Error('提醒计划已变化');
         const values = reminderFormValues();
         if (!native) updateC09PreviewPlan(item.planId, { ...values, updatedAtMs: Date.now() });
         else state.reminders = await invoke('update_desktop_reminder_plan', { args: { planId: item.planId, expectedUpdatedAtMs: item.updatedAtMs, ...values } });
-        state.reminderEditor = null;
+        adoptSavedReminderForContinuedDraft(state.reminders);
+        if (state.reminderEditor === saveEditor) state.reminderEditor = null;
         state.status = native ? '提醒计划已更新；原执行记录保留，下一次执行时间已重新计算。' : 'Web 只读交互样本已演示编辑返回；未写入 Desktop SQLite。';
       } else if (action === 'set-reminder-paused') {
         const paused = target.dataset.paused === 'true';
@@ -967,12 +1547,35 @@ app.addEventListener('click', event => {
         state.dialog = null;
         state.status = native ? '提醒计划及其执行记录已删除；运行中的请求已请求停止。' : 'Web 只读交互样本已演示删除；未写入 Desktop SQLite。';
       }
-      if (native) await loadDesktopBackgroundRuntime();
+      if (state !== owner) return;
+      if (native) {
+        await loadDesktopBackgroundRuntime(owner);
+        if (state !== owner) return;
+        if (['confirm-reminder-draft', 'confirm-edit-reminder-plan', 'retry-reminder-plan'].includes(action)
+            || (action === 'set-reminder-paused' && target.dataset.paused !== 'true')) {
+          if (state.backgroundRuntime.desiredEnabled) {
+            state.status += state.backgroundRuntime.installed
+              ? ' 系统后台任务已注册。'
+              : ' 系统后台任务未注册；关闭应用后不会按计划执行。';
+          }
+        }
+      }
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    } catch (error) {
+      if (state !== owner || error?.code === 'STALE_DATA_AREA') return;
       state.error = `提醒操作未完成：${String(error)}`;
+    } finally {
+      if (draftPreparation && owner.reminderDraftPreparing === draftPreparation) {
+        owner.reminderDraftPreparing = null;
+        target.disabled = false;
+      }
+      if (saveEditor) saveEditor.submitting = false;
+      if (savePending && owner.reminderEditorSavePending === savePending) {
+        owner.reminderEditorSavePending = null;
+        if (owner.reminderEditor && editorKey(owner.reminderEditor) === savePending.key) owner.reminderEditor.submitting = false;
+      }
+      if (state === owner) render();
     }
-    render();
   })();
 }, true);
 app.addEventListener('click', event => {
@@ -982,59 +1585,181 @@ app.addEventListener('click', event => {
   state.status = '临时聊天与普通导航隔离；点击右上角“临时聊天”返回普通聊天。';
   render();
 }, true);
+// Leaving a cloud row invalidates its pending workspace read and optional
+// preference projection, so a late reply cannot undo the user's navigation.
+app.addEventListener('click', event => {
+  const target = event.target.closest?.('[data-action]');
+  const action = target?.dataset.action;
+  if (action === 'select-chat' && target.dataset.workspaceId) return;
+  if (!['new-chat', 'select-chat', 'select-workspace', 'select-chat-source', 'show-chat', 'show-work', 'show-settings'].includes(action)) return;
+  openCloudConversationRoute.cancel();
+  state.cloudConversationOpening = null;
+}, true);
+let conversationSelectionGeneration = 0;
+async function loadConversationSelectionProjection(owner, workspaceId, conversationId, generation) {
+  if (!native || !workspaceId || !conversationId) return;
+  const navigationGeneration = desktopEntryRouteGeneration;
+  const areaGeneration = cloudOpenAreaGeneration;
+  const selection = await invoke('read_desktop_p6g_selection', { workspaceId, conversationId }, owner);
+  if (state !== owner || generation !== conversationSelectionGeneration
+      || navigationGeneration !== desktopEntryRouteGeneration || areaGeneration !== cloudOpenAreaGeneration
+      || state.current?.summary?.id !== workspaceId || state.selectedConversationId !== conversationId) return;
+  state.p6gSelection = { ...retainNewerConversationSelection(state.p6gSelection, selection, conversationId), pickerTier: owner.p6gSelection?.pickerTier ?? null };
+  state.p6gGlobalDefault = selection.globalDefault;
+  state.conversationPreferences = state.p6gSelection?.conversationOverride
+    || { revision: 0, toneOverride: null, webSearchOverride: null };
+  render();
+}
 app.addEventListener('click', event => {
   const target = event.target.closest('[data-action="select-chat"]');
-  if (!target || state.pane !== 'work') return;
+  if (!target || target.dataset.workspaceId || state.pane !== 'work') return;
   // Work is a Conversation scope, not a route to the former work-home dashboard.
   event.stopImmediatePropagation();
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const conversationId = target.dataset.id;
+  const generation = ++conversationSelectionGeneration;
+  const navigationGeneration = ++desktopEntryRouteGeneration;
+  const areaGeneration = cloudOpenAreaGeneration;
+  const ownsRoute = () => state === owner && generation === conversationSelectionGeneration
+    && navigationGeneration === desktopEntryRouteGeneration && areaGeneration === cloudOpenAreaGeneration
+    && owner.current?.summary?.id === workspaceId && owner.selectedConversationId === conversationId;
   state.selectedConversationId = target.dataset.id;
+  state.p6gSelection = null;
+  state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
   state.conversationFindOpen = false;
   state.conversationFindQuery = '';
   recomputeConversationFind({ resetIndex: true });
   state.profileOpen = false;
   state.error = '';
   resetComposerPresentation();
-  void Promise.all([markConversationOpened(target.dataset.id), loadOrdinaryComposerDraft()]).finally(render);
+  void Promise.all([
+    markConversationOpened(conversationId, ownsRoute),
+    loadOrdinaryComposerDraft(),
+    loadConversationSelectionProjection(owner, workspaceId, conversationId, generation),
+  ]).catch(error => {
+    if (!ownsRoute()) return;
+    state.error = `WORK 会话未完全读取：${String(error)}`;
+  }).finally(() => { if (ownsRoute()) render(); });
 }, true);
-const invoke = async (command, args = {}, owner = state) => {
-  const stale = () => Object.assign(new Error('原区域的操作结果已留在原区域'), { code: 'STALE_DATA_AREA' });
-  let result;
-  try { result = await tauriBridge.invoke(command, args, { headers: { 'x-nanfeng-data-area': owner.dataArea } }); }
-  catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (state !== owner) throw stale(); throw error; }
-  if (state !== owner) throw stale();
-  return result?.exchange ? { ...result, dataArea: owner.dataArea } : result;
-};
-window.addEventListener('unhandledrejection', event => {
-  if (event.reason?.code === 'STALE_DATA_AREA') event.preventDefault();
-});
-async function switchDataArea(area, pane) {
-  if (!canOpenDataArea(area)) return;
-  if (state.dataArea === area) { state.pane = pane; render(); return; }
-  await flushOrdinaryComposerDraft();
-  ordinaryChatRuntimeRefreshPending = null;
-  composerDraftRouteGeneration += 1;
-  if (newConversationDraftExpiryTimer) clearTimeout(newConversationDraftExpiryTimer);
-  state = dataAreaStates.get(area) || createAreaState(area);
-  dataAreaStates.set(area, state);
-  state.pane = pane;
-  state.profileOpen = false;
-  state.sidebarOpen = true;
-  render();
-  await refresh();
-  await loadOrdinaryComposerDraft();
-  render();
+const invoke = (command, args = {}, owner = state) => invokeForDataArea(tauriBridge, command, args, owner, () => state);
+async function switchDataArea(nextArea, nextPane) {
+  if (!native || !state.runtimeInfo?.dataAreasReady || areaSwitchPending) return;
+  if ([...dataAreaStates.values()].some(area => area.localBackup?.working)) {
+    state.error = '本机备份或恢复正在进行，请等待完成后切换数据区。';
+    render();
+    return;
+  }
+  if ([...dataAreaStates.values()].some(area => area.localBackup?.restartRequired)) {
+    state.dialog = { kind: 'local-backup-restart-required' };
+    render();
+    return;
+  }
+  if (state.dataArea === nextArea) {
+    if (nextArea === 'WORK' && nextPane === 'work') {
+      await flushOrdinaryComposerDraft();
+      state.selectedWorkProjectId = null;
+      selectWorkspaceDefaultConversation(state.current);
+      if (state.current && state.selectedConversationId) {
+        state.p6gSelection = await invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId });
+        state.conversationPreferences = state.p6gSelection.conversationOverride;
+      } else {
+        state.p6gSelection = null;
+        state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+      }
+      await loadOrdinaryComposerDraft();
+    }
+    state.pane = nextPane;
+    render();
+    return;
+  }
+  areaSwitchPending = true;
+  const previous = state;
+  try {
+    await flushOrdinaryComposerDraft();
+    // Drain the temporary timer and local queue while CHAT still owns invoke.
+    // A failed save keeps this route open instead of sending its ID to WORK.
+    if (previous.temporaryConversation) await flushTemporaryDraft();
+    await localSettingsWrites.flush();
+    if (previous.videoPreview || previous.videoPreviewOpening) await closeVideoPreview();
+    if (previous.audioPreviewOpening && !previous.audioPreview) previous.audioPreviewOpening = null;
+    stopComposerCamera();
+    // Search requests and cached pages belong to the area being left. A quick
+    // CHAT -> WORK -> CHAT round trip must not revive an older CHAT response.
+    supersedeFullSearch();
+    fullSearchResultCache.clear();
+    fullSearchCacheScope = '';
+    ordinaryChatRuntimeRefreshPending = null;
+    composerDraftRouteGeneration += 1;
+    cloudOpenAreaGeneration += 1;
+    previous.cloudConversationOpening = null;
+    state = dataAreaStates.get(nextArea) || initializeAreaState(createAreaState(nextArea));
+    dataAreaStates.set(nextArea, state);
+    state.selectedWorkProjectId ??= null;
+    state.assistantMessageMenu ??= null;
+    state.cloudConversationOpening ??= null;
+    globalThis.__nanfengDesktopWorkState = state;
+    if (!state.runtimeInfo?.dataAreasReady) state.runtimeInfo = previous.runtimeInfo;
+    state.pane = nextPane;
+    state.profileOpen = false;
+    state.sidebarOpen = true;
+    app.innerHTML = '<main class="desktop-area-switch" role="status" aria-live="polite">正在切换数据区…</main>';
+    await loadDesktopLocalBackupStatus();
+    if (state.localBackup.restartRequired) {
+      render();
+      return;
+    }
+    if (nextArea === 'WORK' && !state.current) {
+      state.current = await invoke('ensure_desktop_local_workspace');
+      state.workspaces = [state.current.summary];
+    }
+    await loadDesktopAppSettings({ preserveUnsavedDraft: true });
+    await loadModelServiceSettings({ preserveUnsavedDraft: true });
+    await loadDesktopHistoryKnowledge();
+    await loadDesktopReminders(state);
+    await refresh();
+    if (nextArea === 'WORK' && nextPane === 'work') {
+      state.selectedWorkProjectId = null;
+      selectWorkspaceDefaultConversation(state.current);
+      if (state.current && state.selectedConversationId) {
+        state.p6gSelection = await invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId });
+        state.conversationPreferences = state.p6gSelection.conversationOverride;
+      } else {
+        state.p6gSelection = null;
+        state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+      }
+    }
+    await loadDesktopAccountSync();
+    if (!state.cloudConversations.length) await restoreCachedCloudConversationList();
+    if (!state.current && !state.runtimeInfo?.automaticWorkSuppressed) {
+      state.current = await invoke('ensure_desktop_local_workspace');
+      state.workspaces = [state.current.summary];
+    }
+    await loadOrdinaryComposerDraft();
+    render();
+    await drainReminderNotificationActions().catch(() => {});
+  } catch (error) {
+    state = previous;
+    globalThis.__nanfengDesktopWorkState = state;
+    render();
+    throw error;
+  } finally {
+    areaSwitchPending = false;
+    render();
+  }
 }
 const dialogInvoke = (command, options) => invoke(`plugin:dialog|${command}`, { options });
+let conversationReadStateRequestId = 0;
 function applyConversationReadState(projection) {
   state.conversationReadState = projection || { workspaceId: null, conversations: [] };
   const rows = projection?.conversations || [];
   state.unreadConversationIds = new Set(rows.filter(item => item.unread).map(item => item.conversationId));
   state.manualUnreadAtMs = new Map(rows.filter(item => item.manualUnreadAtMs != null).map(item => [item.conversationId, Number(item.manualUnreadAtMs)]));
 }
-async function loadConversationReadState({ observeSelected = true } = {}) {
+async function loadConversationReadState({ observeSelected = true, isCurrent = () => true } = {}) {
   const owner = state;
-  const selectedId = owner.selectedConversationId;
-  const workspaceId = owner.current?.summary?.id;
+  const workspaceId = state.current?.summary?.id;
+  const requestId = ++conversationReadStateRequestId;
   if (!workspaceId || !native) {
     applyConversationReadState({ workspaceId: workspaceId || null, conversations: [] });
     return state.conversationReadState;
@@ -1043,24 +1768,54 @@ async function loadConversationReadState({ observeSelected = true } = {}) {
     workspaceId,
     observedConversationId: observeSelected ? state.selectedConversationId : null,
   });
-  if (state === owner && state.current?.summary?.id === workspaceId && state.selectedConversationId === selectedId) applyConversationReadState(projection);
+  if (owner === state && state.current?.summary?.id === workspaceId && requestId === conversationReadStateRequestId && isCurrent()) applyConversationReadState(projection);
   return projection;
 }
-async function markConversationOpened(conversationId) {
+async function markConversationOpened(conversationId, isCurrent = () => true) {
+  const owner = state;
   const workspaceId = state.current?.summary?.id;
   if (!workspaceId || !conversationId || !native) return;
-  applyConversationReadState(await invoke('mark_desktop_conversation_opened', { workspaceId, conversationId }));
+  const requestId = ++conversationReadStateRequestId;
+  const projection = await invoke('mark_desktop_conversation_opened', { workspaceId, conversationId });
+  if (owner === state && state.current?.summary?.id === workspaceId && requestId === conversationReadStateRequestId && isCurrent()) applyConversationReadState(projection);
 }
 async function markConversationUnread(conversationId) {
+  const owner = state;
   const workspaceId = state.current?.summary?.id;
-  if (!native) throw new Error('当前环境不支持保存未读标记');
-  if (!workspaceId || !conversationId) throw new Error('当前会话不可用');
+  if (!workspaceId || !conversationId || !native) return;
+  const requestId = ++conversationReadStateRequestId;
   const projection = await invoke('mark_desktop_conversation_unread', { workspaceId, conversationId });
-  const marker = projection?.conversations?.find(item => item.conversationId === conversationId);
-  if (marker?.manualUnreadAtMs == null) throw new Error('未读标记没有完成回读确认');
-  applyConversationReadState(projection);
+  if (owner === state && state.current?.summary?.id === workspaceId && requestId === conversationReadStateRequestId) applyConversationReadState(projection);
 }
-const selectedModelService = () => state.modelServiceSettings.find(item => item.providerId === state.modelProviderId) || state.modelServiceSettings[0] || null;
+const selectedModelService = (owner = state) => owner.modelServiceSettings.find(item => item.providerId === owner.modelProviderId) || owner.modelServiceSettings[0] || null;
+const modelSettingsController = createModelSettingsController({
+  native, currentOwner: () => state, render: () => render(),
+  invoke: (owner, command, args) => invokeForAuthorizedDataAreaOperation(tauriBridge, command, args, owner),
+  trackWrite: (operation, recoveryOwner) => localSettingsWrites.track(operation, recoveryOwner),
+  updateStatus: owner => { owner.status = modelServiceConfigurationStatus(owner.modelServiceSettings); },
+});
+function captureSettingsPickerFocusScope() {
+  const owner = state, page = owner.settingsSection, visit = owner.settingsReadGeneration;
+  const picker = owner.settingsPicker, dialog = owner.dialog, menu = owner.contextMenu;
+  return () => state === owner && state.pane === 'settings' && state.settingsSection === page
+    && state.settingsReadGeneration === visit && state.settingsPicker === picker
+    && state.dialog === dialog && state.contextMenu === menu;
+}
+function captureModelSettingsFocusScope(includePreset = false) {
+  const owner = state;
+  const provider = owner.modelProviderId;
+  const preset = owner.modelServiceDraft?.presetId;
+  const dialog = owner.dialog;
+  const picker = owner.settingsPicker;
+  const menu = owner.contextMenu;
+  return () => state === owner && state.pane === 'settings'
+    && state.settingsSection === 'model-configuration' && state.modelProviderId === provider
+    && state.dialog === dialog && state.settingsPicker === picker && state.contextMenu === menu
+    && (!includePreset || state.modelServiceDraft?.presetId === preset);
+}
+installModelSettingsKeyboardNavigation(document, () => captureModelSettingsFocusScope(true),
+  () => native && /^(windows|win32|win64)$/i.test(String(state.runtimeInfo?.platform || navigator.platform || '')));
+
 function modelServiceConfigurationStatus(settings = state.modelServiceSettings) {
   const enabled = (settings || []).filter(item => item?.enabled);
   const configured = enabled.filter(item => item?.credentialStored);
@@ -1068,23 +1823,15 @@ function modelServiceConfigurationStatus(settings = state.modelServiceSettings) 
   if (enabled.length) return `本地工作区已就绪；已有 ${enabled.length} 个联网服务商启用，尚未检测到已保存凭据。`;
   return '本地工作区已就绪；尚未启用联网模型。';
 }
-function setModelProviderFeedback(providerId, notice = '', error = '') {
-  state.modelProviderFeedback ||= {};
-  state.modelProviderFeedback[providerId] = { notice, error };
-  if (state.modelProviderId === providerId) {
-    state.modelSettingsNotice = notice;
-    state.modelSettingsError = error;
-  }
-}
 function resetModelServiceDraft(service = selectedModelService()) {
   state.modelServiceDraft = service ? { providerId: service.providerId, enabled: service.enabled, presetId: service.presetId, revision: service.revision } : null;
   state.modelCredentialDraft = '';
   state.modelCredentialEdited = false;
   state.modelCredentialVisible = false;
-  state.modelCredentialRevealRequest = null;
   const feedback = state.modelProviderFeedback?.[service?.providerId];
   state.modelSettingsNotice = feedback?.notice || '';
   state.modelSettingsError = feedback?.error || '';
+  state.modelCredentialRevealRequest = null;
   state.settingsPicker = null;
 }
 function clearModelCredentialDraftOutsideEditor(force = false) {
@@ -1095,29 +1842,30 @@ function clearModelCredentialDraftOutsideEditor(force = false) {
   state.modelCredentialEdited = false;
   state.modelCredentialVisible = false;
 }
-function replaceModelService(next) {
-  state.modelServiceSettings = state.modelServiceSettings.map(item => item.providerId === next.providerId ? next : item);
+function replaceModelService(next, owner = state) {
+  owner.modelServiceSettings = owner.modelServiceSettings.map(item => item.providerId === next.providerId
+    && Number(next.revision || 0) >= Number(item.revision || 0) ? next : item);
 }
-let modelServiceReadSequence = 0;
-async function loadModelServiceSettings({ preserveDraft = false } = {}) {
+async function loadModelServiceSettings({ preserveUnsavedDraft = false } = {}) {
   if (!native) return;
   const owner = state;
-  const sequence = ++modelServiceReadSequence;
-  const settings = await invoke('read_desktop_model_service_settings', undefined, owner);
-  if (state !== owner || sequence !== modelServiceReadSequence) return;
-  if (Array.isArray(settings) && settings.length) {
-    state.modelServiceSettings = settings.map(service => {
-      const current = state.modelServiceSettings.find(item => item.providerId === service.providerId);
-      const latest = Number(current?.revision || 0) > Number(service.revision || 0) ? current : service;
-      return mergeModelServiceIntents(latest, owner);
-    });
-    if (!settings.some(item => item.providerId === state.modelProviderId)) state.modelProviderId = settings[0].providerId;
-    if (!preserveDraft) resetModelServiceDraft();
-    state.status = modelServiceConfigurationStatus(state.modelServiceSettings);
-    return settings;
-  }
+  const keyDraft = owner.modelCredentialDraft;
+  const keyEdited = owner.modelCredentialEdited;
+  const updated = await modelSettingsController.read(owner, { preserveUnsavedDraft });
+  if (!updated || state !== owner) return;
+  if (!preserveUnsavedDraft && owner.modelCredentialDraft === keyDraft && owner.modelCredentialEdited === keyEdited) clearOwnedModelCredentialDraft(owner);
 }
-async function loadDesktopAppSettings() {
+async function setModelServiceEnabled() {
+  const owner = state;
+  const service = selectedModelService(owner);
+  if (!service) return;
+  return modelSettingsController.setEnabled(owner, !Boolean(owner.modelServiceDraft?.enabled ?? service.enabled));
+}
+async function setModelServicePreset(presetId) {
+  return modelSettingsController.setPreset(state, presetId);
+}
+
+async function loadDesktopAppSettings({ preserveUnsavedDraft = false } = {}) {
   if (!native) return;
   const legacyAppearance = normalizeAppearance(state.appearance);
   const legacyProduct = normalizeProductSettings(state.productSettings);
@@ -1127,16 +1875,43 @@ async function loadDesktopAppSettings() {
   }
   state.appearance = normalizeAppearance(projection.appearance);
   state.productSettings = normalizeProductSettings(projection.product);
-  state.personalizationDraft = { ...state.productSettings };
-  state.personalizationDirty = false;
+  if (!preserveUnsavedDraft || !state.personalizationDirty) {
+    state.personalizationDraft = { ...state.productSettings };
+    state.personalizationDirty = false;
+  }
   state.appSettingsRevision = Number(projection.revision || 0);
   state.settingsCapabilities = projection.capabilities || state.settingsCapabilities;
   if (!state.runtimeInfo?.automaticWorkSuppressed) parityPreferences.clearNativeAppSettingsMigrationSource();
   applyAppearance();
 }
-async function loadDesktopUsageLedger() {
+async function loadDesktopLocalBackupStatus() {
   if (!native) return;
-  state.usageLedger = await invoke('read_desktop_usage_ledger');
+  const backupStatus = await invoke('read_desktop_local_backup_status');
+  applyDesktopLocalBackupStatus(state, backupStatus);
+}
+function applyDesktopLocalBackupStatus(owner, backupStatus) {
+  owner.localBackup = {
+    ...owner.localBackup,
+    preflight: backupStatus.preflight || null,
+    replaceLocal: Boolean(backupStatus.preflight && !(backupStatus.preflight.conflicts || []).length),
+    notice: backupStatus.notice || '',
+    restartRequired: Boolean(backupStatus.restartRequired),
+    interrupted: Boolean(backupStatus.interrupted),
+    rollbackPending: Boolean(backupStatus.rollbackPending),
+  };
+  if (backupStatus.restartRequired) state.dialog = { kind: 'local-backup-restart-required' };
+}
+async function loadSelectedBackupStatus() {
+  if (!native) return;
+  const owner = selectedBackupAreaState();
+  applyDesktopLocalBackupStatus(owner, await invokeSelectedBackup(owner, 'read_desktop_local_backup_status'));
+}
+async function loadDesktopUsageLedger({ owner = state, isCurrent = () => true } = {}) {
+  if (!native) return false;
+  const ledger = await invoke('read_desktop_usage_ledger');
+  if (state !== owner || !isCurrent()) return false;
+  owner.usageLedger = ledger;
+  return true;
 }
 async function loadDesktopContextRecords() {
   if (!native) return;
@@ -1150,48 +1925,47 @@ async function loadDesktopPrivacyInventory() {
   if (!native) return;
   state.privacyInventory = await invoke('read_desktop_privacy_inventory');
 }
-async function loadDesktopAccountSync() {
-  if (!native) return state.accountSync;
-  const pendingUnknown = state.accountSync?.pendingUnknown || null;
+async function loadDesktopAccountSync(owner = state) {
+  if (!native) return owner.accountSync;
+  const pendingUnknown = owner.accountSync?.pendingUnknown || null;
   // `null` means the user has not requested a cloud read in this settings
   // session.  An empty array is a real, authenticated read that returned no
   // documents; collapsing the two made the page claim "none found" before it
   // had contacted the cloud at all.
-  const remoteDocuments = Array.isArray(state.accountSync?.remoteDocuments)
-    ? state.accountSync.remoteDocuments
+  const remoteDocuments = Array.isArray(owner.accountSync?.remoteDocuments)
+    ? owner.accountSync.remoteDocuments
     : null;
-  const previous = state.accountSync;
-  state.accountSync = { ...await invoke('read_desktop_account_sync'), pendingUnknown, remoteDocuments };
-  if (previous?.email && previous.email === state.accountSync.email) state.accountSync.avatarDataUrl ||= previous.avatarDataUrl;
-  if (state.accountSync.email && !state.accountSync.avatarDataUrl && !accountAvatarPending) {
-    const email = state.accountSync.email;
+  const previous = owner.accountSync;
+  const generation = (accountSyncReadGenerations.get(owner) || 0) + 1;
+  accountSyncReadGenerations.set(owner, generation);
+  const latest = await invoke('read_desktop_account_sync', {}, owner);
+  if (state !== owner || accountSyncReadGenerations.get(owner) !== generation || owner.accountSync !== previous) return owner.accountSync;
+  const sameAccount = previous?.email === latest.email;
+  owner.accountSync = { ...latest, pendingUnknown: sameAccount ? pendingUnknown : null, remoteDocuments: sameAccount ? remoteDocuments : null };
+  if (sameAccount) owner.accountSync.avatarDataUrl ||= previous?.avatarDataUrl;
+  else owner.cloudConversations = [];
+  if (owner.accountSync.email && !owner.accountSync.avatarDataUrl && !accountAvatarPending) {
+    const email = owner.accountSync.email;
     accountAvatarPending = true;
-    invoke('read_desktop_google_avatar').then(avatar => {
-      if (avatar && state.accountSync?.email === email) {
-        state.accountSync.avatarDataUrl = avatar;
-        if (state.settingsSection === 'account') render();
+    invoke('read_desktop_google_avatar', {}, owner).then(avatar => {
+      if (avatar && state === owner && owner.accountSync?.email === email) {
+        owner.accountSync.avatarDataUrl = avatar;
+        if (owner.settingsSection === 'account') render();
       }
     }).catch(() => {}).finally(() => { accountAvatarPending = false; });
   }
-  return state.accountSync;
+  return owner.accountSync;
 }
 
-async function cloudRowsFromLocalEntries(entries) {
+async function cloudRowsFromLocalEntries(entries, owner = state) {
   if (!native || !Array.isArray(entries)) return [];
   const uniqueEntries = dedupeCloudConversationEntries(entries);
   // Restoring a cloud list often returns several rows from one workspace.  The
   // old per-row IPC pattern made every row wait for two SQLite reads.
   const workspaceIds = [...new Set(uniqueEntries.map(item => item?.workspaceId).filter(Boolean))];
-  const projections = await Promise.all(workspaceIds.map(async workspaceId => {
-    try {
-      const [workspace, favoriteIds] = await Promise.all([
-        invoke('read_desktop_workspace', { workspaceId }),
-        invoke('read_desktop_favorite_conversation_ids', { workspaceId }),
-      ]);
-      return [workspaceId, { workspace, favoriteIds }];
-    } catch { return null; }
-  }));
-  const byWorkspace = new Map(projections.filter(Boolean));
+  if (!workspaceIds.length) return [];
+  const batch = await invoke('read_desktop_cloud_workspace_projections', { workspaceIds }, owner);
+  const byWorkspace = new Map(batch.projections.map(item => [item.workspaceId, item]));
   const rows = uniqueEntries.map(item => {
     if (!item?.workspaceId || !item?.conversationId) return null;
     const projection = byWorkspace.get(item.workspaceId);
@@ -1205,12 +1979,34 @@ async function cloudRowsFromLocalEntries(entries) {
 }
 
 async function restoreCachedCloudConversationList() {
-  const cached = readCloudConversationCache();
+  const owner = state;
+  const email = owner.accountSync?.email;
+  const cached = readCloudConversationCache(owner);
   // A list is private to the signed-in Google identity. A prior account's
   // cached IDs are never shown after an account switch or sign-out.
-  if (!cached || !state.accountSync?.email || cached.email !== state.accountSync.email) return;
-  state.cloudConversations = await cloudRowsFromLocalEntries(cached.entries);
-  persistCloudConversationCache();
+  if (!cached || !email || cached.email !== email) return;
+  if (cached.entries.length > cloudConversationEntryLimit) {
+    owner.status = '本机云列表缓存超过 10,000 项读取上限，缓存已保留；请重新读取云端列表。';
+    return;
+  }
+  const generation = advanceCloudListRead(owner);
+  const current = () => state === owner && currentCloudListRead(owner) === generation
+    && owner.accountSync?.email === email;
+  let rows;
+  try {
+    rows = await cloudRowsFromLocalEntries(cached.entries, owner);
+  } catch (error) {
+    // The area adapter can reject before returning the projection. That old
+    // read must not roll back navigation to the newer area's state.
+    if (!current()) return;
+    throw error;
+  }
+  if (!current()) return;
+  owner.cloudConversations = rows;
+  // A local projection is not a remote membership receipt. Keep cached IDs
+  // even if a missing or unreadable local workspace cannot be displayed yet.
+  const missingCount = cached.entries.length - rows.length;
+  if (missingCount > 0) owner.status = `本机云列表有 ${missingCount} 项暂时未能显示，原缓存已保留；请核对本机聊天数据或重新读取云端列表。`;
 }
 
 function accountSyncErrorMessage(error) {
@@ -1227,37 +2023,37 @@ async function loadDesktopHistoryKnowledge({ runDue = false } = {}) {
   state.historyKnowledge = await invoke(runDue ? 'run_desktop_history_knowledge_due' : 'read_desktop_history_knowledge');
   return state.historyKnowledge;
 }
-async function loadDesktopReminders() {
-  if (!native) return state.reminders;
-  state.reminders = await invoke('read_desktop_reminders');
-  return state.reminders;
+async function loadDesktopReminders(owner = state) {
+  if (!native) return owner.reminders;
+  owner.reminders = await invoke('read_desktop_reminders', {}, owner);
+  return owner.reminders;
 }
-async function loadDesktopBackgroundRuntime() {
-  if (!native) return state.backgroundRuntime;
-  state.backgroundRuntime = await invoke('read_desktop_background_runtime');
-  return state.backgroundRuntime;
+async function loadDesktopBackgroundRuntime(owner = state) {
+  if (!native) return owner.backgroundRuntime;
+  owner.backgroundRuntime = await invoke('read_desktop_background_runtime', {}, owner);
+  return owner.backgroundRuntime;
 }
-async function readReminderNotificationPermission() {
+async function readReminderNotificationPermission(owner = state) {
   if (!native) {
-    state.reminderNotificationPermission = 'unavailable';
+    owner.reminderNotificationPermission = 'unavailable';
     return false;
   }
   try {
-    state.reminderNotificationPermission = await invoke('read_desktop_reminder_notification_permission');
-    return ['granted', 'legacy'].includes(state.reminderNotificationPermission);
+    owner.reminderNotificationPermission = await invoke('read_desktop_reminder_notification_permission', {}, owner);
+    return ['granted', 'legacy'].includes(owner.reminderNotificationPermission);
   } catch {
-    state.reminderNotificationPermission = 'unavailable';
+    if (state === owner) owner.reminderNotificationPermission = 'unavailable';
     return false;
   }
 }
-async function requestReminderNotificationPermission() {
+async function requestReminderNotificationPermission(owner = state) {
   if (!native) return false;
   try {
-    const permission = await invoke('request_desktop_reminder_notification_permission');
-    state.reminderNotificationPermission = ['granted', 'legacy', 'denied'].includes(permission) ? permission : 'default';
+    const permission = await invoke('request_desktop_reminder_notification_permission', {}, owner);
+    owner.reminderNotificationPermission = ['granted', 'legacy', 'denied'].includes(permission) ? permission : 'default';
     return ['granted', 'legacy'].includes(permission);
   } catch {
-    state.reminderNotificationPermission = 'unavailable';
+    if (state === owner) owner.reminderNotificationPermission = 'unavailable';
     return false;
   }
 }
@@ -1265,7 +2061,11 @@ async function flushReminderNotifications() {
   if (!native) return;
   const pending = await invoke('read_pending_desktop_reminder_notifications');
   if (!pending.length) return;
-  const allowed = Boolean(state.productSettings.monitorNotifications) && await readReminderNotificationPermission();
+  const permissionGranted = await readReminderNotificationPermission();
+  // An unreadable Windows setting must not silently suppress an authorized reminder.
+  // The native owner attempts delivery and records UNKNOWN instead of claiming SENT.
+  const windowsPermissionUnknown = /^Win/i.test(navigator.platform || '') && state.reminderNotificationPermission === 'unavailable';
+  const allowed = Boolean(state.productSettings.monitorNotifications) && (permissionGranted || windowsPermissionUnknown);
   for (const item of pending) {
     if (!allowed) {
       await invoke('acknowledge_desktop_reminder_notification', { runId: item.runId, sent: false, safeCode: state.productSettings.monitorNotifications ? 'PERMISSION_NOT_GRANTED' : 'SETTING_DISABLED' });
@@ -1278,23 +2078,62 @@ async function flushReminderNotifications() {
     }
   }
 }
+function showUnavailableReminderNotificationTarget() {
+  state.status = '该通知已处理，或对应的提醒与会话已不可用；没有打开其他对象。';
+  render();
+}
 async function routeToReminderPlan(extra = {}) {
   const candidate = reminderNotificationExtra(extra);
   if (candidate.route !== 'desktop-reminder-plan' || !candidate.planId) return false;
-  const resolved = await invoke('resolve_desktop_reminder_notification_target', { target: candidate });
-  if (!resolved) return false;
-  await loadDesktopReminders();
-  const plan = state.reminders.plans.find(item => item.planId === resolved.planId);
-  if (!plan || plan.workspaceId !== resolved.workspaceId || (plan.conversationId || '') !== resolved.conversationId) return false;
-  const nextWorkspace = state.current?.summary?.id === resolved.workspaceId
-    ? state.current
-    : await invoke('read_desktop_workspace', { workspaceId: resolved.workspaceId });
-  if (!await invoke('activate_desktop_reminder_notification_target', { target: resolved })) return false;
-  state.current = nextWorkspace;
-  if (resolved.conversationId) state.selectedConversationId = resolved.conversationId;
-  state.selectedReminderPlanId = resolved.planId;
-  state.pane = 'settings';
-  state.settingsSection = 'reminders';
+  const owner = state;
+  const resolved = await invoke('resolve_desktop_reminder_notification_target', { target: candidate }, owner);
+  if (state !== owner) return false;
+  if (!resolved) { showUnavailableReminderNotificationTarget(); return false; }
+  await loadDesktopReminders(owner);
+  if (state !== owner) return false;
+  const plan = owner.reminders.plans.find(item => item.planId === resolved.planId);
+  if (!plan || plan.workspaceId !== resolved.workspaceId || (plan.conversationId || '') !== resolved.conversationId) {
+    showUnavailableReminderNotificationTarget();
+    return false;
+  }
+  const nextWorkspace = owner.current?.summary?.id === resolved.workspaceId
+    ? owner.current
+    : await invoke('read_desktop_workspace', { workspaceId: resolved.workspaceId }, owner);
+  if (state !== owner) return false;
+  const routeChanged = owner.current?.summary?.id !== resolved.workspaceId
+    || (owner.selectedConversationId || '') !== (resolved.conversationId || '');
+  if (routeChanged) {
+    await flushOrdinaryComposerDraft();
+    if (state !== owner) return false;
+  }
+  if (!await invoke('activate_desktop_reminder_notification_target', { target: resolved }, owner)) {
+    showUnavailableReminderNotificationTarget();
+    return false;
+  }
+  if (state !== owner) return false;
+  if (routeChanged) {
+    owner.current = nextWorkspace;
+    owner.selectedConversationId = resolved.conversationId || null;
+    owner.selectedWorkProjectId = null;
+    owner.newConversationDraftWorkspaceId = null;
+    resetComposerPresentation();
+    owner.p6gSelection = null;
+    owner.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+    owner.favoriteConversationIds = new Set();
+    applyConversationReadState({ workspaceId: resolved.workspaceId, conversations: [] });
+    owner.history = { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] };
+    owner.contextMenu = null;
+    owner.assistantMessageMenu = null;
+  }
+  owner.selectedReminderPlanId = resolved.planId;
+  owner.pane = 'reminders';
+  owner.settingsSection = 'reminders';
+  if (routeChanged) {
+    await refresh({ observeSelected: false });
+    if (state !== owner) return false;
+    await loadOrdinaryComposerDraft();
+    if (state !== owner) return false;
+  }
   render();
   queueMicrotask(() => document.querySelector(`[data-reminder-plan-id="${CSS.escape(resolved.planId)}"]`)?.scrollIntoView({ block: 'center' }));
   return true;
@@ -1302,9 +2141,18 @@ async function routeToReminderPlan(extra = {}) {
 async function handleReminderNotificationAction(event) {
   const action = reminderNotificationAction(event);
   if (!action.clickId) return false;
+  if (action.dataArea !== state.dataArea) {
+    await switchDataArea(action.dataArea, action.dataArea === 'WORK' ? 'work' : 'chat');
+    if (state.dataArea !== action.dataArea) return false;
+  }
   const target = await invoke('consume_desktop_reminder_notification_action', { clickId: action.clickId });
-  if (!target) return false;
+  if (!target) { showUnavailableReminderNotificationTarget(); return false; }
   return routeToReminderPlan(target);
+}
+async function drainReminderNotificationActions() {
+  const pending = await invoke('drain_desktop_reminder_notification_actions');
+  for (const target of pending) await routeToReminderPlan(target);
+  state.reminderNotificationBridge = { ...state.reminderNotificationBridge, pendingActionCount: 0 };
 }
 async function installReminderNotificationActionListener() {
   if (!native || !tauriEvents?.listen) return false;
@@ -1317,9 +2165,11 @@ async function installReminderNotificationActionListener() {
     });
     const status = await invoke('read_desktop_reminder_notification_bridge_status');
     state.reminderNotificationBridge = { ...status, listenerReady: true };
-    const pending = await invoke('drain_desktop_reminder_notification_actions');
-    for (const target of pending) await routeToReminderPlan(target);
-    state.reminderNotificationBridge = { ...state.reminderNotificationBridge, pendingActionCount: 0 };
+    const activationArea = await invoke('read_pending_desktop_reminder_activation_area');
+    if (activationArea && activationArea !== state.dataArea) {
+      await switchDataArea(activationArea, activationArea === 'WORK' ? 'work' : 'chat');
+    }
+    await drainReminderNotificationActions();
     return true;
   } catch {
     state.reminderNotificationBridge = { ...state.reminderNotificationBridge, initialized: false, listenerReady: false, safeCode: 'LISTENER_INIT_FAILED' };
@@ -1330,60 +2180,79 @@ async function installReminderNotificationActionListener() {
 function notifyAccountSync(kind) {
   const NotificationOwner = globalThis.Notification;
   if (!native || typeof NotificationOwner !== 'function' || NotificationOwner.permission !== 'granted') return;
-  const body = kind === 'success' ? '加密同步已完成；可在设置中查看安全回执。' : '加密同步需要处理；请在设置中查看安全诊断。';
+  const body = kind === 'success' ? '南枫云同步已完成；可在设置中查看回执。' : '南枫云同步需要处理；请在设置中查看诊断。';
   try { new NotificationOwner('南枫云同步', { body, tag: 'nanfeng-account-sync-v1' }); } catch { /* system notification is optional and never blocks local truth */ }
 }
 
 function scheduleUnknownSyncReconciliation(workspaceId, conversationId) {
-  if (!native || !workspaceId || !conversationId) return;
-  const key = `${workspaceId}:${conversationId}`;
+  const owner = state;
+  const email = owner.accountSync?.email;
+  if (!native || !workspaceId || !conversationId || !email) return;
+  const sourceWorkspaceId = owner.current?.summary?.id;
+  const sourcePane = owner.pane;
+  const sourceSettingsPage = owner.settingsSection;
+  let pendingMarker = owner.accountSync?.pendingUnknown;
+  const isCurrent = () => state === owner && owner.current?.summary?.id === sourceWorkspaceId
+    && owner.pane === sourcePane && owner.settingsSection === sourceSettingsPage
+    && owner.accountSync?.email === email && owner.accountSync?.pendingUnknown === pendingMarker;
+  const key = JSON.stringify([owner.dataArea, email, workspaceId, conversationId]);
   if (pendingSyncReconciliations.has(key)) return;
   pendingSyncReconciliations.add(key);
   // The submit response was uncertain, not a failed write.  Reconcile after
   // yielding the click frame so the user sees the honest pending state first.
   window.setTimeout(() => {
-    void invoke('reconcile_desktop_conversation_sync', { workspaceId, conversationId })
+    void invokeForAuthorizedDataAreaOperation(tauriBridge, 'reconcile_desktop_conversation_sync',
+      { workspaceId, conversationId, expectedAccountEmail: email }, owner)
       .then(receipt => {
+        if (!isCurrent()) return;
         if (receipt.status === 'SYNCED_AFTER_RECONCILE' || receipt.status === 'SYNCED_AFTER_REMOTE_RECONCILE') {
-          state.accountSync = { ...state.accountSync, pendingUnknown: null };
-          state.status = receipt.status === 'SYNCED_AFTER_REMOTE_RECONCILE' ? '已合并云端最新对话并完成同步。' : '同步成功，已回读校验。';
-          state.error = '';
-          showTransientToast(state.status);
+          owner.accountSync = { ...owner.accountSync, pendingUnknown: null };
+          owner.status = receipt.status === 'SYNCED_AFTER_REMOTE_RECONCILE' ? '已合并云端最新对话并完成同步。' : '同步成功，已回读校验。';
+          owner.error = '';
+          showTransientToast(owner.status);
           notifyAccountSync('success');
         } else if (receipt.status === 'SAFE_TO_RETRY_EXPLICITLY') {
-          state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
-          state.status = '云端未确认本次提交；未重复上传。';
+          owner.accountSync = { ...owner.accountSync, pendingUnknown: { workspaceId, conversationId } };
+          owner.status = '云端未确认本次提交；未重复上传。';
           notifyAccountSync('attention');
         } else {
-          state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
-          state.status = '云端仍在核对，未覆盖任何内容。';
+          owner.accountSync = { ...owner.accountSync, pendingUnknown: { workspaceId, conversationId } };
+          owner.status = '云端仍在核对，未覆盖任何内容。';
           notifyAccountSync('attention');
         }
+        pendingMarker = owner.accountSync.pendingUnknown;
       })
       .catch(() => {
-        state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
-        state.status = '云端提交正在后台核对；不会重复上传。';
+        if (!isCurrent()) return;
+        owner.accountSync = { ...owner.accountSync, pendingUnknown: { workspaceId, conversationId } };
+        owner.status = '云端提交正在后台核对；不会重复上传。';
+        pendingMarker = owner.accountSync.pendingUnknown;
       })
       .finally(() => {
         pendingSyncReconciliations.delete(key);
+        if (!isCurrent()) return;
         render();
-        void loadDesktopAccountSync().then(render).catch(() => {});
+        void loadDesktopAccountSync(owner).then(() => { if (isCurrent()) render(); }).catch(() => {});
       });
   }, 0);
 }
-async function loadTranscriptionState() {
+async function loadTranscriptionState(owner = state) {
   if (!native) {
-    state.transcription = c10TranscriptionPreview
+    owner.transcription = c10TranscriptionPreview
       ? createC10TranscriptionPreviewProjection(c10TranscriptionPreview)
       : { settings: { ...TRANSCRIPTION_PREVIEW_STATE.settings }, tasks: [] };
-    state.selectedTranscriptionTaskId = state.transcription.tasks[0]?.id || null;
-    return state.transcription;
+    owner.selectedTranscriptionTaskId = owner.transcription.tasks[0]?.id || null;
+    return owner.transcription;
   }
-  state.transcription = await invoke('read_desktop_transcription_state', { workspaceId: null });
-  if (!state.transcription.tasks.some(task => task.id === state.selectedTranscriptionTaskId)) {
-    state.selectedTranscriptionTaskId = state.transcription.tasks[0]?.id || null;
+  const generation = owner.transcriptionReadGeneration = (owner.transcriptionReadGeneration || 0) + 1;
+  const areaGeneration = cloudOpenAreaGeneration;
+  const projection = await invoke('read_desktop_transcription_state', { workspaceId: null }, owner);
+  if (state !== owner || areaGeneration !== cloudOpenAreaGeneration || generation !== owner.transcriptionReadGeneration) return owner.transcription;
+  owner.transcription = projection;
+  if (!owner.transcription.tasks.some(task => task.id === owner.selectedTranscriptionTaskId)) {
+    owner.selectedTranscriptionTaskId = owner.transcription.tasks[0]?.id || null;
   }
-  return state.transcription;
+  return owner.transcription;
 }
 
 function transcriptionTask(taskId = state.selectedTranscriptionTaskId) {
@@ -1425,15 +2294,21 @@ async function pickTranscriptionDocument() {
     state.selectedTranscriptionTaskId = task.id;
     state.status = '图片/PDF 已复制到本机私有存储并建立 GLM-OCR 任务；尚未发送。';
     state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
     state.error = `图片/PDF 未导入：${String(error)}`;
   }
   render();
 }
 
 async function executeTranscriptionTask(taskId, retry = false) {
+  const owner = state;
   if ((!native && !c10TranscriptionPreview) || state.transcriptionBusyTaskId) return;
   const documentTask = transcriptionTask(taskId)?.modelId === 'glm-ocr';
+  if (!documentTask) {
+    state.error = '旧版音视频任务仅供查看和导出。';
+    render();
+    return;
+  }
   if (!native) {
     state.transcription = { ...state.transcription, tasks: state.transcription.tasks.map(task => task.id === taskId ? { ...task, state: 'TRANSCRIBING', errorCode: null, userMessage: null } : task) };
     state.transcriptionBusyTaskId = taskId;
@@ -1446,15 +2321,24 @@ async function executeTranscriptionTask(taskId, retry = false) {
   state.error = '';
   render();
   try {
-    if (retry) await invoke('retry_desktop_transcription_task', { taskId });
-    await invoke(documentTask ? 'run_desktop_ocr_task' : 'run_desktop_transcription_task', { taskId });
-    state.status = documentTask ? '图片/PDF 已转换为 Markdown，来源、结果与费用已保存。' : '语音转写已完成，结果、时间轴与费用已保存。';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `${documentTask ? '图片/PDF 转写' : '语音转写'}未完成：${String(error)}`;
+    if (retry) await invokeForAuthorizedDataAreaOperation(tauriBridge,
+      'retry_desktop_transcription_task', { taskId }, owner);
+    const outcome = await invokeForAuthorizedDataAreaOperation(tauriBridge,
+      'run_desktop_ocr_task', { taskId }, owner);
+    if (state !== owner) return;
+    state.status = outcome.state === 'COMPLETED'
+      ? '图片/PDF 已转换为 Markdown，来源、结果与费用已保存。'
+      : outcome.state === 'CANCELLED' ? '转写任务已取消；迟到结果不会写入本机任务。'
+        : '转写任务状态已更新，请查看任务详情。';
+  } catch (error) {
+    if (state !== owner || error?.code === 'STALE_DATA_AREA') return;
+    state.error = `图片/PDF 转写未完成：${String(error)}`;
   } finally {
-    state.transcriptionBusyTaskId = null;
-    await loadTranscriptionState().catch(() => {});
-    render();
+    owner.transcriptionBusyTaskId = null;
+    if (state === owner) {
+      await loadTranscriptionState(owner).catch(() => {});
+      if (state === owner) render();
+    }
   }
 }
 
@@ -1471,7 +2355,7 @@ async function previewTranscriptionSource(taskId) {
   if (task.sourceMimeType === 'video/mp4') return openVideoPreview(task.sourceAttachmentId, undefined, task.workspaceId);
   if (['audio/mpeg', 'audio/wav', 'audio/mp4'].includes(task.sourceMimeType)) return openAudioPreview(task.sourceAttachmentId, undefined, task.workspaceId);
   try { await invoke('open_desktop_attachment_with_system', { args: { workspaceId: task.workspaceId, attachmentId: task.sourceAttachmentId } }); }
-  catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `原文件未打开：${String(error)}`; render(); }
+  catch (error) { state.error = `原文件未打开：${String(error)}`; render(); }
 }
 
 async function previewTranscriptionResult(taskId) {
@@ -1496,31 +2380,60 @@ async function exportTranscriptionTask(taskId, format) {
     const receipt = await invoke('export_desktop_transcription_task', { args: { taskId, selectedPath, format } });
     state.status = `转写结果已原子导出并回读：${bytes(receipt.byteCount)} · ${short(receipt.sha256)}`;
     state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `转写结果未导出：${String(error)}`; }
+  } catch (error) { state.error = `转写结果未导出：${String(error)}`; }
   render();
 }
 
 async function continueChatWithTranscription(taskId) {
+  const owner = state;
   const task = transcriptionTask(taskId);
   if (!task?.resultAttachmentId) return;
   try {
-    const result = await invoke('read_desktop_text_preview', { args: { workspaceId: task.workspaceId, attachmentId: task.resultAttachmentId } });
-    state.composerAttachments = [{ id: result.attachmentId, mimeType: result.mimeType, displayName: result.displayName, byteCount: result.byteCount }];
-    state.composerDraft = '';
+    if (owner.temporaryConversation) throw new Error('请先退出临时会话，再将转写结果加入新对话。');
+    await flushOrdinaryComposerDraft();
+    const result = await invokeForAuthorizedDataAreaOperation(tauriBridge, 'read_desktop_text_preview', { args: { workspaceId: task.workspaceId, attachmentId: task.resultAttachmentId } }, owner);
+    const currentDraft = await invokeForAuthorizedDataAreaOperation(tauriBridge, 'read_desktop_conversation_draft', { workspaceId: task.workspaceId, conversationId: null }, owner);
+    const saved = await persistOrdinaryComposerDraft({
+      dataArea: owner.dataArea, workspaceId: task.workspaceId, conversationId: null,
+      text: currentDraft?.text || '',
+      attachmentIds: [...new Set([...(currentDraft?.attachments || []).map(item => item.id), result.attachmentId])],
+      modelId: currentDraft?.modelId || null,
+      toneOverride: currentDraft?.toneOverride || null,
+      webSearchOverride: currentDraft?.webSearchOverride ?? null,
+    });
+    if (!saved?.attachments?.some(item => item.id === result.attachmentId)) throw new Error('转写结果附件未写入新对话草稿');
+    if (state !== owner) return;
+    if (!await ensureConversationActionWorkspace({ workspaceId: task.workspaceId })) return;
+    if (state !== owner) return;
+    resetComposerPresentation();
     state.selectedConversationId = null;
+    state.newConversationDraftWorkspaceId = task.workspaceId;
+    state.composerDraft = saved.text;
+    state.composerAttachments = saved.attachments;
+    state.pendingNewConversationModelId = saved.modelId || null;
+    state.conversationPreferences = { revision: 0, toneOverride: saved.toneOverride || null, webSearchOverride: saved.webSearchOverride ?? null };
+    armNewConversationDraftExpiry(saved.expiresAtMs);
     state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
     state.status = '转写结果已作为本地 Markdown 附件放入新对话草稿；尚未发送。';
     state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `转写结果未加入对话：${String(error)}`; }
+  } catch (error) { if (state !== owner) return; owner.error = `转写结果未加入对话：${String(error)}`; }
   render();
 }
 
-const utilityPagesLoading = new Set();
+const utilityPagesLoading = new WeakMap();
 const loadUtilityPage = createUtilityPageNavigation({
-  isCurrent: page => state.pane === page,
+  currentOwner: () => state,
+  isCurrent: (page, owner) => state === owner && state.pane === page,
   render: () => render(),
-  loading: (page, value) => value ? utilityPagesLoading.add(page) : utilityPagesLoading.delete(page),
-  failed: (page, error) => { state.error = `${page === 'reminders' ? '定时任务' : '南枫转写任务'}未读取：${String(error)}`; },
+  loading: (page, value, owner) => {
+    let pages = utilityPagesLoading.get(owner);
+    if (!pages) { pages = new Set(); utilityPagesLoading.set(owner, pages); }
+    if (value) pages.add(page);
+    else pages.delete(page);
+  },
+  failed: (page, error) => {
+    state.error = `${page === 'reminders' ? '定时任务' : '南枫转写任务'}未读取：${String(error)}`;
+  },
 });
 
 app.addEventListener('click', async event => {
@@ -1533,256 +2446,219 @@ app.addEventListener('click', async event => {
   if (action === 'show-reminders' || action === 'show-transcription') {
     state.utilitySidebarWorkMode = false;
     state.pane = action === 'show-reminders' ? 'reminders' : 'transcription';
-    state.sidebarOpen = false; state.profileOpen = false; state.error = '';
-    await loadUtilityPage(state.pane, state.pane === 'reminders' ? loadDesktopReminders : loadTranscriptionState);
+    state.sidebarOpen = false;
+    state.profileOpen = false;
+    state.error = '';
+    const page = state.pane;
+    await loadUtilityPage(page, owner => page === 'reminders'
+      ? loadDesktopReminders(owner) : loadTranscriptionState(owner));
     return;
   }
   if (action === 'pick-transcription-document') return pickTranscriptionDocument();
   if (action === 'select-transcription-task') { state.selectedTranscriptionTaskId = target.dataset.taskId; render(); return; }
   if (action === 'run-transcription-task') return executeTranscriptionTask(target.dataset.taskId, false);
   if (action === 'retry-transcription-task') return executeTranscriptionTask(target.dataset.taskId, true);
-  if (action === 'cancel-transcription-task') { try { await invoke('cancel_desktop_transcription_task', { taskId: target.dataset.taskId }); state.status = '转写任务已取消；已保存的检查点仍保留供后续显式重试。'; state.error = ''; } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `任务未取消：${String(error)}`; } await loadTranscriptionState().catch(() => {}); render(); return; }
+  if (action === 'cancel-transcription-task' && transcriptionTask(target.dataset.taskId)?.modelId !== 'glm-ocr') {
+    state.error = '旧版音视频任务仅供查看和导出。';
+    render();
+    return;
+  }
+  if (action === 'cancel-transcription-task') { try { await invoke('cancel_desktop_transcription_task', { taskId: target.dataset.taskId }); state.status = '转写任务已取消；已保存的检查点仍保留供后续显式重试。'; state.error = ''; } catch (error) { state.error = `任务未取消：${String(error)}`; } await loadTranscriptionState().catch(() => {}); render(); return; }
   if (action === 'preview-transcription-source') return previewTranscriptionSource(target.dataset.taskId);
   if (action === 'preview-transcription-result') return previewTranscriptionResult(target.dataset.taskId);
   if (action === 'copy-transcription-result') { const text = (transcriptionTask(target.dataset.taskId)?.segments || []).map(segment => segment.text).join('\n\n'); try { await navigator.clipboard.writeText(text); showCopyIconFeedback(target); state.error = ''; } catch { state.error = '系统未允许写入剪贴板。'; render(); } return; }
   if (action === 'continue-chat-with-transcription') return continueChatWithTranscription(target.dataset.taskId);
   if (action === 'export-transcription-task') return exportTranscriptionTask(target.dataset.taskId, target.dataset.format);
   if (action === 'ask-delete-transcription-task') { state.dialog = { kind: 'transcription-delete', taskId: target.dataset.taskId, submitting: false, failure: '' }; render(); return; }
-  if (action === 'confirm-delete-transcription-task') { state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('delete_desktop_transcription_task', { taskId: target.dataset.taskId }); state.dialog = null; state.selectedTranscriptionTaskId = null; state.status = '转写任务已删除；无引用私有字节进入安全清理期。'; await loadTranscriptionState(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; } render(); }
+  if (action === 'confirm-delete-transcription-task') { state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('delete_desktop_transcription_task', { taskId: target.dataset.taskId }); state.dialog = null; state.selectedTranscriptionTaskId = null; state.status = '转写任务已删除；无引用私有字节进入安全清理期。'; await loadTranscriptionState(); } catch (error) { state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; } render(); }
 }, true);
-let modelEnabledQueue = Promise.resolve();
-const modelEnabledIntents = new Map();
-const modelPresetIntents = new Map();
-function mergeModelServiceIntents(record, owner = state) {
-  const enabled = modelEnabledIntents.get(record.providerId);
-  const preset = modelPresetIntents.get(record.providerId);
-  return { ...record,
-    enabled: enabled?.owner === owner ? enabled.enabled : record.enabled,
-    presetId: preset?.owner === owner ? preset.presetId : record.presetId,
-    presetDisplayName: preset?.owner === owner ? preset.displayName : record.presetDisplayName,
-  };
+function modelServiceEditorIsCurrent(owner, providerId) {
+  return state === owner && owner.pane === 'settings' && owner.settingsSection === 'model-configuration'
+    && owner.modelProviderId === providerId;
 }
-function rememberModelServiceReceipt(record, owner = state) {
-  for (const intents of [modelEnabledIntents, modelPresetIntents]) {
-    const pending = intents.get(record.providerId);
-    if (pending?.owner === owner) pending.confirmed = record;
-  }
-  return mergeModelServiceIntents(record, owner);
-}
-function queueModelSettingsWrite(operation) {
-  const result = modelEnabledQueue.catch(() => {}).then(operation);
-  modelEnabledQueue = result;
-  return result;
-}
-async function setModelServiceEnabled() {
-  const service = selectedModelService();
-  if (!native || !service) return;
-  const owner = state;
-  const providerId = service.providerId;
-  const previous = modelEnabledIntents.get(providerId);
-  const pending = previous?.owner === owner ? previous : null;
-  const enabled = !Boolean(pending?.enabled ?? state.modelServiceDraft?.enabled ?? service.enabled);
-  const intent = { enabled, owner, confirmed: pending?.confirmed ?? service };
-  modelEnabledIntents.set(providerId, intent);
-  replaceModelService({ ...service, enabled });
-  if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, enabled };
-  render();
-  await queueModelSettingsWrite(async () => {
-    try {
-      if (state !== owner) return;
-      const saved = await invoke('set_desktop_model_service_enabled', { args: { providerId, enabled } }, owner);
-      if (state !== owner) return;
-      const latest = modelEnabledIntents.get(providerId);
-      if (latest?.owner === owner) latest.confirmed = saved;
-      replaceModelService(rememberModelServiceReceipt(saved, owner));
-      if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, revision: saved.revision };
-      setModelProviderFeedback(providerId, '启用状态已保存。');
-    } catch {
-      if (state !== owner) return;
-      // Remove only this failed final intent before reading persisted state.
-      if (modelEnabledIntents.get(providerId) === intent) {
-        modelEnabledIntents.delete(providerId);
-        replaceModelService(mergeModelServiceIntents(intent.confirmed, owner));
-        if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, enabled: intent.confirmed.enabled, revision: intent.confirmed.revision };
-      }
-      let readback = false;
-      try {
-        const records = await loadModelServiceSettings({ preserveDraft: true });
-        readback = state === owner && Array.isArray(records);
-        const persisted = records?.find(item => item.providerId === providerId);
-        const latest = modelEnabledIntents.get(providerId);
-        if (persisted && latest?.owner === owner && persisted.revision >= latest.confirmed.revision) latest.confirmed = persisted;
-      } catch { /* Keep the last confirmed state and the user's draft. */ }
-      if (state !== owner) return;
-      const current = state.modelServiceSettings.find(item => item.providerId === providerId);
-      if (state.modelServiceDraft?.providerId === providerId && current) state.modelServiceDraft = { ...state.modelServiceDraft, enabled: current.enabled, revision: current.revision };
-      setModelProviderFeedback(providerId, '', readback ? '启用状态未确认保存；已重新读取本机设置。' : '启用状态未确认保存；请稍后重新读取本机设置。');
-    } finally {
-      if (modelEnabledIntents.get(providerId) === intent) modelEnabledIntents.delete(providerId);
-      if (state === owner) render();
-    }
-  });
-}
-function providerOcrProbeSelected(service, presetId) {
-  return service?.providerId === 'ZHIPU' && presetId === 'GLM_OCR' && service.nonChatCapabilities?.some(item => item.id === presetId);
-}
-
-async function setModelServicePreset(presetId) {
-  const service = selectedModelService();
-  if (!native || !service) return;
-  if (providerOcrProbeSelected(service, presetId)) {
-    state.modelServiceDraft = { ...state.modelServiceDraft, presetId };
-    setModelProviderFeedback(service.providerId);
-    render();
-    return;
-  }
-  if (!service.presets?.some(item => item.id === presetId)) return;
-  const owner = state;
-  const providerId = service.providerId;
-  const previous = modelPresetIntents.get(providerId);
-  const choice = service.presets.find(item => item.id === presetId);
-  const intent = { owner, presetId, displayName: choice.displayName, confirmed: previous?.owner === owner ? previous.confirmed : service };
-  modelPresetIntents.set(providerId, intent);
-  replaceModelService(mergeModelServiceIntents(service, owner));
-  if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, presetId };
-  setModelProviderFeedback(providerId);
-  render();
-  await queueModelSettingsWrite(async () => {
-    try {
-      if (state !== owner) return;
-      const current = state.modelServiceSettings.find(item => item.providerId === providerId);
-      const saved = await invoke('save_desktop_model_service_settings', { args: {
-        providerId, presetId, enabled: Boolean(current.enabled), preserveEnabled: true,
-        expectedRevision: current.revision, apiKey: null,
-      } }, owner);
-      if (state !== owner) return;
-      replaceModelService(rememberModelServiceReceipt(saved, owner));
-      if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, revision: saved.revision };
-      if (modelPresetIntents.get(providerId) === intent) setModelProviderFeedback(providerId);
-    } catch {
-      if (state !== owner) return;
-      if (modelPresetIntents.get(providerId) === intent) {
-        modelPresetIntents.delete(providerId);
-        const current = state.modelServiceSettings.find(item => item.providerId === providerId);
-        replaceModelService(mergeModelServiceIntents({ ...current, presetId: intent.confirmed.presetId, presetDisplayName: intent.confirmed.presetDisplayName }, owner));
-      }
-      try { await loadModelServiceSettings({ preserveDraft: true }); } catch { /* Keep the last confirmed choice, never write credentials. */ }
-      if (state !== owner) return;
-      const current = state.modelServiceSettings.find(item => item.providerId === providerId);
-      if (state.modelServiceDraft?.providerId === providerId && current) state.modelServiceDraft = { ...state.modelServiceDraft, presetId: providerOcrProbeSelected(current, state.modelServiceDraft.presetId) ? 'GLM_OCR' : current.presetId, revision: current.revision };
-      setModelProviderFeedback(providerId, '', '模型选择未确认保存，请稍后重新读取设置。');
-    } finally {
-      if (modelPresetIntents.get(providerId) === intent) modelPresetIntents.delete(providerId);
-      if (state === owner) render();
-    }
-  });
+function clearOwnedModelCredentialDraft(owner) {
+  owner.modelCredentialDraft = '';
+  owner.modelCredentialEdited = false;
+  owner.modelCredentialVisible = false;
 }
 async function saveModelServiceSettings() {
-  const service = selectedModelService();
   const owner = state;
-  if (!service || state.modelSettingsSaving || state.modelSettingsTesting || !state.modelCredentialEdited || !state.modelCredentialDraft.trim()) return;
-  if (!native) {
-    state.modelSettingsError = 'Web 预览不会保存 API Key；请在 Desktop 应用中操作。';
+  const service = selectedModelService(owner);
+  const draft = owner.modelServiceDraft;
+  if (!service || !draft || owner.modelSettingsSaving) return;
+  if (draft.revision !== service.revision) {
+    owner.modelSettingsNotice = '';
+    owner.modelSettingsError = '模型配置已在另一数据区更新；请重新选择服务商并确认设置后保存。';
     render();
     return;
   }
-  const replacementCredential = state.modelCredentialEdited && state.modelCredentialDraft.trim() ? state.modelCredentialDraft.trim() : null;
-  state.modelSettingsSaving = true;
-  state.modelCredentialRevealRequest = null;
-  setModelProviderFeedback(service.providerId);
+  if (!native) {
+    owner.modelSettingsError = 'Web 预览不会保存 API Key；请在 Desktop 应用中操作。';
+    render();
+    return;
+  }
+  const credentialDraft = owner.modelCredentialDraft;
+  const credentialEdited = owner.modelCredentialEdited;
+  const editorUnchanged = () => owner.modelServiceDraft?.providerId === service.providerId
+    && owner.modelCredentialDraft === credentialDraft && owner.modelCredentialEdited === credentialEdited;
+  owner.modelSettingsSaving = true;
+  owner.modelSettingsNotice = '';
+  owner.modelSettingsError = '';
   render();
-  await queueModelSettingsWrite(async () => {
-    try {
-      if (state !== owner) return;
-      const current = state.modelServiceSettings.find(item => item.providerId === service.providerId);
-      if (!current) throw new Error('模型服务设置尚未加载。');
-      const saved = await invoke('save_desktop_model_service_settings', { args: {
-        providerId: service.providerId,
-        enabled: Boolean(current.enabled),
-        preserveEnabled: true,
-        preservePreset: true,
-        presetId: current.presetId,
-        expectedRevision: current.revision,
-        apiKey: replacementCredential,
-      } }, owner);
-      if (state !== owner) return;
-      const pending = modelEnabledIntents.get(service.providerId);
-      if (pending?.owner === owner) pending.confirmed = saved;
-      replaceModelService(rememberModelServiceReceipt(saved, owner));
-      state.status = modelServiceConfigurationStatus();
-      setModelProviderFeedback(service.providerId, 'API Key 已安全保存在本机。');
-      if (state.modelProviderId === service.providerId) {
-        state.modelServiceDraft = { ...mergeModelServiceIntents(saved, owner), ...(providerOcrProbeSelected(service, state.modelServiceDraft?.presetId) ? {presetId:'GLM_OCR'} : {}) };
-        state.modelCredentialDraft = '';
-        state.modelCredentialEdited = false;
-        state.modelCredentialVisible = false;
+  try {
+    const saved = await localSettingsWrites.track(modelSettingsController.enqueue(owner, () => {
+      const committed = owner.modelServiceSettings.find(item => item.providerId === service.providerId);
+      return invokeForAuthorizedDataAreaOperation(tauriBridge,
+        'save_desktop_model_service_settings', { args: {
+          providerId: service.providerId, enabled: Boolean(committed.enabled), presetId: committed.presetId,
+          expectedRevision: committed.revision, preserveEnabled: true, preservePreset: true,
+          apiKey: credentialEdited && credentialDraft.trim() ? credentialDraft.trim() : null,
+        } }, owner);
+    }), `model-settings:${service.providerId}:credential`);
+    // Merge metadata through the ordering owner; credentials do not own the current model target.
+    modelSettingsController.replace(owner, saved, { project: owner.modelProviderId === saved.providerId });
+    if (!modelServiceEditorIsCurrent(owner, service.providerId) || !editorUnchanged()) return;
+    owner.status = modelServiceConfigurationStatus(owner.modelServiceSettings);
+    if (credentialEdited && credentialDraft.trim()) {
+      owner.modelSettingsNotice = '';
+      owner.dialog = { kind: 'model-credential-saved' };
+    } else owner.modelSettingsNotice = '模型设置已保存。';
+    modelSettingsController.feedback(owner, service.providerId, 'API Key 已保存。');
+    clearOwnedModelCredentialDraft(owner);
+  } catch (error) {
+    if (editorUnchanged()) {
+      let refreshed = false;
+      // Refresh metadata only; preserve the typed key and never retry its write.
+      // A confirmed later save by this same owner still owns close recovery.
+      if (modelServiceEditorIsCurrent(owner, service.providerId)) {
+        try { refreshed = await modelSettingsController.read(owner, { preserveUnsavedDraft: true }); }
+        catch { /* Keep the original save error and input when metadata is unavailable. */ }
       }
-    } catch (error) { if (state !== owner) return; if (error?.code === 'STALE_DATA_AREA') throw error;
-      setModelProviderFeedback(service.providerId, '', `保存失败：${String(error)}`);
-    } finally {
-      owner.modelSettingsSaving = false;
-      if (state === owner) render();
+      if (editorUnchanged()) modelSettingsController.feedback(owner, service.providerId, '',
+        `保存失败：${String(error)}${refreshed ? '；最新配置已读取，输入已保留，请确认后再次保存。' : ''}`);
     }
-  });
+  } finally {
+    owner.modelSettingsSaving = false;
+    if (!modelServiceEditorIsCurrent(owner, service.providerId) && editorUnchanged()) clearOwnedModelCredentialDraft(owner);
+    if (state === owner) render();
+  }
+}
+async function deleteModelServiceCredential() {
+  const owner = state;
+  const request = owner.dialog;
+  if (!native || request?.kind !== 'model-credential-delete' || request.submitting) return;
+  const pendingRequest = { ...request, submitting: true, failure: '' };
+  const draft = owner.modelServiceDraft;
+  owner.dialog = pendingRequest;
+  owner.modelSettingsSaving = true;
+  render();
+  const currentRequest = () => state === owner && owner.dialog === pendingRequest;
+  try {
+    const updated = await localSettingsWrites.track(invokeForAuthorizedDataAreaOperation(tauriBridge,
+      'delete_desktop_model_service_credential', { providerId: request.providerId }, owner));
+    const unchangedDraft = modelServiceEditorIsCurrent(owner, updated.providerId) && owner.modelServiceDraft === draft;
+    modelSettingsController.replace(owner, updated, { project: owner.modelProviderId === updated.providerId });
+    if (!currentRequest()) return;
+    if (unchangedDraft) clearOwnedModelCredentialDraft(owner);
+    owner.status = modelServiceConfigurationStatus(owner.modelServiceSettings);
+    owner.dialog = { kind: 'model-settings-feedback', failed: false, message: `“${updated.providerDisplayName}”的 API Key 已从本机删除。` };
+    owner.modelSettingsError = '';
+  } catch (error) {
+    if (currentRequest()) owner.dialog = { ...request, submitting: false, failure: String(error) };
+  } finally {
+    owner.modelSettingsSaving = false;
+    if (state === owner) render();
+  }
 }
 async function revealModelServiceCredential() {
-  const service = selectedModelService();
-  if (!service || state.modelSettingsSaving || state.modelSettingsTesting) return;
-  if (state.modelCredentialVisible) {
-    state.modelCredentialVisible = false;
+  const owner = state;
+  const service = selectedModelService(owner);
+  if (!service || owner.modelSettingsSaving || owner.modelSettingsTesting) return;
+  if (owner.modelCredentialVisible) {
+    owner.modelCredentialVisible = false;
     render();
     return;
   }
-  // A typed or already revealed key is already available in this editor.
-  if (typeof state.modelCredentialDraft === 'string' && state.modelCredentialDraft.length > 0) {
-    state.modelCredentialVisible = true;
+  if (typeof owner.modelCredentialDraft === 'string' && owner.modelCredentialDraft.length > 0) {
+    owner.modelCredentialVisible = true;
     render();
     return;
   }
   if (!native) {
-    state.modelSettingsError = 'Web 预览不会读取本机凭据。';
+    owner.modelSettingsError = 'Web 预览不会读取本机凭据。';
     render();
     return;
   }
-  const request = {};
-  state.modelCredentialRevealRequest = request;
+  const draft = owner.modelServiceDraft;
+  const credentialDraft = owner.modelCredentialDraft;
+  const currentReveal = () => modelServiceEditorIsCurrent(owner, service.providerId)
+    && owner.modelServiceDraft === draft && owner.modelCredentialDraft === credentialDraft
+    && !owner.modelCredentialEdited && selectedModelService(owner)?.revision === service.revision;
   try {
-    const revealed = await invoke('reveal_desktop_model_service_credential', { providerId: service.providerId });
-    if (state.modelCredentialRevealRequest !== request || state.modelProviderId !== service.providerId || state.modelCredentialEdited || state.pane !== 'settings' || state.settingsSection !== 'model-configuration') return;
-    state.modelCredentialDraft = revealed;
-    state.modelCredentialVisible = true;
-    state.modelSettingsError = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    if (state.modelCredentialRevealRequest === request) setModelProviderFeedback(service.providerId, '', `无法显示 API Key：${String(error)}`);
+    const revealed = await invokeForAuthorizedDataAreaOperation(tauriBridge,
+      'reveal_desktop_model_service_credential', { providerId: service.providerId }, owner);
+    if (!currentReveal()) return;
+    owner.modelCredentialDraft = revealed;
+    owner.modelCredentialVisible = true;
+    owner.modelSettingsError = '';
+  } catch (error) {
+    if (!currentReveal()) return;
+    owner.modelSettingsError = `无法显示 API Key：${String(error)}`;
   }
+  if (state === owner) render();
+}
+async function refreshOpenrouterRegistry() {
+  if (state.openrouterRegistryRefreshing) return;
+  if (!native) {
+    state.openrouterRegistryError = 'Web 预览不能核验在线模型目录。';
+    render();
+    return;
+  }
+  state.openrouterRegistryRefreshing = true;
+  state.openrouterRegistryNotice = '';
+  state.openrouterRegistryError = '';
   render();
+  try {
+    const status = await invoke('refresh_desktop_openrouter_registry');
+    for (const owner of dataAreaStates.values()) owner.openrouterRegistryStatus = status;
+    state.openrouterRegistryNotice = '模型资料已更新。';
+  } catch (error) {
+    state.openrouterRegistryError = `模型资料更新失败：${String(error)}`;
+    try { state.openrouterRegistryStatus = await invoke('read_desktop_openrouter_registry_status'); } catch { /* Keep the last displayed status. */ }
+  } finally {
+    state.openrouterRegistryRefreshing = false;
+    render();
+  }
 }
 async function testModelServiceConnection() {
-  const service = selectedModelService();
   const owner = state;
-  if (!service || state.modelSettingsTesting || state.modelSettingsSaving || !service.credentialStored) return;
-  if (state.modelCredentialEdited) {
-    setModelProviderFeedback(service.providerId, '', 'API Key 尚未保存，请先保存再测试连接。');
-    render(); return;
-  }
+  const service = selectedModelService(owner);
+  if (!service || owner.modelSettingsTesting || !service.credentialStored) return;
+  if (owner.modelCredentialEdited) { modelSettingsController.feedback(owner, service.providerId, '', '请先保存新的 API Key，再测试连接。'); render(); return; }
   if (!native) {
-    state.modelSettingsError = 'Web 预览不会发送连接测试。';
+    owner.modelSettingsError = 'Web 预览不会发送连接测试。';
     render();
     return;
   }
-  const ocrProbe = providerOcrProbeSelected(service, state.modelServiceDraft?.presetId);
-  state.modelSettingsTesting = true;
-  setModelProviderFeedback(service.providerId);
+  const probeDraft = owner.modelServiceDraft;
+  const probePresetId = probeDraft?.providerId === service.providerId ? probeDraft.presetId : service.presetId;
+  const probePreset = [...(service.presets || []), ...(service.nonChatCapabilities || [])].find(item => item.id === probePresetId);
+  const currentTest = () => modelServiceEditorIsCurrent(owner, service.providerId)
+    && selectedModelService(owner)?.revision === service.revision
+    && selectedModelService(owner)?.presetId === service.presetId
+    && owner.modelServiceDraft === probeDraft
+    && (owner.modelServiceDraft?.providerId === service.providerId ? owner.modelServiceDraft.presetId : selectedModelService(owner)?.presetId) === probePresetId;
+  owner.modelSettingsTesting = true;
+  owner.modelSettingsNotice = '';
+  owner.modelSettingsError = '';
   render();
   try {
-    await modelEnabledQueue.catch(() => {});
-    if (state !== owner) return;
-    const current = state.modelServiceSettings.find(item => item.providerId === service.providerId);
-    await invoke('test_desktop_model_service_connection', { args: { providerId: service.providerId, presetId: ocrProbe ? 'GLM_OCR' : current.presetId } }, owner);
-    if (state !== owner) return;
-    setModelProviderFeedback(service.providerId, `连接成功：${service.providerDisplayName} · ${ocrProbe ? 'GLM-OCR' : current.presetDisplayName}`);
-  } catch (error) { if (state !== owner) return; if (error?.code === 'STALE_DATA_AREA') throw error;
-    setModelProviderFeedback(service.providerId, '', `连接测试失败：${String(error)}`);
+    await invokeForAuthorizedDataAreaOperation(tauriBridge, 'test_desktop_model_service_connection', {
+      args: { providerId: service.providerId, presetId: probePresetId },
+    }, owner);
+    if (currentTest()) modelSettingsController.feedback(owner, service.providerId, `连接成功：${service.providerDisplayName} · ${probePreset?.displayName || service.presetDisplayName}`);
+  } catch (error) {
+    if (currentTest()) modelSettingsController.feedback(owner, service.providerId, '', `连接测试失败：${String(error)}`);
   } finally {
     owner.modelSettingsTesting = false;
     if (state === owner) render();
@@ -1798,6 +2674,7 @@ const intent = prefix => `${prefix}-${Date.now().toString(36)}-${Math.random().t
 const icon = (path, label) => `<svg aria-hidden="true" viewBox="0 0 24 24"><title>${label}</title><path d="${path}"/></svg>`;
 let fullSearchDebounce = null;
 let fullSearchGeneration = 0;
+let searchLocateGeneration = 0;
 let fullSearchRequestId = 0;
 let fullSearchCategoryFrame = null;
 let settingsSearchRenderFrame = null;
@@ -1878,12 +2755,13 @@ function currentSidebarRetention(data) {
   return {
     data,
     selectedConversationId: state.selectedConversationId,
-    inlineConversationRename: state.inlineConversationRename,
     sidebarOpen: state.sidebarOpen,
     railCollapsed: state.railCollapsed,
     profileOpen: state.profileOpen,
     sidebarConversationList: state.sidebarConversationList,
     cloudConversations: state.cloudConversations,
+    inlineConversationRename: state.inlineConversationRename,
+    inlineTitleError: state.inlineConversationRename?.error,
     batchEditing: state.batchEditing,
     batchSelectedConversationKeys: state.batchSelectedConversationKeys,
     chatSearch: state.chatSearch,
@@ -1915,20 +2793,25 @@ function canRetainSidebar(previous, next) {
   return previous && next
     && previous.data === next.data
     && previous.sidebarOpen === next.sidebarOpen
-    && previous.inlineConversationRename === next.inlineConversationRename
     && previous.railCollapsed === next.railCollapsed
     && previous.profileOpen === next.profileOpen
-    // Cloud rows participate in the same sidebar projection as local rows.
-    // A new cloud array must therefore invalidate the retained list.
+    // The compact local/cloud switch owns both its selected pill and the list
+    // below it. Retaining the old sidebar here would leave the control visually
+    // frozen even though the state has already changed.
     && previous.sidebarConversationList === next.sidebarConversationList
     && previous.cloudConversations === next.cloudConversations
+    && previous.inlineConversationRename === next.inlineConversationRename
+    && previous.inlineTitleError === next.inlineTitleError
     && previous.batchEditing === next.batchEditing
     && previous.batchSelectedConversationKeys === next.batchSelectedConversationKeys
     && previous.chatSearch === next.chatSearch
     && previous.searchHistory === next.searchHistory
     && previous.searchHistoryOpen === next.searchHistoryOpen
     && previous.favoriteConversationIds === next.favoriteConversationIds
-    && previous.syncedConversationKeys === next.syncedConversationKeys
+    // Cloud rows intentionally omit the local synced marker (shared Mac UI).
+    // Metadata-only membership refresh must not rebuild this unchanged list.
+    && (next.sidebarConversationList === 'cloud'
+      || previous.syncedConversationKeys === next.syncedConversationKeys)
     // Opening a conversation clears only its automatic unread dot. That is a
     // local row patch, not a reason to sort and recreate every sidebar row.
     && sameSetExceptId(previous.unreadConversationIds, next.unreadConversationIds, next.selectedConversationId)
@@ -2033,6 +2916,7 @@ function cancelDesktopLocalSearch(requestId) {
 
 function supersedeFullSearch() {
   fullSearchGeneration += 1;
+  searchLocateGeneration += 1;
   const requestId = ++fullSearchRequestId;
   cancelDesktopLocalSearch(requestId);
   return requestId;
@@ -2060,16 +2944,17 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false, inP
   // This command may arrive after the query command. Cancel only older
   // requests so that out-of-order IPC can never abort this request itself.
   cancelDesktopLocalSearch(requestId - 1);
-  const cacheScope = JSON.stringify([state.workspaces, state.current?.summary]);
+  const cacheScope = JSON.stringify([state.dataArea, state.workspaces, state.current?.summary]);
   if (cacheScope !== fullSearchCacheScope) { fullSearchResultCache.clear(); fullSearchCacheScope = cacheScope; }
-  const offset = append ? (state.searchPage?.hits?.length || 0) : 0;
+  const appendBaseHits = append ? [...(state.searchPage?.hits || [])] : [];
+  const offset = appendBaseHits.length;
   const searchArgs = { query: state.chatSearch, category: state.searchCategory || 'all', sortMode: state.searchSortMode, fileType: state.searchCategory === 'file' ? state.searchFileType : 'all', offset };
   const cachedPage = native ? fullSearchResultCache.get(searchArgs) : null;
   state.searchPanel = true;
   state.searchLoading = !append && !cachedPage;
   state.searchLoadingMore = append && !cachedPage;
   if (cachedPage) {
-    state.searchPage = append ? { ...cachedPage, hits: [...(state.searchPage?.hits || []), ...(cachedPage.hits || [])] } : cachedPage;
+    state.searchPage = append ? { ...cachedPage, hits: [...appendBaseHits, ...(cachedPage.hits || [])] } : cachedPage;
     state.searchResults = state.searchPage.hits;
   }
   state.searchError = '';
@@ -2112,10 +2997,10 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false, inP
       historyWorkspaceId: null,
     }, requestId });
     const page = await withFullSearchDeadline(pending, requestId);
-    if (cacheScope === fullSearchCacheScope) fullSearchResultCache.set(searchArgs, page);
     if (generation !== fullSearchGeneration) return;
+    if (cacheScope === fullSearchCacheScope) fullSearchResultCache.set(searchArgs, page);
     if (cachedPage || append) rememberFullSearchScroll();
-    state.searchPage = append ? { ...page, hits: [...(state.searchPage?.hits || []), ...(page.hits || [])] } : page;
+    state.searchPage = append ? { ...page, hits: [...appendBaseHits, ...(page.hits || [])] } : page;
     state.searchResults = state.searchPage.hits || [];
     state.searchLoading = false;
     state.searchLoadingMore = false;
@@ -2153,7 +3038,8 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false, inP
         if (repaired && generation === fullSearchGeneration && state.searchPanel) void runFullSearch({ restoreScroll: true, inPlace: true });
       }).catch(() => {}).finally(() => { fullSearchRepairPending = false; });
     }
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
+    if (error?.code === 'STALE_DATA_AREA') return;
     if (generation !== fullSearchGeneration) return;
     state.searchLoading = false;
     state.searchLoadingMore = false;
@@ -2243,43 +3129,81 @@ function revealFullSearchAttachment(target = state.searchRevealTarget) {
   return true;
 }
 
-async function loadSearchWorkspace(workspaceId) {
+async function loadSearchWorkspace(workspaceId, isCurrent = () => true) {
   if (!native || !workspaceId) return false;
   if (state.current?.summary?.id === workspaceId) return true;
-  state.current = await invoke('read_desktop_workspace', { workspaceId });
-  state.history = await invoke('read_desktop_workbench_history', { workspaceId });
+  const current = await invoke('read_desktop_workspace', { workspaceId });
+  if (!isCurrent()) return false;
+  state.current = current;
+  const history = await invoke('read_desktop_workbench_history', { workspaceId });
+  if (!isCurrent()) return false;
+  state.history = history;
   reloadFavoriteConversationIds();
-  await loadConversationReadState({ observeSelected: false });
-  return true;
+  await loadConversationReadState({ observeSelected: false, isCurrent });
+  return isCurrent();
 }
 
 async function locateSearchHit(hit) {
   if (!hit) return;
+  const owner = state;
+  const generation = ++searchLocateGeneration;
+  const isCurrent = () => state === owner && generation === searchLocateGeneration;
+  const alreadyShowingWorkspace = owner.current?.summary?.id === hit.workspaceId;
+  let staleHit = false;
   rememberFullSearchScroll(hit.entryId);
   try {
-    await loadSearchWorkspace(hit.workspaceId);
+    await loadSearchWorkspace(hit.workspaceId, isCurrent);
+    if (!isCurrent()) return;
     if (String(hit.conversationId || '').startsWith('transcription-task:')) {
-      state.selectedTranscriptionTaskId = String(hit.conversationId).slice('transcription-task:'.length);
+      const taskId = String(hit.conversationId).slice('transcription-task:'.length);
+      await loadTranscriptionState(owner);
+      if (!isCurrent()) return;
+      const task = owner.transcription.tasks.find(item => item.id === taskId);
+      if (!task) {
+        staleHit = true;
+        throw new Error('结果所属转写任务已删除');
+      }
+      state.selectedTranscriptionTaskId = taskId;
       state.searchReturnActive = true;
       state.searchPanel = false;
       state.pane = 'transcription';
-      await loadTranscriptionState();
-      state.transcriptionMode = transcriptionTask(state.selectedTranscriptionTaskId)?.modelId === 'glm-ocr' ? 'document' : 'speech';
+      state.transcriptionMode = task.modelId === 'glm-ocr' ? 'document' : 'speech';
       render();
       return;
     }
+    if (alreadyShowingWorkspace) {
+      const refreshed = await invoke('read_desktop_workspace', { workspaceId: hit.workspaceId });
+      if (!isCurrent()) return;
+      state.current = refreshed;
+    }
     let conversation = state.current?.exchange?.conversations?.find(item => item.id === hit.conversationId);
-    if (!conversation) throw new Error('结果所属会话已变化');
+    if (!conversation || conversation.deleted) {
+      staleHit = true;
+      throw new Error('结果所属会话已变化或删除');
+    }
+    if (hit.messageId && !conversation.messages?.some(message => message.id === hit.messageId)) {
+      staleHit = true;
+      throw new Error('结果所属消息已删除');
+    }
+    if (hit.attachmentId && !conversation.messages?.some(message => message.id === hit.messageId &&
+      message.blocks?.some(block => block.kind === 'ASSET_REF' && block.asset?.id === hit.attachmentId))) {
+      staleHit = true;
+      throw new Error('结果所属附件引用已删除');
+    }
     if (hit.branchLeafId && conversation.currentLeafId !== hit.branchLeafId) {
       await invoke('mutate_desktop_domain', { args: {
         intentId: intent('search-switch-leaf'), workspaceId: hit.workspaceId, entity: 'conversation', action: 'switchLeaf',
-        objectId: hit.conversationId, expectedRevision: Number(hit.conversationRevision), fields: { messageId: hit.branchLeafId },
+        objectId: hit.conversationId, expectedRevision: Number(conversation.revision), fields: { messageId: hit.branchLeafId },
       } });
-      state.current = await invoke('read_desktop_workspace', { workspaceId: hit.workspaceId });
+      if (!isCurrent()) return;
+      const current = await invoke('read_desktop_workspace', { workspaceId: hit.workspaceId });
+      if (!isCurrent()) return;
+      state.current = current;
       conversation = state.current.exchange.conversations.find(item => item.id === hit.conversationId);
     }
     state.selectedConversationId = hit.conversationId;
-    await markConversationOpened(hit.conversationId);
+    await markConversationOpened(hit.conversationId, isCurrent);
+    if (!isCurrent()) return;
     state.searchAnchorMessageId = hit.messageId || null;
     state.searchAnchorAttachmentId = hit.attachmentId || null;
     // A generated-image group keeps every image surface mounted but only one visible. Select the
@@ -2289,15 +3213,21 @@ async function locateSearchHit(hit) {
     state.searchLocatedArchivedConversationId = hit.archived ? hit.conversationId : null;
     state.searchReturnActive = true;
     state.searchPanel = false;
-    state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
+    state.pane = 'chat';
     render();
     queueMicrotask(() => {
-      if (state.pane !== 'chat' || state.selectedConversationId !== hit.conversationId) return;
+      if (!isCurrent() || state.pane !== 'chat' || state.selectedConversationId !== hit.conversationId) return;
       const { target } = resolveSearchResultAnchor(document, hit);
       target?.scrollIntoView({ block: 'center', inline: 'nearest' });
       if (target) { target.classList.add('search-anchor-flash'); window.setTimeout(() => target.classList.remove('search-anchor-flash'), 1600); }
     });
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
+    if (!isCurrent()) return;
+    if (staleHit) {
+      fullSearchResultCache.clear();
+      try { await runFullSearch({ restoreScroll: true }); } catch { /* Keep the original stale-hit error. */ }
+      if (!isCurrent()) return;
+    }
     state.searchPanel = true;
     state.searchError = `无法定位这条结果：${String(error)}`;
     render();
@@ -2312,11 +3242,56 @@ async function openSearchAttachment(hit) {
 const icons = { check: 'M20 6 9 17l-5-5', workspace: 'M3 5.5A2.5 2.5 0 0 1 5.5 3H10l2 2h6.5A2.5 2.5 0 0 1 21 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z', conversation: 'M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11L7 20v-4H6.5A2.5 2.5 0 0 1 4 13.5z', knowledge: 'M5 3.5h11A3 3 0 0 1 19 6.5v13l-6.5-3-6.5 3v-13a3 3 0 0 1 3-3z', import: 'M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3', export: 'M12 15V3m0 0 4 4m-4-4L8 7M5 17v3h14v-3', download: 'M12 3v12m0 0 4-4m-4 4-4-4M5 19h14', copy: 'M9 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3M5 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z', close: 'M6 6l12 12M18 6 6 18', chevronLeft: 'm14.5 5-7 7 7 7', chevronRight: 'm9.5 5 7 7-7 7', undo: 'M9 7 4 12l5 5M5 12h9a5 5 0 1 1 0 10', redo: 'm15 7 5 5-5 5m4-5h-9a5 5 0 1 0 0 10', trash: 'M4 7h16M10 11v6m4-6v6M9 7l1-2h4l1 2M6 7l1 14h10l1-14', plus: 'M12 5v14M5 12h14', edit: 'm4 16 9-9 3 3-9 9H4zM14 6l2-2 3 3-2 2', info: 'M12 17v-6m0-3.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', branch: 'M5 4v4c0 1.1.9 2 2 2h12m0 0-3-3m3 3-3 3M5 4v12c0 1.1.9 2 2 2h12m0 0-3-3m3 3-3 3', link: 'M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1m3.1 5.9a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 9 20l1.1-1.1' };
 function workspace() { return state.current || (!native ? fixture : null); }
 function selectWorkspaceDefaultConversation(data = workspace()) {
-  state.selectedConversationId = !native && data ? activeConversations(data)[0]?.id || null : null;
+  state.selectedConversationId = data?.dataArea === 'WORK'
+    ? resolveWorkConversationState(data, null, null).conversations[0]?.id || null
+    : data ? activeConversations(data)[0]?.id || null : null;
 }
 function active(data, key) { return data.exchange[key].filter(item => key === 'relations' ? item.status === 'ACTIVE' : item.status !== 'DELETED' && !item.archived && !item.deleted); }
+function workItemScopeField(item, id, scopeIdKey, selectedProjectId = '') {
+  const projects = active(workspace(), 'projects');
+  if (item) {
+    const projectId = item[scopeIdKey];
+    const title = projects.find(project => project.id === projectId)?.title || '已归档项目';
+    const scopeLabel = item.scope === 'PROJECT' ? `仅项目「${escape(title)}」` : item.scope === 'CONVERSATION' ? '仅所属对话' : '所有对话';
+    return `<p class="security-note">适用范围：${scopeLabel}。现有记录的范围保持不变。</p>`;
+  }
+  return `<label>适用范围<select id="${id}"><option value="" ${selectedProjectId ? '' : 'selected'}>所有对话</option>${projects.map(project => `<option value="${escape(project.id)}" ${project.id === selectedProjectId ? 'selected' : ''}>仅项目「${escape(project.title)}」</option>`).join('')}</select></label>`;
+}
 function dialog() {
   if (!state.dialog) return '';
+  const saveShortcut = /Mac/i.test(navigator.platform || '') ? '⌘S' : 'Ctrl+S';
+  if (state.dialog?.kind === 'conversation-branches') {
+    const conversation = state.current?.summary?.id === state.dialog.workspaceId
+      ? resolveConversation(state.current, state.dialog.conversationId) : null;
+    const leaves = conversationBranchLeaves(conversation);
+    return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-busy="${Boolean(state.dialog.submitting)}"><h2 id="dialog-title">分支历史</h2><p>选择一条已保存的消息树路径；旧回答与编辑版本会保留。</p><div class="recycle-list" aria-label="可切换的分支">${leaves.map((leaf, index) => {
+      const current = leaf.id === conversation.currentLeafId;
+      const preview = messagePlainText(leaf).trim().slice(0, 80) || (leaf.role === 'user' ? '用户消息' : '回答');
+      return `<div><span>分支 ${index + 1} · ${escape(preview)}${current ? ' · 当前' : ''}</span><button data-action="select-conversation-branch" data-leaf-id="${escape(leaf.id)}" ${current || conversation.archived || conversation.deleted || state.dialog.submitting ? 'disabled' : ''}>${current ? '当前' : '切换'}</button></div>`;
+    }).join('') || '<p class="empty-copy">没有可切换的分支。</p>'}</div>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${state.dialog.submitting ? 'disabled' : ''}>关闭</button></div></section></div>`;
+  }
+  if (state.dialog?.kind === 'edit-conversation-user-message') {
+    const edit = state.dialog;
+    return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-busy="${Boolean(edit.submitting)}"><h2 id="dialog-title">编辑消息</h2><p>保存后会在本机创建新的用户消息分支；原消息和回答仍可从分支历史切回。</p><label>消息文字<textarea id="conversation-user-message-edit" maxlength="2000000" ${edit.submitting ? 'disabled' : ''}>${escape(edit.text)}</textarea></label>${edit.failure ? `<p class="dialog-error" role="alert">${escape(edit.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${edit.submitting ? 'disabled' : ''}>取消</button><button class="primary" data-action="save-conversation-user-message-edit" ${edit.submitting ? 'disabled' : ''}>${edit.submitting ? '正在保存…' : '保存为新分支'}</button></div></section></div>`;
+  }
+  if (state.dialog?.kind === 'change-answer-model') {
+    const selection = state.dialog;
+    const conversation = state.current?.summary?.id === selection.workspaceId
+      ? resolveConversation(state.current, selection.conversationId) : null;
+    const source = conversation?.messages.find(item => item.id === selection.messageId);
+    const currentSource = conversation?.currentLeafId === selection.messageId && !conversation.archived
+      && !conversation.deleted && source?.role === 'assistant' && Boolean(source.attemptId)
+      && !source.compareExecutionId && ['COMPLETE', 'FAILED', 'CANCELLED', 'UNKNOWN'].includes(source.delivery);
+    const choices = (currentSource ? state.modelServiceSettings || [] : []).filter(service => service.enabled && service.credentialStored)
+      .flatMap(service => (service.presets || []).filter(preset => preset.chatSelectable !== false
+        && !(service.providerId === source?.modelSnapshot?.providerId && preset.modelId === source?.modelSnapshot?.modelId))
+        .map(preset => ({ ...preset, providerId: service.providerId, providerName: service.providerDisplayName })));
+    const notice = !currentSource ? '当前回答已变化，请关闭后重新选择。'
+      : source.delivery === 'UNKNOWN'
+        ? '原请求结果未知，服务商可能已处理。选择目标模型会把当前问题、分支上下文及引用附件发给所选服务商，可能产生另一笔费用。'
+        : '选择目标模型会把当前问题、分支上下文及引用附件发给所选服务商。原回答、分支和用量记录保留。';
+    return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">换模型重答</h2><p>${notice}</p><div class="recycle-list" aria-label="可用模型">${choices.map(choice => `<div><span>${escape(choice.providerName)} · ${escape(choice.displayName)}</span><button data-action="confirm-change-answer-model" data-message-id="${escape(selection.messageId)}" data-target-preset-id="${escape(choice.id)}">选择并生成</button></div>`).join('') || '<p class="empty-copy">没有已启用且保存凭据的其他聊天模型。</p>'}</div><div class="dialog-actions"><button data-action="close-dialog">取消</button></div></section></div>`;
+  }
   if (state.dialog?.kind === 'source-links') {
     const sources = Array.isArray(state.dialog.sources) ? state.dialog.sources : [];
     const sourceRows = sources.map(source => {
@@ -2332,21 +3307,41 @@ function dialog() {
     return `<div class="scrim"><section class="dialog source-links-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">来源网站</h2><div class="source-links-list">${sourceRows || '<p class="empty-copy">没有可安全打开的来源网站。</p>'}</div><div class="dialog-actions"><button class="primary" data-action="close-dialog">关闭</button></div></section></div>`;
   }
   if (state.dialog?.kind === 'model-credential-saved') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">API Key 已保存</h2><p>API Key 已安全保存在本机。尚未测试连接；请点击“测试连接”确认 API Key 是否可用。</p><div class="dialog-actions"><button class="primary" data-action="close-dialog">知道了</button></div></section></div>`;
+  if (state.dialog?.kind === 'model-credential-delete') { const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="model-credential-delete-title" aria-busy="${busy}"><h2 id="model-credential-delete-title">删除这个 API Key？</h2><p>只删除“${escape(state.dialog.providerDisplayName)}”保存在本机的 API Key；其他服务商、模型选择、聊天和文件不受影响。删除后如需使用该服务商，必须重新填写。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-model-service-credential" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除 API Key'}</button></div></section></div>`; }
   if (state.dialog === 'import') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">严格预检已通过</p><h2 id="dialog-title">导入为新的独立工作区</h2><p>不会合并或覆盖。正文仅作为不执行的文本 IR。</p><label>新工作区名称<input id="workspace-title" maxlength="120" value="导入工作区"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="confirm-import">导入</button></div></section></div>`;
-  if (state.dialog.kind === 'project') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Project' : '新建 Project'}</h2><p>保存由 Rust 检查 expected revision；冲突不会覆盖现有对象。</p><label>名称<input id="project-title" maxlength="120" value="${escape(item?.title || '')}"></label><label>说明<textarea id="project-description" maxlength="2000">${escape(item?.description || '')}</textarea></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-project">保存 ⌘S</button></div></section></div>`; }
-  if (state.dialog.kind === 'knowledge') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Knowledge' : '新建 Knowledge'}</h2><p>保存时由 Rust 检查 expected revision；冲突不会覆盖当前记录。</p><label>标题<input id="knowledge-title" maxlength="120" value="${escape(item?.title || '')}"></label><label>正文<textarea id="knowledge-body" maxlength="2000000">${escape(item?.body || '')}</textarea></label><label>标签（逗号分隔）<input id="knowledge-tags" value="${escape((item?.tags || []).join(', '))}"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-knowledge">保存 ⌘S</button></div></section></div>`; }
-  if (state.dialog?.kind === 'history-knowledge-review') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog history-knowledge-review" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">历史对话自动整理 · 待核对候选</p><h2 id="dialog-title">核对资料候选</h2><p>候选尚未进入长期 Memory 或 Knowledge。确认后只保存你当前看到并可编辑的内容；原对话不会改写。</p><label>标题<input id="history-candidate-title" maxlength="120" value="${escape(item.title || '')}"></label><label>候选内容<textarea id="history-candidate-body" maxlength="2000000">${escape(item.body || '')}</textarea></label><label>标签（逗号分隔）<input id="history-candidate-tags" value="${escape((item.tags || []).join(', '))}"></label><p class="security-note">来源会话 ${escape(item.conversationId)} · 消息 ${Number(item.sourceMessageIds?.length || 0)} 条 · ${escape(item.providerId || '未发送')} / ${escape(item.actualModelId || item.requestedModelId || '未知模型')} · checkpoint ${escape(short(item.checkpointId))}</p><div class="dialog-actions"><button data-action="reject-history-knowledge" data-id="${escape(item.candidateId)}">驳回</button><button class="primary" data-action="accept-history-knowledge" data-id="${escape(item.candidateId)}">确认保存为本地知识</button></div></section></div>`; }
+  if (state.dialog.kind === 'project') { const item = state.dialog.item; const draft = state.dialog.draft || {}; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Project' : '新建 Project'}</h2><p>保存由 Rust 检查 expected revision；冲突不会覆盖现有对象。</p><label>名称<input id="project-title" maxlength="120" value="${escape(draft['project-title'] ?? item?.title ?? '')}"></label><label>说明<textarea id="project-description" maxlength="2000">${escape(draft['project-description'] ?? item?.description ?? '')}</textarea></label>${renderDomainConflict(state.dialog, escape)}<div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-project">保存 ${saveShortcut}</button></div></section></div>`; }
+  if (state.dialog.kind === 'markdown-knowledge-review') { const item = state.dialog.item, draft = state.dialog.draft || {}; return `<div class="scrim"><section class="dialog edit-dialog" data-task-id="${escape(state.dialog.taskId)}" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '取消')}</button><p class="overline">Markdown 导入 · 等待明确确认</p><h2 id="dialog-title">审阅知识条目</h2><p>只保存下面明确确认的内容。Markdown、代码和链接不执行，选择文件不会联网。</p>${workItemScopeField(null, 'markdown-knowledge-project', 'projectId', draft['markdown-knowledge-project'] || '')}<label>标题<input id="markdown-knowledge-title" maxlength="120" value="${escape(draft['markdown-knowledge-title'] ?? item.title)}"></label><label>正文<textarea id="markdown-knowledge-body" maxlength="24000">${escape(draft['markdown-knowledge-body'] ?? item.body)}</textarea></label><label>标签（逗号分隔）<input id="markdown-knowledge-tags" value="${escape(draft['markdown-knowledge-tags'] ?? item.tags.join(', '))}"></label><div class="dialog-actions"><button data-action="close-dialog">返回待确认列表</button><button class="primary" data-action="confirm-markdown-knowledge">确认保存为本机知识</button></div></section></div>`; }
+  if (state.dialog.kind === 'web-knowledge-url') { const draft = state.dialog.draft || {}; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '取消')}</button><p class="overline">网页文字快照 · 需要明确抓取</p><h2 id="dialog-title">${state.dialog.retry ? '重新输入网页地址' : '从 HTTPS 网页提取文字'}</h2><p>确认后将直接访问此公开网页。仅提取文字，不登录网站，不使用浏览器 Cookie，也不加载图片或执行脚本。确认前不联网，正文逐条审阅后才保存为知识。</p><label>完整 HTTPS 地址<input id="web-knowledge-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://example.com/article" value="${escape(draft['web-knowledge-url'] || '')}"></label><p class="security-note">请勿输入含密钥、令牌或登录凭据的地址。地址 query 仅用于本次请求；失败重试必须重新输入，不从历史摘要恢复。</p>${state.error ? `<p role="alert">${escape(state.error)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="fetch-web-knowledge">确认抓取网页文字</button></div></section></div>`; }
+  if (state.dialog.kind === 'web-knowledge-review') { const item = state.dialog.item, draft = state.dialog.draft || {}; return `<div class="scrim"><section class="dialog edit-dialog" data-task-id="${escape(state.dialog.taskId)}" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '取消')}</button><p class="overline">网页文字快照 · 等待明确确认</p><h2 id="dialog-title">审阅条目 ${state.dialog.ordinal + 1}</h2><p>${escape(state.dialog.requestedUrl)} · 只保存下面明确确认的内容，原网页与来源回执保留在本机。</p>${workItemScopeField(null, 'web-knowledge-project', 'projectId', draft['web-knowledge-project'] || '')}<label>标题<input id="web-knowledge-title" maxlength="120" value="${escape(draft['web-knowledge-title'] ?? item.title)}"></label><label>正文<textarea id="web-knowledge-body" maxlength="24000">${escape(draft['web-knowledge-body'] ?? item.body)}</textarea></label><label>标签（逗号分隔）<input id="web-knowledge-tags" value="${escape(draft['web-knowledge-tags'] ?? item.tags.join(', '))}"></label>${state.error ? `<p role="alert">${escape(state.error)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog">返回待确认列表</button><button class="primary" data-action="confirm-web-knowledge">确认保存为本机知识</button></div></section></div>`; }
+  if (state.dialog.kind === 'pdf-knowledge-review') { const item = state.dialog.item, draft = state.dialog.draft || {}; return `<div class="scrim"><section class="dialog edit-dialog" data-task-id="${escape(state.dialog.taskId)}" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '取消')}</button><p class="overline">PDF 文字导入 · 等待明确确认</p><h2 id="dialog-title">审阅第 ${state.dialog.pageNumber} 页</h2><p>只保存下面明确确认的内容。只提取可读取文字层，不还原原版排版，不扫描识别，也不执行文件中的脚本、链接和附件。</p>${workItemScopeField(null, 'pdf-knowledge-project', 'projectId', draft['pdf-knowledge-project'] || '')}<label>标题<input id="pdf-knowledge-title" maxlength="120" value="${escape(draft['pdf-knowledge-title'] ?? item.title)}"></label><label>正文<textarea id="pdf-knowledge-body" maxlength="24000">${escape(draft['pdf-knowledge-body'] ?? item.body)}</textarea></label><label>标签（逗号分隔）<input id="pdf-knowledge-tags" value="${escape(draft['pdf-knowledge-tags'] ?? item.tags.join(', '))}"></label><div class="dialog-actions"><button data-action="close-dialog">返回待确认列表</button><button class="primary" data-action="confirm-pdf-knowledge">确认保存为本机知识</button></div></section></div>`; }
+  if (state.dialog.kind === 'json-knowledge-review') { const item = state.dialog.item, draft = state.dialog.draft || {}; return `<div class="scrim"><section class="dialog edit-dialog" data-task-id="${escape(state.dialog.taskId)}" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '取消')}</button><p class="overline">JSON 导入 · 等待明确确认</p><h2 id="dialog-title">审阅知识条目</h2><p>只保存下面明确确认的内容。JSON、代码和链接不执行，选择文件不会联网。</p><p>来源：${escape(state.dialog.source?.kind || '未提供')} · ${escape(state.dialog.source?.summary || '')} · 版本 ${escape(state.dialog.source?.revision || '')}。${state.dialog.source?.requestedScope === 'PROJECT' ? '来源请求项目范围；请选择目标项目，否则保存到全局。' : '项目只按下面明确选择的目标保存。'}</p>${workItemScopeField(null, 'json-knowledge-project', 'projectId', draft['json-knowledge-project'] || '')}<label>标题<input id="json-knowledge-title" maxlength="120" value="${escape(draft['json-knowledge-title'] ?? item.title)}"></label><label>正文<textarea id="json-knowledge-body" maxlength="24000">${escape(draft['json-knowledge-body'] ?? item.body)}</textarea></label><label>标签（逗号分隔）<input id="json-knowledge-tags" value="${escape(draft['json-knowledge-tags'] ?? item.tags.join(', '))}"></label><div class="dialog-actions"><button data-action="close-dialog">返回待确认列表</button><button class="primary" data-action="confirm-json-knowledge">确认保存为本机知识</button></div></section></div>`; }
+
+  if (state.dialog.kind === 'json-knowledge-export') { const dialog = state.dialog; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '取消')}</button><h2 id="dialog-title">导出已保存知识</h2><p>仅导出勾选的有效知识。未保存的编辑草稿、附件、记忆和关系不包含在文件中。重新导入时生成新的本地 ID。</p><p>已选择 ${dialog.selectedIds.length} 条，单次最多 100 条。</p><ul>${dialog.eligible.map(item => `<li><label><input type="checkbox" data-action="toggle-json-knowledge-export" data-id="${escape(item.id)}" ${dialog.selectedIds.includes(item.id) ? 'checked' : ''} ${dialog.busy ? 'disabled' : ''}>${escape(item.title)}</label></li>`).join('')}</ul><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-json-knowledge-export" ${dialog.busy || !dialog.selectedIds.length || dialog.selectedIds.length > 100 ? 'disabled' : ''}>${dialog.busy ? '正在导出…' : '选择位置并导出'}</button></div></section></div>`; }
+
+  if (state.dialog.kind === 'knowledge') { const item = state.dialog.item; const draft = state.dialog.draft || {}; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Knowledge' : '新建 Knowledge'}</h2><p>保存时由 Rust 检查 expected revision；冲突不会覆盖当前记录。</p>${workItemScopeField(item, 'knowledge-project', 'projectId', draft['knowledge-project'] || '')}<label>标题<input id="knowledge-title" maxlength="120" value="${escape(draft['knowledge-title'] ?? item?.title ?? '')}"></label><label>正文<textarea id="knowledge-body" maxlength="2000000">${escape(draft['knowledge-body'] ?? item?.body ?? '')}</textarea></label><label>标签（逗号分隔）<input id="knowledge-tags" value="${escape(draft['knowledge-tags'] ?? (item?.tags || []).join(', '))}"></label>${item ? renderKnowledgeDuplicates(state.dialog, escape) : ''}${renderDomainConflict(state.dialog, escape)}<div class="dialog-actions">${item?.status === 'ACTIVE' && native ? `<button data-action="read-knowledge-duplicates" ${state.dialog.duplicateLoading || state.dialog.conflict ? 'disabled' : ''}>${state.dialog.duplicateLoading ? '读取重复候选…' : '查看重复候选'}</button><button data-action="open-json-knowledge-export" data-id="${escape(item.id)}">导出已保存知识…</button>` : ''}${!item ? '<button data-action="select-markdown-knowledge">从 Markdown 导入…</button><button data-action="select-json-knowledge">从 Knowledge JSON 导入…</button><button data-action="select-pdf-knowledge">从 PDF 文字导入…</button><button data-action="select-web-knowledge">从 HTTPS 网页文字导入…</button>' : ''}<button data-action="close-dialog">取消</button><button class="primary" data-action="save-knowledge">保存 ${saveShortcut}</button></div></section></div>`; }
+  if (state.dialog?.kind === 'history-knowledge-review') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog history-knowledge-review" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">历史对话自动整理 · 待核对候选</p><h2 id="dialog-title">核对资料候选</h2><p>候选尚未进入长期 Memory 或 Knowledge。确认后只保存你当前看到并可编辑的内容；原对话不会改写。</p><label>标题<input id="history-candidate-title" maxlength="120" value="${escape(state.dialog.draft?.['history-candidate-title'] ?? item.title ?? '')}"></label><label>候选内容<textarea id="history-candidate-body" maxlength="2000000">${escape(state.dialog.draft?.['history-candidate-body'] ?? item.body ?? '')}</textarea></label><label>标签（逗号分隔）<input id="history-candidate-tags" value="${escape(state.dialog.draft?.['history-candidate-tags'] ?? (item.tags || []).join(', '))}"></label><p class="security-note">来源会话 ${escape(item.conversationId)} · 消息 ${Number(item.sourceMessageIds?.length || 0)} 条 · ${escape(item.providerId || '未发送')} / ${escape(item.actualModelId || item.requestedModelId || '未知模型')} · checkpoint ${escape(short(item.checkpointId))}</p><div class="dialog-actions"><button data-action="reject-history-knowledge" data-id="${escape(item.candidateId)}">驳回</button><button class="primary" data-action="accept-history-knowledge" data-id="${escape(item.candidateId)}">确认保存为本地知识</button></div></section></div>`; }
   if (state.dialog?.kind === 'reminder-draft') { const item = state.dialog.item; const option = (value, label) => `<option value="${value}" ${item.scheduleKind === value ? 'selected' : ''}>${label}</option>`; return `<div class="scrim"><section class="dialog edit-dialog reminder-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">提醒草案 · 必须确认</p><h2 id="dialog-title">核对计划与监控</h2><p>模型只整理草案，不会替你创建计划。请核对对象、条件、频率、时区与错过策略。</p><label>计划名称<input id="reminder-title" maxlength="40" value="${escape(item.title || '')}" placeholder="例如：检查项目状态"></label><label>执行说明<textarea id="reminder-instruction" maxlength="8000" rows="5" placeholder="写清要检查什么、何时算完成">${escape(item.instruction || '')}</textarea></label><label>执行频率<select id="reminder-schedule-kind">${option('ONCE', '一次')}${option('HOURLY', '每小时')}${option('DAILY', '每天')}${option('WEEKLY', '每周')}</select></label><label>本地时间<input id="reminder-anchor-local" type="datetime-local" value="${escape(item.anchorLocal || '')}"></label><label>时区<input id="reminder-timezone" maxlength="64" value="${escape(item.timezoneId || '')}" placeholder="Asia/Shanghai"></label><label>错过执行窗口后<select id="reminder-missed-policy"><option value="RUN_ONCE" ${item.missedPolicy === 'RUN_ONCE' ? 'selected' : ''}>恢复后执行一次</option><option value="SKIP" ${item.missedPolicy === 'SKIP' ? 'selected' : ''}>跳过本次</option></select></label><p class="security-note">${escape(item.providerId || '手工草案')} · ${escape(item.actualModelId || item.requestedModelId || '未调用模型')} · ${item.chargeMicros == null ? '费用未报告' : `$${(item.chargeMicros / 1_000_000).toFixed(6)}`}</p><div class="dialog-actions"><button data-action="reject-reminder-draft" data-id="${escape(item.draftId)}">拒绝</button><button class="primary" data-action="confirm-reminder-draft">确认并创建计划</button></div></section></div>`; }
   if (state.dialog?.kind === 'reminder-plan') { const item = state.dialog.item; const option = (value, label) => `<option value="${value}" ${item.scheduleKind === value ? 'selected' : ''}>${label}</option>`; return `<div class="scrim"><section class="dialog edit-dialog reminder-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">已确认计划 · 本机更新</p><h2 id="dialog-title">编辑计划与监控</h2><p>保存会保留既有执行记录，并按新频率、时间和时区重新计算下一次执行。</p><label>计划名称<input id="reminder-title" maxlength="40" value="${escape(item.title || '')}"></label><label>执行说明<textarea id="reminder-instruction" maxlength="8000" rows="5">${escape(item.instruction || '')}</textarea></label><label>执行频率<select id="reminder-schedule-kind">${option('ONCE', '一次')}${option('HOURLY', '每小时')}${option('DAILY', '每天')}${option('WEEKLY', '每周')}</select></label><label>本地时间<input id="reminder-anchor-local" type="datetime-local" value="${escape(item.anchorLocal || '')}"></label><label>时区<input id="reminder-timezone" maxlength="64" value="${escape(item.timezoneId || '')}"></label><label>错过执行窗口后<select id="reminder-missed-policy"><option value="RUN_ONCE" ${item.missedPolicy === 'RUN_ONCE' ? 'selected' : ''}>恢复后执行一次</option><option value="SKIP" ${item.missedPolicy === 'SKIP' ? 'selected' : ''}>跳过本次</option></select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="confirm-edit-reminder-plan">保存计划</button></div></section></div>`; }
   if (state.dialog?.kind === 'memory-summary-about') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">关于记忆</h2><p>这里显示已保存在本机的记忆摘要。启用后，相关内容可用于回答。</p><div class="dialog-actions"><button class="primary" data-action="close-dialog">知道了</button></div></section></div>`;
-if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim custom-instructions-scrim"><section class="dialog memory-summary-editor" role="dialog" aria-modal="true" aria-labelledby="memory-summary-editor-title"><header><button data-action="close-dialog">取消</button><h2 id="memory-summary-editor-title">编辑记忆摘要</h2><button class="primary" data-action="save-memory-summary-editor" ${String(state.dialog.value || '').trim() ? '' : 'disabled'}>保存</button></header><label><span>完整摘要</span><textarea id="memory-summary-editor" maxlength="2000000" placeholder="输入或粘贴新的记忆摘要">${escape(state.dialog.value || '')}</textarea><small>${String(state.dialog.value || '').length} / 2000000 字</small></label></section></div>`;
+  if (state.dialog?.kind === 'memory-audit') {
+    const draft = state.dialog;
+    const audit = draft.audit;
+    const actionLabel = action => ({ create: '创建', update: '修订', softDelete: '删除', restore: '恢复', undo: '撤销操作', redo: '重做操作', replaceMemorySummary: '全文修订', deleteMemorySummary: '摘要删除', saveReviewedMemory: '确认加入', resolvePendingMemoryTopic: '冲突处理' })[action] || '本机变更';
+    const statusLabel = status => ({ ACTIVE: '使用中', PAUSED: '已暂停', DELETED: '已删除', PENDING_REVIEW: '待审阅' })[status] || '状态未知';
+    const localTime = value => { const date = new Date(value); return Number.isNaN(date.getTime()) ? '时间未记录' : date.toLocaleString('zh-CN', { hour12: false }); };
+    return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="memory-audit-title"><h2 id="memory-audit-title">来源与修订 · ${escape(draft.title)}</h2>${draft.loading ? '<p role="status">正在读取本机记录…</p>' : draft.failure ? `<p class="dialog-error" role="alert">${escape(draft.failure)}</p>` : `<p>当前版本 ${Number(audit.currentRevision)} · ${audit.importedRevision != null ? '曾从历史资料导入' : audit.source === 'LOCAL_EDIT' ? '本机创建或编辑' : '来源未记录'}</p>${audit.olderRevisionsOmitted ? '<p>仅显示最近 100 次变更；更早记录未在此页展示。</p>' : ''}<ol style="max-height:60vh;overflow:auto">${audit.revisions.map(item => `<li><strong>版本 ${Number(item.revision)} · ${actionLabel(item.action)} · ${escape(localTime(item.changedAt))}${item.undone ? ' · 已撤销' : ''}</strong><p>${escape(item.title)} · ${statusLabel(item.status)}</p><p>${escape(item.body)}</p></li>`).join('')}</ol>${audit.revisions.length ? '' : '<p>当前记录可用；此前修订记录不可回读。</p>'}` }<div class="dialog-actions"><button class="primary" data-action="close-dialog">关闭</button></div></section></div>`;
+  }
+  if (state.dialog?.kind === 'memory-summary-suggestion') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="memory-suggestion-title" aria-busy="${Boolean(state.dialog.submitting)}"><h2 id="memory-suggestion-title">加入记忆摘要？</h2><p>仅将下列内容保存在本机。后续普通聊天开启记忆时，相关内容可能随本次请求发送给所选模型服务。</p><p><strong>${escape(state.dialog.title)}</strong></p><p>${escape(state.dialog.body)}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${state.dialog.submitting ? 'disabled' : ''}>取消</button><button class="primary" data-action="confirm-memory-summary-suggestion" ${state.dialog.submitting ? 'disabled' : ''}>${state.dialog.submitting ? '正在保存…' : '确认加入'}</button></div></section></div>`;
+  if (state.dialog?.kind === 'memory-topic-conflict') { const draft = state.dialog; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="memory-topic-conflict-title" aria-busy="${Boolean(draft.submitting)}"><h2 id="memory-topic-conflict-title">已有同主题记忆</h2><p>主题：${escape(draft.title)}。现有 ${draft.expectedEntries.length} 条，本次内容与现有内容不同。</p><p><strong>现有内容</strong><br>${escape(draft.existing.body)}</p><p><strong>本次内容</strong><br>${escape(draft.body)}</p>${draft.failure ? `<p class="dialog-error" role="alert">${escape(draft.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${draft.submitting ? 'disabled' : ''}>取消</button><button data-action="keep-memory-topic" ${draft.submitting ? 'disabled' : ''}>保留现有</button><button data-action="parallel-memory-topic" ${draft.submitting ? 'disabled' : ''}>并存</button><button class="primary" data-action="revise-memory-topic" ${draft.submitting ? 'disabled' : ''}>修订显示的这条</button></div></section></div>`; }
+  if (state.dialog?.kind === 'pending-memory-topic') { const draft = state.dialog; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="pending-memory-topic-title" aria-busy="${Boolean(draft.submitting)}"><h2 id="pending-memory-topic-title">处理待审阅记忆</h2><p>主题：${escape(draft.candidate.title)}。候选内容尚未用于后续回答。</p><p><strong>现有内容</strong><br>${escape(draft.existing?.body || '已无现有内容')}</p><p><strong>候选内容</strong><br>${escape(draft.candidate.body)}</p>${draft.failure ? `<p class="dialog-error" role="alert">${escape(draft.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${draft.submitting ? 'disabled' : ''}>稍后处理</button><button data-action="resolve-pending-memory-topic" data-resolution="KEEP_EXISTING" ${draft.submitting ? 'disabled' : ''}>保留现有</button><button data-action="resolve-pending-memory-topic" data-resolution="CREATE_PARALLEL" ${draft.submitting ? 'disabled' : ''}>并存</button>${draft.existing ? `<button class="primary" data-action="resolve-pending-memory-topic" data-resolution="REVISE_EXISTING" ${draft.submitting ? 'disabled' : ''}>修订显示的这条</button>` : ''}</div></section></div>`; }
+if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim custom-instructions-scrim"><section class="dialog memory-summary-editor" role="dialog" aria-modal="true" aria-labelledby="memory-summary-editor-title"><header><button data-action="close-dialog">取消</button><h2 id="memory-summary-editor-title">编辑记忆摘要</h2><button class="primary" data-action="save-memory-summary-editor" ${String(state.dialog.value || '').trim() && !(state.memorySummarySavePending && state.memorySummarySavePending.workspaceId === state.current?.summary?.id) ? '' : 'disabled'}>保存</button></header>${renderDomainConflict(state.dialog, escape)}<label><span>完整摘要</span><textarea id="memory-summary-editor" maxlength="2000000" placeholder="输入或粘贴新的记忆摘要">${escape(state.dialog.value || '')}</textarea><small>${String(state.dialog.value || '').length} / 2000000 字</small></label></section></div>`;
   if (state.dialog?.kind === 'memory-summary-delete') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true"><h2>删除记忆？</h2><p>删除当前记忆摘要；聊天、文件和记忆开关不受影响。</p><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary danger" data-action="confirm-delete-memory-summary">删除</button></div></section></div>`;
   if (state.dialog?.kind === 'memory-summary-disable') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true"><h2>关闭记忆摘要生成和应用？</h2><p>停止生成和使用记忆摘要；已保存内容不会删除。</p><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary danger" data-action="confirm-disable-memory-summary">关闭</button></div></section></div>`;
   if (state.dialog?.kind === 'model-settings-feedback') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="model-feedback-title"><h2 id="model-feedback-title">${state.dialog.failed ? '操作未完成' : '操作完成'}</h2><p>${escape(state.dialog.message)}</p><div class="dialog-actions"><button class="primary" data-action="close-dialog">知道了</button></div></section></div>`;
-  if (state.dialog?.kind === 'custom-instructions-fullscreen') return `<div class="scrim custom-instructions-scrim"><section class="dialog custom-instructions-fullscreen" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><header><button class="icon-button" data-action="close-dialog" aria-label="关闭全屏自定义指令编辑">${icon(icons.close, '关闭')}</button><h2 id="dialog-title">自定义指令</h2><button class="icon-button" data-action="save-custom-instructions-fullscreen" aria-label="保存自定义指令" title="保存">${icon(icons.check, '保存')}</button></header><label class="android-settings-field"><span>自定义指令</span><textarea id="personalization-instructions-fullscreen" maxlength="${CUSTOM_INSTRUCTIONS_MAX_LENGTH}" placeholder="希望南枫 AI 如何回答你">${escape(state.personalizationDraft.customInstructions || '')}</textarea><small>${String(state.personalizationDraft.customInstructions || '').length} / ${CUSTOM_INSTRUCTIONS_MAX_LENGTH} 字</small></label></section></div>`;
+  if (state.dialog?.kind === 'custom-instructions-fullscreen') return `<div class="scrim custom-instructions-scrim"><section class="dialog custom-instructions-fullscreen" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><header><button class="icon-button" data-action="close-dialog" aria-label="关闭全屏自定义指令编辑">${icon(icons.close, '关闭')}</button><h2 id="dialog-title">自定义指令</h2><button class="icon-button" data-action="save-custom-instructions-fullscreen" aria-label="保存自定义指令" title="保存">${icon(icons.check, '保存')}</button></header><label class="android-settings-field"><span>自定义指令</span><textarea id="personalization-instructions-fullscreen" data-max-codepoints="${CUSTOM_INSTRUCTIONS_MAX_LENGTH}" placeholder="希望南枫 AI 如何回答你">${escape(state.personalizationDraft.customInstructions || '')}</textarea><small>${Array.from(String(state.personalizationDraft.customInstructions || '')).length} / ${CUSTOM_INSTRUCTIONS_MAX_LENGTH} 字</small></label></section></div>`;
   if (state.dialog?.kind === 'reminder-delete') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true"><h2>删除这个提醒计划？</h2><p>将删除“${escape(item.title)}”及其本机执行记录；操作不可撤销，运行中的请求会请求停止。</p><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary danger" data-action="confirm-delete-reminder-plan" data-id="${escape(item.planId)}">删除计划</button></div></section></div>`; }
-  if (state.dialog.kind === 'memory') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Memory' : '新建 Memory'}</h2><p>Memory 仅是本地文本 IR，不会进入 Prompt 或网络。</p><label>正文<textarea id="memory-body" maxlength="2000000">${escape(item?.body || '')}</textarea></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-memory">保存 ⌘S</button></div></section></div>`; }
-  if (state.dialog.kind === 'relation') { const data = workspace(); const items = active(data, 'knowledge'); const options = items.map(item => `<option value="${escape(item.id)}">${escape(item.title)} · r${item.revision}</option>`).join(''); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">显式本地 relation</p><h2 id="dialog-title">建立 Knowledge 关系</h2><p>仅同一活动 scope 的两条 Knowledge 可建立；不会自动关联或去重。</p><label>来源<select id="relation-from">${options}</select></label><label>目标<select id="relation-to">${options}</select></label><label>类型<select id="relation-kind"><option value="RELATED">RELATED（对称）</option><option value="DERIVED_FROM">DERIVED_FROM</option><option value="REFERENCES">REFERENCES</option></select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-relation" ${items.length < 2 ? 'disabled' : ''}>建立关系</button></div></section></div>`; }
+  if (state.dialog.kind === 'memory') { const item = state.dialog.item; const draft = state.dialog.draft || {}; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Memory' : '新建 Memory'}</h2><p>保存只写入本机；普通聊天开启记忆时，会按当前问题选取相关内容。点击发送后，选中的内容才会交给本次显示的模型服务。</p>${workItemScopeField(item, 'memory-project', 'scopeId', draft['memory-project'] || '')}<label>主题<input id="memory-title" maxlength="120" value="${escape(draft['memory-title'] ?? item?.title ?? '概览')}"></label><label>正文<textarea id="memory-body" maxlength="2000000">${escape(draft['memory-body'] ?? item?.body ?? '')}</textarea></label>${renderDomainConflict(state.dialog, escape)}<div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-memory">保存 ${saveShortcut}</button></div></section></div>`; }
+  if (state.dialog.kind === 'relation') { const data = workspace(); const items = active(data, 'knowledge'); const draft = state.dialog.draft || {}; const options = field => items.map(item => `<option value="${escape(item.id)}" ${draft[field] === item.id ? 'selected' : ''}>${escape(item.title)} · r${item.revision}</option>`).join(''); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">显式本地 relation</p><h2 id="dialog-title">建立 Knowledge 关系</h2><p>仅同一活动 scope 的两条 Knowledge 可建立；不会自动关联或去重。</p><label>来源<select id="relation-from">${options('relation-from')}</select></label><label>目标<select id="relation-to">${options('relation-to')}</select></label><label>类型<select id="relation-kind"><option value="RELATED" ${draft['relation-kind'] === 'RELATED' ? 'selected' : ''}>RELATED（对称）</option><option value="DERIVED_FROM" ${draft['relation-kind'] === 'DERIVED_FROM' ? 'selected' : ''}>DERIVED_FROM</option><option value="REFERENCES" ${draft['relation-kind'] === 'REFERENCES' ? 'selected' : ''}>REFERENCES</option></select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-relation" ${items.length < 2 ? 'disabled' : ''}>建立关系</button></div></section></div>`; }
   if (state.dialog?.kind === 'assistant-answer-information') return renderAnswerInformation(state.dialog.record);
   if (state.dialog === 'metadata') return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">仅本地安全 metadata</p><h2 id="dialog-title">模型与成本 metadata</h2><p>不存 Key、不联网取 catalog；价格仅标记为 fixture、手工或未知，绝不当作真实费用。</p><label>Provider ID<input id="provider-id" value="provider-local"></label><label>Model ID<input id="model-id" value="model-manual"></label><label>价格版本<input id="price-version" value="manual-v1"></label><label>币种<input id="price-currency" value="CNY"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-metadata">保存 metadata</button></div></section></div>`;
   if (state.dialog === 'recycle') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">本地软删除</p><h2 id="dialog-title">回收站</h2><p>此处恢复通用软删除对象；会话的恢复与永久删除在“设置 → 对话管理 → 回收站”。恢复将生成新 revision。</p><div class="recycle-list">${state.history.recycleBin.length ? state.history.recycleBin.map(item => `<div><span>${escape(item.entity)} · ${escape(item.title)}</span><button data-action="restore" data-entity="${escape(item.entity)}" data-id="${escape(item.id)}" data-revision="${item.revision}">恢复</button></div>`).join('') : '<p class="empty-copy">暂无可恢复对象。</p>'}</div><div class="dialog-actions"><button data-action="close-dialog">关闭</button></div></section></div>`;
@@ -2356,19 +3351,20 @@ if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim cu
   if (state.dialog?.kind === 'transcription-delete') { const task = state.transcription.tasks.find(item => item.id === state.dialog.taskId); const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除这条转写任务？</h2><p>将删除“${escape(task?.sourceDisplayName || '转写任务')}”的任务记录与时间轴。原文件或结果仍被会话引用时，私有字节不会删除；无引用字节进入安全清理期。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-transcription-task" data-task-id="${escape(state.dialog.taskId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除任务'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'search-attachment-delete') { const hit = state.dialog.hit; const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除此附件引用？</h2><p>只会从这条消息移除“${escape(hit.displayName || '附件')}”。若其他消息仍在引用，私有副本会继续保留；最后一个引用移除后进入安全清理期。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-search-attachment" data-entry-id="${escape(hit.entryId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除此引用'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'p6k-batch-delete') { const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除这个 ZIP 导入批次？</h2><p>将移除该批次导入的本地对话与 ZIP 私有副本。对话的删除标记会长期保留，以后重新导入同一官方会话也不会复活。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-p6k-zip-batch" data-task-id="${escape(state.dialog.taskId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除批次'}</button></div></section></div>`; }
+  if (state.dialog?.kind === 'conversation-rename') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true"><label>会话标题<input id="conversation-rename" maxlength="120" value="${escape(state.dialog.title)}"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-conversation-rename" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}">保存</button></div></section></div>`;
   if (state.dialog?.kind === 'conversation-project') { const projects = active(workspace(), 'projects'); const options = [`<option value="">不归入项目</option>`, ...projects.map(project => `<option value="${escape(project.id)}" ${project.id === state.dialog.projectId ? 'selected' : ''}>${escape(project.title)}</option>`)].join(''); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true"><h2>项目归属</h2><p>${projects.length ? '选择现有本地项目；切换即为移动，取消不变更。' : '当前没有可选项目。'}</p><label>项目<select id="conversation-project">${options}</select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-conversation-project" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}">保存</button></div></section></div>`; }
-  if (state.dialog?.kind === 'conversation-delete') { const busy = state.dialog.submitting; const copy = state.dialog.source === 'archived' ? `“${escape(state.dialog.title)}”将移入回收站，可恢复。` : '删除不同于归档：消息树不会物理删除，可从回收站恢复。'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>移入回收站？</h2><p>${copy}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary" data-action="confirm-conversation-delete" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}" ${busy ? 'disabled' : ''}>${busy ? '正在移入…' : '移入回收站'}</button></div></section></div>`; }
-  if (state.dialog?.kind === 'conversation-batch-delete') { const busy = state.dialog.submitting; const count = state.dialog.items?.length || 0; const cloud = state.dialog.items?.every(item => item.workspaceId); const label = cloud ? '取消同步' : '移入回收站'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>${label}？</h2><p>${cloud ? `${count} 个会话将取消同步，本地对话保留。` : `${count} 个会话将移入回收站，可恢复。`}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary" data-action="confirm-conversation-batch-delete" ${busy ? 'disabled' : ''}>${busy ? '正在处理…' : label}</button></div></section></div>`; }
+  if (state.dialog?.kind === 'conversation-delete') { const busy=state.dialog.submitting; const cloud=Boolean(state.dialog.workspaceId); const copy=cloud?'云端副本将删除，本地对话与收藏保留。':state.dialog.source==='archived'?`“${escape(state.dialog.title)}”将移入回收站，可恢复。`:'删除不同于归档：消息树不会物理删除，可从回收站恢复。'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>${cloud?'取消云同步？':'移入回收站？'}</h2><p>${copy}</p>${state.dialog.failure?`<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>`:''}<div class="dialog-actions"><button data-action="close-dialog" ${busy?'disabled':''}>取消</button><button class="primary" data-action="confirm-conversation-delete" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}" ${busy?'disabled':''}>${cloud?(busy?'正在取消…':'取消同步'):(busy?'正在移入…':'移入回收站')}</button></div></section></div>`; }
+  if (state.dialog?.kind === 'conversation-batch-delete') { const busy=state.dialog.submitting; const items=state.dialog.items||[]; const count=items.length; const cloud=count>0&&items.every(item=>item.workspaceId); const mixed=!cloud&&items.some(item=>item.workspaceId); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>${cloud?'取消所选会话的同步？':mixed?'请分别操作':'移入回收站？'}</h2><p>${cloud?`${count} 个云端副本将删除，本地对话与收藏保留。`:mixed?'云端和本地会话需要分别选择。':`${count} 个会话将移入回收站，可恢复。`}</p>${state.dialog.failure?`<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>`:''}<div class="dialog-actions"><button data-action="${cloud&&busy?'stop-conversation-cloud-unlink':'close-dialog'}" ${busy&&(!cloud||state.dialog.stopRequested)?'disabled':''}>${cloud&&busy?(state.dialog.stopRequested?'正在停止后续…':'停止后续'):'取消'}</button><button class="primary" data-action="confirm-conversation-batch-delete" ${busy||mixed?'disabled':''}>${cloud?(busy?'正在取消…':'取消同步'):(busy?'正在移入…':'移入回收站')}</button></div></section></div>`; }
   if (state.dialog?.kind === 'conversation-permanent-delete') { const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>永久删除？</h2><p>将永久删除“${escape(state.dialog.title)}”，无法恢复。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-conversation-permanent-delete" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}" ${busy ? 'disabled' : ''}>${busy ? '正在永久删除…' : '永久删除'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'conversation-bulk-cleanup') { const busy = state.dialog.submitting; const recycle = state.dialog.scope === 'recycle'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>${recycle ? '清空回收站？' : '清空已归档？'}</h2><p>${recycle ? `将永久删除 ${state.dialog.count} 个会话，无法恢复。` : `${state.dialog.count} 个会话将移入回收站，可恢复。`}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary ${recycle ? 'danger' : ''}" data-action="confirm-conversation-bulk-cleanup" data-scope="${state.dialog.scope}" ${busy ? 'disabled' : ''}>${busy ? '正在处理…' : recycle ? '永久删除' : '移入回收站'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'local-backup-restart-required') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title"><p class="overline">本机恢复已完成</p><h2 id="dialog-title">请完全重启 App</h2><p>数据库和受控资产已经替换并通过回读。为避免旧 SQLite、页面和任务引用，现请手动完全退出并重新打开 App；不会自动继续任何任务。</p></section></div>`;
-  if (state.dialog?.kind === 'privacy-cleanup-scope') return renderLocalDataCleanupScopeDialog();
+  if (state.dialog?.kind === 'privacy-cleanup-scope') return renderLocalDataCleanupScopeDialog(state);
   if (state.dialog?.kind === 'privacy-cleanup-preview') return renderLocalDataCleanupPreviewDialog(state.dialog, escape);
   return '';
 }
 function tree(data) { if (!data) return '<div class="tree-empty">还没有本地工作区。<br>先从受控交换包导入。</div>'; const workspaceRows = state.workspaces.map(item => `<button class="tree-row ${item.id === data.summary.id ? 'selected' : ''}" data-action="select-workspace" data-id="${escape(item.id)}"><span>${icon(icons.workspace, '工作区')}</span><span>${escape(item.title)}</span><small>${item.id === data.summary.id ? '当前' : ''}</small></button>`).join(''); return `<div class="tree-section"><p>Workspace</p>${workspaceRows}</div><div class="tree-section"><p>Project <button class="small-add" data-action="new-project" aria-label="新建 Project">+</button></p>${data.exchange.projects.map(item => `<button class="tree-row" data-action="edit-project" data-id="${escape(item.id)}"><span>${icon(icons.workspace, '项目')}</span><span>${escape(item.title)}</span><small>r${item.revision || 0}</small></button>`).join('') || '<span class="tree-muted">暂无 Project</span>'}</div><div class="tree-section"><p>Conversation</p>${data.exchange.conversations.map(item => `<button class="tree-row ${state.pane === 'conversation' ? 'selected' : ''}" data-action="show-conversation"><span>${icon(icons.conversation, '会话')}</span><span>${escape(item.title)}</span><small>${item.messages.length}</small></button>`).join('')}</div><div class="tree-section"><p>Knowledge</p><button class="tree-row ${state.pane === 'knowledge' ? 'selected' : ''}" data-action="show-knowledge"><span>${icon(icons.knowledge, '知识')}</span><span>知识与记忆</span><small>${data.exchange.knowledge.length}</small></button></div>`; }
 function conversationCanvas(data) { const conversation = data.exchange.conversations[0]; if (!conversation) return `<section class="canvas empty-canvas"><h2>暂无会话</h2><p>新建 Conversation 会在 Rust transaction 中同时建立明确的本地 root 节点。</p></section>`; return `<section class="canvas conversation-canvas"><div class="canvas-header"><div><p class="overline">Conversation · 本地树</p><h1>${escape(conversation.title)}</h1><p>追加节点只接受明确本地文本，不构造 Prompt 或 RunSpec。</p></div><button class="subtle" data-action="show-knowledge">知识工作台</button></div><div class="message-list">${orderedConversationMessages(conversation).map(message => `<article class="message ${escape(message.role)}"><header><span>${escape(message.role)}</span><time>${escape(short(message.createdAt))}</time></header>${message.blocks.map(block => `<pre>${escape(block.text || `附件引用 · ${block.asset?.displayName || ''}`)}</pre>`).join('')}</article>`).join('')}</div></section>`; }
-function knowledgeCanvas(data) { const knowledge = active(data, 'knowledge'); const memory = active(data, 'memory'); const relationItems = active(data, 'relations'); const name = id => data.exchange.knowledge.find(item => item.id === id)?.title || short(id); return `<section class="canvas knowledge-canvas"><div class="canvas-header"><div><p class="overline">Knowledge / Memory · 文本 IR</p><h1>知识与记忆</h1><p>保存、取消、冲突、撤销与软删除均由 Rust SQLite 真值驱动。</p></div><div class="canvas-actions"><button class="primary" data-action="new-knowledge">${icon(icons.plus, '新建')}新建 Knowledge</button><button data-action="new-memory">${icon(icons.plus, '新建')}新建 Memory</button><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>${icon(icons.link, '关系')}建立关系</button></div></div><div class="knowledge-list">${knowledge.map(item => `<article class="knowledge-item"><header><div><p class="overline">${escape(item.status)} · r${item.revision} · ${escape(item.classification)}</p><h2>${escape(item.title)}</h2></div><span>${escape((item.tags || []).join(' · '))}</span></header><pre>${escape(item.body)}</pre><div class="item-actions"><button data-action="edit-knowledge" data-id="${escape(item.id)}">${icon(icons.edit, '编辑')}编辑</button><button data-action="delete-knowledge" data-id="${escape(item.id)}" data-revision="${item.revision}">${icon(icons.trash, '软删除')}软删除</button></div></article>`).join('') || '<p class="empty-copy">尚无已保存的本地知识。</p>'}</div><section class="memory-rail"><div class="section-head"><h2>Memory</h2><button data-action="new-memory">新建</button></div><ul>${memory.map(item => `<li><span>${escape(item.scope)} · r${item.revision}</span><button class="memory-button" data-action="edit-memory" data-id="${escape(item.id)}">${escape(item.body)}</button><button data-action="delete-memory" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></li>`).join('') || '<li>暂无活动 Memory。</li>'}</ul></section><section class="memory-rail"><div class="section-head"><h2>Knowledge relation</h2><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立</button></div><ul>${relationItems.map(item => `<li><span>${escape(item.kind)} · r${item.revision}</span>${escape(name(item.fromId))} → ${escape(name(item.toId))}<button data-action="delete-relation" data-id="${escape(item.id)}" data-revision="${item.revision}">撤销</button></li>`).join('') || '<li>暂无活动 relation。</li>'}</ul></section></section>`; }
+function knowledgeCanvas(data) { const knowledge = active(data, 'knowledge'); const memory = active(data, 'memory'); const relationItems = active(data, 'relations'); const name = id => data.exchange.knowledge.find(item => item.id === id)?.title || short(id); return `<section class="canvas knowledge-canvas"><div class="canvas-header"><div><p class="overline">Knowledge / Memory · 文本 IR</p><h1>知识与记忆</h1><p>保存、取消、冲突、撤销与软删除均由 Rust SQLite 真值驱动。</p></div><div class="canvas-actions"><button class="primary" data-action="new-knowledge">${icon(icons.plus, '新建')}新建 Knowledge</button><button data-action="new-memory">${icon(icons.plus, '新建')}新建 Memory</button><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>${icon(icons.link, '关系')}建立关系</button></div></div><div class="knowledge-list">${knowledge.map(item => `<article class="knowledge-item"><header><div><p class="overline">${escape(item.status)} · r${item.revision} · ${escape(item.classification)}</p><h2>${escape(item.title)}</h2></div><span>${escape((item.tags || []).join(' · '))}</span></header><pre>${escape(item.body)}</pre><div class="item-actions"><button data-action="edit-knowledge" data-id="${escape(item.id)}">${icon(icons.edit, '编辑')}编辑</button><button data-action="delete-knowledge" data-id="${escape(item.id)}" data-revision="${item.revision}">${icon(icons.trash, '软删除')}软删除</button></div></article>`).join('') || '<p class="empty-copy">尚无已保存的本地知识。</p>'}</div><section class="memory-rail"><div class="section-head"><h2>Memory</h2><button data-action="new-memory">新建</button></div><ul>${memory.map(item => `<li><span>${escape(item.title || '概览')} · ${escape(item.scope)} · r${item.revision}</span><button class="memory-button" data-action="edit-memory" data-id="${escape(item.id)}">${escape(item.body)}</button><button data-action="delete-memory" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></li>`).join('') || '<li>暂无活动 Memory。</li>'}</ul></section><section class="memory-rail"><div class="section-head"><h2>Knowledge relation</h2><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立</button></div><ul>${relationItems.map(item => `<li><span>${escape(item.kind)} · r${item.revision}</span>${escape(name(item.fromId))} → ${escape(name(item.toId))}<button data-action="delete-relation" data-id="${escape(item.id)}" data-revision="${item.revision}">撤销</button></li>`).join('') || '<li>暂无活动 relation。</li>'}</ul></section></section>`; }
 function inspector(data) { if (!data) return `<aside class="inspector"><div class="inspector-head"><h2>Inspector</h2></div><p class="empty-copy">导入后显示本地工作区。</p></aside>`; const meta = state.history.modelMetadata; return `<aside class="inspector"><div class="inspector-head"><div><p class="overline">本地事实</p><h2>Inspector</h2></div><button class="icon-button" data-action="toggle-inspector" aria-label="收起">${icon(icons.close, '收起')}</button></div><section><h3>revision 与恢复</h3><div class="inspector-actions"><button data-action="undo" ${state.history.canUndo && native ? '' : 'disabled'}>${icon(icons.undo, '撤销')}撤销</button><button data-action="redo" ${state.history.canRedo && native ? '' : 'disabled'}>${icon(icons.redo, '重做')}重做</button><button data-action="recycle">${icon(icons.trash, '回收站')}回收站 ${state.history.recycleBin.length}</button></div><p class="security-note">动作栈持久化；重启后仍可恢复。冲突会保留当前 revision，绝不静默覆盖。</p></section><section><h3>模型与成本 metadata</h3>${meta.length ? meta.map(item => `<p class="metadata-row"><b>${escape(item.providerId)} / ${escape(item.modelId)}</b><br>${escape(item.metadata?.pricingStatus || 'UNKNOWN')} · ${escape(item.metadata?.priceVersion || '未配置')} · ${escape(item.metadata?.currency || '—')}</p>`).join('') : '<p class="empty-copy">未配置。无网络 catalog、无 Key、无真实费用。</p>'}<button data-action="metadata">${icon(icons.plus, '配置')}配置本地 metadata</button></section><section><h3>工作区</h3><dl><dt>状态</dt><dd>离线 · Rust SQLite</dd><dt>语义 hash</dt><dd title="${escape(data.summary.semanticHash)}">${escape(short(data.summary.semanticHash))}</dd><dt>项目 / 知识</dt><dd>${data.summary.projectCount} / ${data.summary.knowledgeCount}</dd><dt>关系 / 资产</dt><dd>${data.summary.relationCount} / ${data.summary.assetCount}</dd><dt>资产字节</dt><dd>${bytes(data.summary.assetByteCount)}</dd></dl></section><section class="security-note"><h3>安全边界</h3><p>无账号、无网络、无 Provider、无 Prompt/RunSpec。正文不执行。</p></section></aside>`; }
 function scheduleComposerModelPricingRefresh() {
   if (composerModelPricingRefreshTimer !== null) window.clearTimeout(composerModelPricingRefreshTimer);
@@ -2386,17 +3382,21 @@ function accountSyncProgressDialog() {
   const title = result
     ? result.kind === 'success' ? (reading ? '读取完成' : '同步成功')
       : result.kind === 'pending' ? '同步尚未确认'
-        : result.kind === 'attention' ? '读取完成，部分待处理'
-          : reading ? '读取失败' : '同步失败'
+        : result.kind === 'attention' ? (reading ? '读取需要核对' : '同步需要核对')
+        : reading ? '读取失败' : '同步失败'
     : reading ? '正在读取云端列表' : '正在同步到南枫云';
-  const detail = result?.message || (result ? '' : reading ? '正在核对并合并云端会话，请稍候。' : '正在提交并核对云端回执，请稍候。');
+  const detail = result?.message || (result ? '' : reading ? '正在核对并合并云端会话，请稍候。' : '正在加密提交并核对云端回执，请稍候。');
   const resultIcon = result
     ? icon(result.kind === 'success' ? icons.check : icons.info, result.kind === 'success' ? '成功' : '提示')
     : '<span class="account-sync-progress-spinner" aria-hidden="true"></span>';
   return `<div class="scrim account-sync-progress-scrim"><section class="dialog account-sync-progress-dialog ${result ? `result ${escape(result.kind)}` : ''}" role="status" aria-live="polite" aria-busy="${result ? 'false' : 'true'}">${resultIcon}<h2>${title}</h2>${detail ? `<p>${escape(detail)}</p>` : ''}</section></div>`;
 }
+const desktopAppEntry = new DesktopAppEntry(window.localStorage);
+let desktopEntryRouteGeneration = 0;
+let desktopWorkspaceRefreshGeneration = 0;
 async function refresh() {
   const runtimeRefresh = arguments[0]?.runtimeRefresh === true;
+  const observeSelected = arguments[0]?.observeSelected ?? !state.runtimeInfo?.automaticWorkSuppressed;
   if (!native) {
     const browserWorkspace = c15WorkspacePreview
       ? createC15WorkspacePreview()
@@ -2469,66 +3469,95 @@ async function refresh() {
     render({ runtimeRefresh });
     return;
   }
-  const owner = state;
-  const request = ++desktopWorkspaceRefreshGeneration;
-  let expectedWorkspaceId = owner.current?.summary?.id;
-  let expectedConversationId = owner.selectedConversationId;
-  const ownsRoute = () => state === owner && request === desktopWorkspaceRefreshGeneration
-    && state.current?.summary?.id === expectedWorkspaceId && state.selectedConversationId === expectedConversationId;
-  const runtimeInfo = await invoke('read_desktop_runtime_info');
-  if (!ownsRoute()) return;
-  const workspaces = await invoke('list_desktop_workspaces');
-  if (!ownsRoute()) return;
-  const entry = owner.entryResolved ? null : desktopAppEntry.read(owner.dataArea);
-  const workspaceId = workspaces.find(item => item.id === expectedWorkspaceId)?.id
+  const entryOwner = state;
+  const entryGeneration = desktopEntryRouteGeneration;
+  const areaGeneration = cloudOpenAreaGeneration;
+  const refreshGeneration = ++desktopWorkspaceRefreshGeneration;
+  const ownsEntryRoute = () => state === entryOwner && desktopEntryRouteGeneration === entryGeneration
+    && cloudOpenAreaGeneration === areaGeneration && desktopWorkspaceRefreshGeneration === refreshGeneration;
+  const runtimeInfo = await invoke('read_desktop_runtime_info', {}, entryOwner);
+  if (!ownsEntryRoute()) return;
+  state.runtimeInfo = runtimeInfo;
+  void loadMarkdownKnowledgeTask().catch(() => {});
+  void loadJsonKnowledgeTask().catch(() => {});
+  void pdfKnowledge.load().catch(() => {});
+  void webKnowledge.load().catch(() => {});
+  const workspaces = await invoke('list_desktop_workspaces', {}, entryOwner);
+  if (!ownsEntryRoute()) return;
+  const entry = entryOwner.entryResolved ? null : desktopAppEntry.read(entryOwner.dataArea);
+  const workspaceId = workspaces.find(item => item.id === entryOwner.current?.summary?.id)?.id
     || workspaces.find(item => item.id === entry?.workspaceId)?.id || workspaces[0]?.id;
-  const current = workspaceId ? await invoke('read_desktop_workspace', { workspaceId }) : null;
-  if (!ownsRoute()) return;
-  owner.runtimeInfo = runtimeInfo;
-  owner.workspaces = workspaces;
-  owner.current = current;
-  if (!owner.entryResolved) {
-    owner.selectedConversationId = entry && entry.workspaceId === workspaceId && resolveConversation(current, entry.conversationId)
+  const current = workspaceId ? await invoke('read_desktop_workspace', { workspaceId }, entryOwner) : null;
+  if (!ownsEntryRoute()) return;
+  state.workspaces = workspaces;
+  state.current = current;
+  if (!entryOwner.entryResolved) {
+    state.selectedConversationId = entry && entry.workspaceId === workspaceId && resolveConversation(current, entry.conversationId)
       ? entry.conversationId : null;
-    owner.entryResolved = true;
-  } else if (!resolveConversation(current, owner.selectedConversationId)) {
-    owner.selectedConversationId = null;
-  }
-  expectedWorkspaceId = owner.current?.summary?.id;
-  expectedConversationId = owner.selectedConversationId;
+    entryOwner.entryResolved = true;
+    if (!state.selectedConversationId) state.newConversationDraftWorkspaceId = workspaceId || null;
+  } else if (!resolveConversation(current, state.selectedConversationId)) state.selectedConversationId = null;
   reloadFavoriteConversationIds({ runtimeRefresh });
+  const selectionWorkspaceId = state.current?.summary?.id || null;
+  const selectionConversationId = state.selectedConversationId || null;
   // These are independent read projections after the workspace and selected
   // conversation are known. Waiting for each IPC receipt serially delayed the
   // first usable Desktop frame even though no mutation depends on another.
   const [
     ,
     p6gCatalog,
+    openrouterRegistryStatus,
     p6gGlobalDefault,
     p6gSelection,
     history,
     agentRuns,
     p6eAcceptance,
     transcription,
+    p6kTask,
+    chatgptTask,
+    claudeTask,
+    knowledgeTask,
   ] = await Promise.all([
-    loadConversationReadState({ observeSelected: !state.runtimeInfo?.automaticWorkSuppressed }),
+    loadConversationReadState({ observeSelected }),
     invoke('read_desktop_p6g_catalog'),
+    invoke('read_desktop_openrouter_registry_status'),
     invoke('read_desktop_p6g_global_default'),
-    state.current && state.selectedConversationId ? invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId }) : Promise.resolve(null),
+    selectionWorkspaceId && selectionConversationId ? invoke('read_desktop_p6g_selection', { workspaceId: selectionWorkspaceId, conversationId: selectionConversationId }) : Promise.resolve(null),
     state.current ? invoke('read_desktop_workbench_history', { workspaceId: state.current.summary.id }) : Promise.resolve({ canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }),
-    invoke('inspect_p8_agent_runs'),
+    workspaceUiEnabled(state.runtimeInfo) ? invoke('inspect_p8_agent_runs') : Promise.resolve([]),
     invoke('read_p6e_temporary_maintenance_acceptance_status'),
     loadTranscriptionState(),
+    state.current ? invoke('read_latest_p6k_zip_import_task', { workspaceId: state.current.summary.id }) : Promise.resolve(null),
+    state.current ? invoke('read_latest_chatgpt_import_task', { workspaceId: state.current.summary.id }) : Promise.resolve(null),
+    state.current ? invoke('read_latest_claude_import_task', { workspaceId: state.current.summary.id }) : Promise.resolve(null),
+    state.current ? invoke('read_latest_nanfeng_knowledge_import_task', { workspaceId: state.current.summary.id }) : Promise.resolve(null),
   ]);
-  if (!ownsRoute()) return;
+  if (!ownsEntryRoute()) return;
   recomputeConversationFind();
   state.p6gCatalog = p6gCatalog;
+  state.openrouterRegistryStatus = openrouterRegistryStatus;
   state.p6gGlobalDefault = p6gGlobalDefault;
-  state.p6gSelection = p6gSelection;
-  state.conversationPreferences = state.p6gSelection?.conversationOverride || { revision: 0, toneOverride: null, webSearchOverride: null };
+  if (state.current?.summary?.id === selectionWorkspaceId
+      && (state.selectedConversationId || null) === selectionConversationId) {
+    const selection = retainNewerConversationSelection(state.p6gSelection, p6gSelection, selectionConversationId);
+    state.p6gSelection = selection ? { ...selection, pickerTier: entryOwner.p6gSelection?.pickerTier ?? null } : null;
+    // Runtime refreshes from a prior reply must not erase choices already made
+    // for a new conversation. Route transitions and draft reads own that state.
+    if (selectionConversationId) {
+      state.conversationPreferences = state.p6gSelection?.conversationOverride
+        || { revision: 0, toneOverride: null, webSearchOverride: null };
+    } else if (!state.conversationPreferences) {
+      state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+    }
+  }
   state.history = history;
   state.agentRuns = agentRuns;
   state.p6eAcceptance = p6eAcceptance;
   state.transcription = transcription;
+  state.p6kTask = p6kTask?.workspaceId === state.current?.summary?.id ? p6kTask : null;
+  state.chatgptTask = chatgptTask?.workspaceId === state.current?.summary?.id ? chatgptTask : null;
+  state.claudeTask = claudeTask?.workspaceId === state.current?.summary?.id ? claudeTask : null;
+  state.nanfengKnowledgeTask = knowledgeTask?.workspaceId === state.current?.summary?.id ? knowledgeTask : null;
   if (state.p6eAcceptance.enabled && state.pane === 'chat') state.pane = 'connections';
   render({ runtimeRefresh });
 }
@@ -2539,7 +3568,7 @@ async function runP6eTemporaryMaintenanceAcceptance() {
     state.p6eAcceptance = { enabled: true, receipt: await invoke('run_p6e_temporary_maintenance_acceptance') };
     state.status = 'P6-E 固定 23h59 / 24h owner 维护已运行；回执保存在 acceptance 私有根目录，重启后可读。';
     state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
     state.error = `P6-E 验收维护失败：${String(error)}`;
   }
   render();
@@ -2551,92 +3580,265 @@ app.addEventListener('click', event => {
   event.stopImmediatePropagation();
   void runP6eTemporaryMaintenanceAcceptance();
 }, true);
-async function pickExchange() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 交换包', extensions: ['nfai-exchange'] }] }); if (!selectedPath) return; try { state.preflight = await invoke('stage_preflight_selected_exchange', { selectedPath }); state.current = await invoke('import_staged_exchange_as_new_workspace', { args: { stagingId: state.preflight.stagingId, workspaceTitle: '导入工作区' } }); state.preflight = null; state.dialog = null; state.status = '交换包已通过严格预检并直接导入为新的独立工作区。'; state.error = ''; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `导入被拒绝：${String(error)}`; } render(); }
+async function pickExchange() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 交换包', extensions: ['nfai-exchange'] }] }); if (!selectedPath) return; try { state.preflight = await invoke('stage_preflight_selected_exchange', { selectedPath }); state.current = await invoke('import_staged_exchange_as_new_workspace', { args: { stagingId: state.preflight.stagingId, workspaceTitle: '导入工作区' } }); state.preflight = null; state.dialog = null; state.status = '交换包已通过严格预检并直接导入为新的独立工作区。'; state.error = ''; await refresh(); } catch (error) { state.error = `导入被拒绝：${String(error)}`; } render(); }
 function p6hImportLifecycleMarker(phase) { if (!p6hDiagnosticsEnabled) return; let marker = document.querySelector('#p6h-dom-event-marker'); if (!marker) { marker = document.createElement('p'); marker.id = 'p6h-dom-event-marker'; marker.setAttribute('role', 'status'); marker.style.cssText = 'position:fixed;z-index:9999;left:12px;bottom:12px;padding:6px;background:#173;color:#fff;font-size:12px'; document.body.append(marker); } marker.textContent = `P6-H acceptance import: ${phase}`; }
-async function commitSelectedImport({ taskKey, stageCommand, readCommand, confirmCommand, selectedPath, label }) {
-  if (!state.current) throw new Error('请先导入或创建一个本地工作区。');
-  const staged = await invoke(stageCommand, { selectedPath });
+function importRouteIsCurrent(owner, workspaceId) {
+  return state === owner && state.current?.summary?.id === workspaceId;
+}
+async function commitSelectedImport({ taskKey, stageCommand, readCommand, confirmCommand, selectedPath, label, owner = state, workspaceId = owner.current?.summary?.id }) {
+  if (!workspaceId) throw new Error('请先导入或创建一个本地工作区。');
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
+  const staged = await invoke(stageCommand, { selectedPath, workspaceId });
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
   let task = await invoke(readCommand, { taskId: staged.id });
   let rejected = 0;
-  for (const item of task.items.filter(candidate => candidate.status === 'PENDING_CONFIRMATION')) {
+  for (const item of task.items.filter(candidate => candidate.status === 'PENDING_CONFIRMATION' && candidate.failure !== 'CONFLICT_REIMPORT')) {
+    if (!importRouteIsCurrent(owner, workspaceId)) break;
     try {
-      await invoke(confirmCommand, { args: { workspaceId: state.current.summary.id, taskId: task.id, itemId: item.id } });
+      await invoke(confirmCommand, { args: { workspaceId, taskId: task.id, itemId: item.id } });
     } catch {
       // The item stays independently recoverable in its persisted task; selection remains one command.
       rejected += 1;
     }
   }
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
   task = await invoke(readCommand, { taskId: staged.id });
-  state[taskKey] = task;
-  state.dialog = null;
-  if (state.current) await refresh();
-  state.status = `${label} 已直接执行导入；失败或拒绝 ${rejected} 项可在回执中查看。`;
-  state.error = '';
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
+  owner[taskKey] = task;
+  owner.dialog = null;
+  await refresh();
+  if (!importRouteIsCurrent(owner, workspaceId)) return task;
+  const conflicts = task.items.filter(item => item.status === 'PENDING_CONFIRMATION' && item.failure === 'CONFLICT_REIMPORT').length;
+  owner.status = `${label} 已直接执行导入；失败或拒绝 ${rejected} 项${conflicts ? `，同源冲突 ${conflicts} 项待您在导入结果中确认` : ''}。`;
+  owner.error = '';
   return task;
 }
-async function commitPendingImport({ taskKey, readCommand, confirmCommand, label }) {
-  if (!state.current || !state[taskKey]) throw new Error('需要一个本地工作区和可恢复的导入任务。');
-  let task = await invoke(readCommand, { taskId: state[taskKey].id });
+async function commitPendingImport({ taskKey, readCommand, confirmCommand, label, owner = state, workspaceId = owner.current?.summary?.id }) {
+  if (!workspaceId || !owner[taskKey]) throw new Error('需要一个本地工作区和可恢复的导入任务。');
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
+  let task = await invoke(readCommand, { taskId: owner[taskKey].id });
   let rejected = 0;
-  for (const item of task.items.filter(candidate => candidate.status === 'PENDING_CONFIRMATION')) {
-    try { await invoke(confirmCommand, { args: { workspaceId: state.current.summary.id, taskId: task.id, itemId: item.id } }); } catch { rejected += 1; }
+  for (const item of task.items.filter(candidate => candidate.status === 'PENDING_CONFIRMATION' && candidate.failure !== 'CONFLICT_REIMPORT')) {
+    if (!importRouteIsCurrent(owner, workspaceId)) break;
+    try { await invoke(confirmCommand, { args: { workspaceId, taskId: task.id, itemId: item.id } }); } catch { rejected += 1; }
   }
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
   task = await invoke(readCommand, { taskId: task.id });
-  state[taskKey] = task;
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
+  owner[taskKey] = task;
   await refresh();
-  state.status = `${label} 已直接续作；失败或拒绝 ${rejected} 项保留独立回执。`;
-  state.error = '';
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
+  owner.status = `${label} 已直接续作；失败或拒绝 ${rejected} 项保留独立回执。`;
+  owner.error = '';
 }
-async function pickChatGptExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } p6hImportLifecycleMarker('picker-open'); const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'ChatGPT conversations.json', extensions: ['json'] }] }); if (!selectedPath) { p6hImportLifecycleMarker('picker-cancel'); return; } p6hImportLifecycleMarker('picker-returned'); try { await commitSelectedImport({ taskKey: 'chatgptTask', stageCommand: 'stage_chatgpt_export_selected', readCommand: 'read_chatgpt_import_task', confirmCommand: 'confirm_chatgpt_import_item', selectedPath, label: 'ChatGPT' }); p6hImportLifecycleMarker('direct-commit-succeeded'); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; p6hImportLifecycleMarker('stage-error'); state.error = `ChatGPT 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
-async function pickClaudeExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'Claude conversations.json', extensions: ['json'] }] }); if (!selectedPath) return; try { await commitSelectedImport({ taskKey: 'claudeTask', stageCommand: 'stage_claude_export_selected', readCommand: 'read_claude_import_task', confirmCommand: 'confirm_claude_import_item', selectedPath, label: 'Claude' }); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `Claude 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
-async function pickP6kZip(provider) { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } if (!state.current) { state.error = '先导入或创建一个本地工作区。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: `${provider} data export ZIP`, extensions: ['zip'] }] }); if (!selectedPath) return; try { state.p6kTask = await invoke('stage_p6k_zip_import_selected', { args: { workspaceId: state.current.summary.id, provider, selectedPath } }); state.status = `${provider} ZIP 已完成私有校验并直接导入：${state.p6kTask.importedCount} 个会话；失败 ${state.p6kTask.failedCount}，未关联媒体 ${state.p6kTask.unmappedAssetCount}。`; state.error = ''; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `ZIP 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
+async function pickChatGptExport() {
+  if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; }
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  p6hImportLifecycleMarker('picker-open');
+  const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'ChatGPT conversations.json', extensions: ['json'] }] });
+  if (!selectedPath) { p6hImportLifecycleMarker('picker-cancel'); return; }
+  if (!importRouteIsCurrent(owner, workspaceId)) return;
+  p6hImportLifecycleMarker('picker-returned');
+  try { const task = await commitSelectedImport({ taskKey: 'chatgptTask', stageCommand: 'stage_chatgpt_export_selected', readCommand: 'read_chatgpt_import_task', confirmCommand: 'confirm_chatgpt_import_item', selectedPath, label: 'ChatGPT', owner, workspaceId }); if (task) p6hImportLifecycleMarker('direct-commit-succeeded'); }
+  catch (error) { p6hImportLifecycleMarker('stage-error'); if (state === owner) { owner.error = `ChatGPT 导入被拒绝：${String(error)}`; owner.status = owner.error; } }
+  if (state === owner) render();
+}
+async function pickClaudeExport() {
+  if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; }
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'Claude conversations.json', extensions: ['json'] }] });
+  if (!selectedPath || !importRouteIsCurrent(owner, workspaceId)) return;
+  try { await commitSelectedImport({ taskKey: 'claudeTask', stageCommand: 'stage_claude_export_selected', readCommand: 'read_claude_import_task', confirmCommand: 'confirm_claude_import_item', selectedPath, label: 'Claude', owner, workspaceId }); }
+  catch (error) { if (state === owner) { owner.error = `Claude 导入被拒绝：${String(error)}`; owner.status = owner.error; } }
+  if (state === owner) render();
+}
+async function pickP6kZip(provider) {
+  if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; }
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  if (!workspaceId) { owner.error = '先导入或创建一个本地工作区。'; render(); return; }
+  const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: `${provider} data export ZIP`, extensions: ['zip'] }] });
+  if (!selectedPath || !importRouteIsCurrent(owner, workspaceId)) return;
+  try {
+    const task = await invoke('stage_p6k_zip_import_selected', { args: { workspaceId, provider, selectedPath } });
+    if (!importRouteIsCurrent(owner, workspaceId)) return;
+    owner.p6kTask = task;
+    owner.status = `${provider} ZIP 已完成私有校验并直接导入：${task.importedCount} 个会话；失败 ${task.failedCount}，未关联媒体 ${task.unmappedAssetCount}。`;
+    owner.error = '';
+    await refresh();
+  } catch (error) { if (state === owner) { owner.error = `ZIP 导入被拒绝：${String(error)}`; owner.status = owner.error; } }
+  if (state === owner) render();
+}
 async function pickV2WorkspaceExchange() {
   if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; }
+  const owner = state;
   const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 完整工作区交换（v2）', extensions: ['nfai-exchange', 'zip'] }] });
-  if (!selectedPath) return;
+  if (!selectedPath || state !== owner) return;
   try {
-    const receipt = await invoke('import_desktop_workspace_exchange_v2_selected', { selectedPath });
+    const receipt = await invoke('import_desktop_workspace_exchange_v2_selected', { selectedPath }, owner);
+    if (state !== owner) return;
     await refresh();
-    state.v2CommittedExchanges = await invoke('list_desktop_workspace_exchange_v2_committed');
-    globalThis.__nanfengV2CommittedExchanges = state.v2CommittedExchanges;
-    state.status = `完整工作区交换（v2）已私有导入并回读：${short(receipt.semanticHash)} · ${receipt.assetCount} 项附件${receipt.replayed ? ' · 已验证重放回执' : ''}。`;
-    state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `完整工作区交换（v2）被拒绝：${String(error)}`;
-    state.status = state.error;
+    if (state !== owner) return;
+    const committed = await invoke('list_desktop_workspace_exchange_v2_committed', {}, owner);
+    if (state !== owner) return;
+    owner.v2CommittedExchanges = committed;
+    globalThis.__nanfengV2CommittedExchanges = committed;
+    owner.status = `完整工作区交换（v2）已私有导入并回读：${short(receipt.semanticHash)} · ${receipt.assetCount} 项附件${receipt.replayed ? ' · 已验证重放回执' : ''}。`;
+    owner.error = '';
+  } catch (error) {
+    if (state !== owner) return;
+    owner.error = `完整工作区交换（v2）被拒绝：${String(error)}`;
+    owner.status = owner.error;
   }
-  render();
+  if (state === owner) render();
 }
 async function reexportV2WorkspaceExchange(workspaceId) {
   if (!native) { state.status = 'Web 预览不会请求保存位置；请在 Tauri Desktop 开发包中使用系统保存窗口。'; render(); return; }
+  const owner = state;
   const selectedPath = await dialogInvoke('save', { defaultPath: 'nanfeng-ai-workspace-v2.nfai-exchange', filters: [{ name: '南枫 AI 完整工作区交换（v2）', extensions: ['nfai-exchange'] }] });
-  if (!selectedPath) return;
+  if (!selectedPath || state !== owner) return;
   try {
-    const receipt = await invoke('reexport_desktop_workspace_exchange_v2_selected', { workspaceId, selectedPath });
-    state.status = `完整工作区交换（v2）已从私有记录回导并严格回读：${short(receipt.semanticHash)} · ${receipt.assetCount} 项附件。`;
-    state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `完整工作区交换（v2）回导被拒绝：${String(error)}`;
-    state.status = state.error;
+    const receipt = await invoke('reexport_desktop_workspace_exchange_v2_selected', { workspaceId, selectedPath }, owner);
+    if (state !== owner) return;
+    owner.status = `完整工作区交换（v2）已从私有记录回导并严格回读：${short(receipt.semanticHash)} · ${receipt.assetCount} 项附件。`;
+    owner.error = '';
+  } catch (error) {
+    if (state !== owner) return;
+    owner.error = `完整工作区交换（v2）回导被拒绝：${String(error)}`;
+    owner.status = owner.error;
   }
-  render();
+  if (state === owner) render();
 }
-async function pickNanfengKnowledgeExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫知识库完整 JSON', extensions: ['json'] }] }); if (!selectedPath) return; try { await commitSelectedImport({ taskKey: 'nanfengKnowledgeTask', stageCommand: 'stage_nanfeng_knowledge_export_selected', readCommand: 'read_nanfeng_knowledge_import_task', confirmCommand: 'confirm_nanfeng_knowledge_import_item', selectedPath, label: '南枫知识库' }); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `知识库导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
+async function pickNanfengKnowledgeExport() {
+  if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; }
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫知识库完整 JSON', extensions: ['json'] }] });
+  if (!selectedPath || !importRouteIsCurrent(owner, workspaceId)) return;
+  try { await commitSelectedImport({ taskKey: 'nanfengKnowledgeTask', stageCommand: 'stage_nanfeng_knowledge_export_selected', readCommand: 'read_nanfeng_knowledge_import_task', confirmCommand: 'confirm_nanfeng_knowledge_import_item', selectedPath, label: '南枫知识库', owner, workspaceId }); }
+  catch (error) { if (state === owner) { owner.error = `知识库导入被拒绝：${String(error)}`; owner.status = owner.error; } }
+  if (state === owner) render();
+}
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-chatgpt-export"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickChatGptExport(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-claude-export"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickClaudeExport(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-p6k-chatgpt-zip"],[data-action="select-p6k-claude-zip"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickP6kZip(target.dataset.action === 'select-p6k-chatgpt-zip' ? 'CHATGPT' : 'CLAUDE'); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-v2-workspace-exchange"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickV2WorkspaceExchange(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="reexport-v2-workspace-exchange"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); reexportV2WorkspaceExchange(target.dataset.workspaceId); }, true);
-app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="retry-p6k-zip"],[data-action="skip-p6k-zip-failures"],[data-action="delete-p6k-zip-batch"],[data-action="confirm-delete-p6k-zip-batch"]'); if (!target || !state.p6kTask) return; event.preventDefault(); event.stopImmediatePropagation(); const action = target.dataset.action; if (action === 'delete-p6k-zip-batch') { state.dialog = { kind: 'p6k-batch-delete', taskId: state.p6kTask.id, submitting: false, failure: '' }; render(); return; } if (action === 'confirm-delete-p6k-zip-batch' && (state.dialog?.kind !== 'p6k-batch-delete' || state.dialog.taskId !== state.p6kTask.id || state.dialog.submitting)) return; try { if (action === 'retry-p6k-zip') state.p6kTask = await invoke('retry_p6k_zip_import_task', { taskId: state.p6kTask.id }); else if (action === 'skip-p6k-zip-failures') state.p6kTask = await invoke('skip_p6k_zip_import_failures', { taskId: state.p6kTask.id }); else { state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); await invoke('delete_p6k_zip_import_batch', { taskId: state.p6kTask.id }); state.p6kTask = null; state.dialog = null; } state.status = action === 'confirm-delete-p6k-zip-batch' ? '已删除该导入批次与私有副本；官方会话删除标记已保留，不会在后续导入中复活。' : 'ZIP 导入状态已更新。'; state.error = ''; if (state.current) await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (action === 'confirm-delete-p6k-zip-batch' && state.dialog?.kind === 'p6k-batch-delete') state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; else state.error = `ZIP 导入状态未更新：${String(error)}`; } render(); }, true);
-app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="select-p6k-manual-asset"],[data-action="select-p6k-manual-target"],[data-action="link-p6k-manual-asset"]'); if (!target || !state.p6kTask) return; event.preventDefault(); event.stopImmediatePropagation(); if (target.dataset.action === 'select-p6k-manual-asset') { p6kManualLink = { assetOrdinal: Number(target.dataset.assetOrdinal), conversationId: null, messageId: null }; globalThis.__nanfengP6kManualLink = p6kManualLink; render(); return; } if (target.dataset.action === 'select-p6k-manual-target') { p6kManualLink = { ...p6kManualLink, conversationId: target.dataset.conversationId, messageId: target.dataset.messageId }; globalThis.__nanfengP6kManualLink = p6kManualLink; render(); return; } if (p6kManualLink.assetOrdinal === null || !p6kManualLink.conversationId || !p6kManualLink.messageId || !state.current) return; try { state.p6kTask = await invoke('link_p6k_zip_manual_asset', { args: { taskId: state.p6kTask.id, assetOrdinal: p6kManualLink.assetOrdinal, workspaceId: state.current.summary.id, conversationId: p6kManualLink.conversationId, messageId: p6kManualLink.messageId } }); p6kManualLink = { assetOrdinal: null, conversationId: null, messageId: null }; globalThis.__nanfengP6kManualLink = p6kManualLink; state.status = '已按所选媒体与消息建立精确关联；附件现在只在该消息位置呈现。'; state.error = ''; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `媒体关联未完成：${String(error)}`; } render(); }, true);
+app.addEventListener('click', async event => {
+  const target = event.target.closest?.('[data-action="retry-p6k-zip"],[data-action="skip-p6k-zip-failures"],[data-action="delete-p6k-zip-batch"],[data-action="confirm-delete-p6k-zip-batch"]');
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const task = owner.p6kTask;
+  if (!target || !task || task.workspaceId !== workspaceId) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const action = target.dataset.action;
+  if (action === 'delete-p6k-zip-batch') {
+    owner.dialog = { kind: 'p6k-batch-delete', taskId: task.id, submitting: false, failure: '' };
+    render();
+    return;
+  }
+  if (action === 'confirm-delete-p6k-zip-batch' && (owner.dialog?.kind !== 'p6k-batch-delete' || owner.dialog.taskId !== task.id || owner.dialog.submitting)) return;
+  try {
+    if (action === 'retry-p6k-zip' || action === 'skip-p6k-zip-failures') {
+      const command = action === 'retry-p6k-zip' ? 'retry_p6k_zip_import_task' : 'skip_p6k_zip_import_failures';
+      const updated = await invoke(command, { taskId: task.id });
+      if (!importRouteIsCurrent(owner, workspaceId)) return;
+      owner.p6kTask = updated;
+    } else {
+      owner.dialog = { ...owner.dialog, submitting: true, failure: '' };
+      render();
+      await invoke('delete_p6k_zip_import_batch', { taskId: task.id });
+      if (!importRouteIsCurrent(owner, workspaceId)) return;
+      owner.p6kTask = null;
+      owner.dialog = null;
+    }
+    owner.status = action === 'confirm-delete-p6k-zip-batch' ? '已删除该导入批次与私有副本；官方会话删除标记已保留，不会在后续导入中复活。' : 'ZIP 导入状态已更新。';
+    owner.error = '';
+    await refresh();
+  } catch (error) {
+    if (!importRouteIsCurrent(owner, workspaceId)) return;
+    if (action === 'confirm-delete-p6k-zip-batch' && owner.dialog?.kind === 'p6k-batch-delete') owner.dialog = { ...owner.dialog, submitting: false, failure: String(error) };
+    else owner.error = `ZIP 导入状态未更新：${String(error)}`;
+  }
+  if (importRouteIsCurrent(owner, workspaceId)) render();
+}, true);
+app.addEventListener('click', async event => {
+  const target = event.target.closest?.('[data-action="select-p6k-manual-asset"],[data-action="select-p6k-manual-target"],[data-action="link-p6k-manual-asset"]');
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const task = owner.p6kTask;
+  if (!target || !task || task.workspaceId !== workspaceId) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (target.dataset.action === 'select-p6k-manual-asset') {
+    p6kManualLink = { taskId: task.id, assetOrdinal: Number(target.dataset.assetOrdinal), conversationId: null, messageId: null };
+    globalThis.__nanfengP6kManualLink = p6kManualLink;
+    render();
+    return;
+  }
+  if (target.dataset.action === 'select-p6k-manual-target') {
+    if (p6kManualLink.taskId !== task.id || p6kManualLink.assetOrdinal === null) return;
+    p6kManualLink = { ...p6kManualLink, conversationId: target.dataset.conversationId, messageId: target.dataset.messageId || null };
+    globalThis.__nanfengP6kManualLink = p6kManualLink;
+    render();
+    return;
+  }
+  if (p6kManualLink.taskId !== task.id || p6kManualLink.assetOrdinal === null || !p6kManualLink.conversationId || !p6kManualLink.messageId) return;
+  const selectedLink = { ...p6kManualLink };
+  try {
+    const updated = await invoke('link_p6k_zip_manual_asset', { args: { taskId: task.id, assetOrdinal: selectedLink.assetOrdinal, workspaceId, conversationId: selectedLink.conversationId, messageId: selectedLink.messageId } });
+    if (!importRouteIsCurrent(owner, workspaceId)) return;
+    owner.p6kTask = updated;
+    p6kManualLink = { taskId: null, assetOrdinal: null, conversationId: null, messageId: null };
+    globalThis.__nanfengP6kManualLink = p6kManualLink;
+    owner.status = '已按所选媒体与消息建立精确关联；附件现在只在该消息位置呈现。';
+    owner.error = '';
+    await refresh();
+  } catch (error) { if (importRouteIsCurrent(owner, workspaceId)) owner.error = `媒体关联未完成：${String(error)}`; }
+  if (importRouteIsCurrent(owner, workspaceId)) render();
+}, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-nanfeng-knowledge-export"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickNanfengKnowledgeExport(); }, true);
+const jsonConflictActions = Object.freeze({
+  chatgpt: { taskKey: 'chatgptTask', confirm: 'confirm_chatgpt_conflict_reimport_item', skip: 'skip_chatgpt_import_item', label: 'ChatGPT' },
+  claude: { taskKey: 'claudeTask', confirm: 'confirm_claude_conflict_reimport_item', skip: 'skip_claude_import_item', label: 'Claude' },
+  'nanfeng-knowledge': { taskKey: 'nanfengKnowledgeTask', confirm: 'confirm_nanfeng_knowledge_conflict_reimport_item', skip: 'skip_nanfeng_knowledge_import_item', label: '南枫知识库' },
+});
+app.addEventListener('click', async event => {
+  const target = event.target.closest?.('[data-action$="-conflict"]');
+  if (!target || !native) return;
+  const match = /^(confirm|skip)-(chatgpt|claude|nanfeng-knowledge)-conflict$/.exec(target.dataset.action || '');
+  if (!match) return;
+  const config = jsonConflictActions[match[2]];
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const task = owner[config.taskKey];
+  const item = task?.items?.find(candidate => candidate.id === target.dataset.itemId && candidate.status === 'PENDING_CONFIRMATION' && candidate.failure === 'CONFLICT_REIMPORT');
+  if (!workspaceId || task?.workspaceId !== workspaceId || !item) return;
+  target.disabled = true;
+  try {
+    const confirmed = match[1] === 'confirm';
+    await invoke(confirmed ? config.confirm : config.skip, { args: { workspaceId, taskId: task.id, itemId: item.id } });
+    if (!importRouteIsCurrent(owner, workspaceId)) return;
+    await refresh();
+    if (!importRouteIsCurrent(owner, workspaceId)) return;
+    owner.status = confirmed ? `已按您的确认再次导入该 ${config.label} 会话；旧会话保留。` : `已跳过该 ${config.label} 冲突项；旧会话保留。`;
+    owner.error = '';
+  } catch (error) {
+    if (importRouteIsCurrent(owner, workspaceId)) owner.error = `${config.label} 冲突处理失败：${String(error)}`;
+  }
+  if (state === owner) render();
+}, true);
 const settingsParent = page => ['model-configuration', 'conversation-cost', 'context-selections', 'diagnostics'].includes(page)
   ? 'model'
   : ['favorites', 'archived', 'recycle'].includes(page) ? 'conversations'
     : page === 'memory-overview' ? 'personalization'
       : ['json-import-results', 'zip-import-results'].includes(page) ? 'data' : null;
 function writeProductSettings(patch) {
-  const previous = state.productSettings;
   state.productSettings = normalizeProductSettings({ ...state.productSettings, ...patch });
   if (!state.personalizationDirty) state.personalizationDraft = { ...state.productSettings };
   if (!native) {
@@ -2649,67 +3851,86 @@ function writeProductSettings(patch) {
       await loadDesktopHistoryKnowledge({ runDue: Boolean(state.productSettings.historyLibraryEnabled) });
       await loadDesktopBackgroundRuntime();
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    } catch (error) {
       state.error = `历史资料库状态未更新：${String(error)}`;
     }
     render();
-  }).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.productSettings = previous;
-    if (!state.personalizationDirty) state.personalizationDraft = { ...previous };
-    state.error = `Desktop 设置未保存：${String(error)}`;
+  }).catch(error => {
+    state.error = error?.code === 'APP_SETTINGS_COMMIT_UNKNOWN'
+      ? `Desktop 设置保存结果未确认，当前选择保留在界面：${String(error)}`
+      : `Desktop 设置未保存：${String(error)}`;
     render();
   });
 }
 
 async function savePersonalization() {
   if (!state.settingsCapabilities.ordinaryChatPersonalization) return;
-  const previous = state.productSettings;
+  const fields = ['tone', 'nickname', 'occupation', 'customInstructions'];
+  const patch = Object.fromEntries(fields.map(key => [key, state.personalizationDraft[key]]));
   try {
-    await persistNativeAppSettings({}, Object.fromEntries(['tone', 'nickname', 'occupation', 'customInstructions'].map(key => [key, state.personalizationDraft[key]])));
-    state.personalizationDraft = { ...state.productSettings };
-    state.personalizationDirty = false;
-    if (state.dialog?.kind === 'custom-instructions-fullscreen') state.dialog = null;
-    showTransientToast('个性化设置已保存。');
+    await persistNativeAppSettings({}, patch);
+    if (fields.every(key => state.personalizationDraft[key] === patch[key])) {
+      state.personalizationDraft = { ...state.productSettings };
+      state.personalizationDirty = false;
+      if (state.dialog?.kind === 'custom-instructions-fullscreen') state.dialog = null;
+    }
     state.status = '';
     state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.productSettings = previous;
-    state.error = `个性化设置未保存：${String(error)}`;
-    showTransientToast(state.error, 'error');
+  } catch (error) {
+    state.error = error?.code === 'APP_SETTINGS_COMMIT_UNKNOWN'
+      ? `个性化设置保存结果未确认，编辑稿已保留：${String(error)}`
+      : `个性化设置未保存：${String(error)}`;
   }
   render();
 }
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   const action = target?.dataset.action;
-  if (!['show-settings', 'open-settings-page', 'settings-back', 'return-to-settings-conversation-list', 'open-settings-picker', 'dismiss-settings-picker', 'select-settings-picker-option', 'toggle-product-setting', 'save-personalization', 'open-custom-instructions-fullscreen', 'save-custom-instructions-fullscreen', 'select-model-service-provider', 'toggle-model-service-enabled', 'select-model-service-preset', 'reveal-model-service-credential', 'save-model-service-settings', 'test-model-service-connection', 'select-usage-section'].includes(action)) return;
+  if (!['show-settings', 'open-settings-page', 'settings-back', 'return-to-settings-conversation-list', 'open-settings-picker', 'dismiss-settings-picker', 'select-settings-picker-option', 'toggle-product-setting', 'save-personalization', 'open-custom-instructions-fullscreen', 'save-custom-instructions-fullscreen', 'select-model-service-provider', 'toggle-model-service-enabled', 'select-model-service-preset', 'reveal-model-service-credential', 'save-model-service-settings', 'ask-delete-model-service-credential', 'confirm-delete-model-service-credential', 'test-model-service-connection', 'refresh-openrouter-registry', 'select-usage-section'].includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   if (action === 'show-settings') {
     state.pane = 'settings';
+    state.sidebarOpen = false;
     state.settingsSection = 'personalization';
     state.settingsPicker = null;
-    state.personalizationDraft = { ...state.productSettings };
-    state.personalizationDirty = false;
+    if (!state.personalizationDirty) state.personalizationDraft = { ...state.productSettings };
     state.profileOpen = false;
     state.error = '';
   } else if (action === 'open-settings-page') {
+    if (state.pane !== 'settings') {
+      closeTopOverlay({ restoreFocus: false });
+      state.pane = 'settings';
+      state.sidebarOpen = false;
+    }
     const nextSettingsSection = target.dataset.page || 'personalization';
     if (nextSettingsSection !== 'account' && state.accountRecovery?.rotation === true) state.accountRecovery = null;
     if (nextSettingsSection !== 'model-configuration') clearModelCredentialDraftOutsideEditor(true);
     state.settingsSection = nextSettingsSection;
     state.settingsPicker = null;
     if (state.settingsSection === 'personalization') {
-      state.personalizationDraft = { ...state.productSettings };
-      state.personalizationDirty = false;
+      if (!state.personalizationDirty) state.personalizationDraft = { ...state.productSettings };
     }
     if (state.settingsSection === 'model-configuration' && !state.modelServiceDraft) resetModelServiceDraft();
-    if (state.settingsSection === 'reminders' && native) Promise.all([loadDesktopReminders(), loadDesktopBackgroundRuntime(), readReminderNotificationPermission()]).then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `提醒计划读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'conversation-cost' && native) loadDesktopUsageLedger().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `费用记录读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'context-selections' && native) loadDesktopContextRecords().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `上下文记录读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'diagnostics' && native) loadDesktopDiagnosticRecords().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `运行诊断读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'privacy' && native) loadDesktopPrivacyInventory().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `本机数据概况读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'account' && native) loadDesktopAccountSync().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `账号同步状态读取失败：${String(error)}`; render(); });
+    const settingsReadOwner = state;
+    const settingsReadGeneration = (state.settingsReadGeneration || 0) + 1;
+    state.settingsReadGeneration = settingsReadGeneration;
+    const settingsReadIsCurrent = () => state === settingsReadOwner && state.pane === 'settings'
+      && state.settingsSection === nextSettingsSection && state.settingsReadGeneration === settingsReadGeneration;
+    const readSettings = (promise, label, message = String) => promise.then(() => {
+      if (settingsReadIsCurrent()) render();
+    }).catch(error => {
+      if (!settingsReadIsCurrent() || error?.code === 'STALE_DATA_AREA') return;
+      settingsReadOwner.error = `${label}：${message(error)}`;
+      render();
+    });
+    if (state.settingsSection === 'reminders' && native) readSettings(Promise.all([loadDesktopReminders(), loadDesktopBackgroundRuntime(), readReminderNotificationPermission()]), '提醒计划读取失败');
+    if (state.settingsSection === 'conversation-cost' && native) readSettings(loadDesktopUsageLedger(), '费用记录读取失败');
+    if (state.settingsSection === 'context-selections' && native) readSettings(loadDesktopContextRecords(), '上下文记录读取失败');
+    if (state.settingsSection === 'diagnostics' && native) readSettings(loadDesktopDiagnosticRecords(), '运行诊断读取失败');
+    if (state.settingsSection === 'privacy' && native) readSettings(loadDesktopPrivacyInventory(), '本机数据概况读取失败');
+    if (state.settingsSection === 'data' && native) readSettings(loadSelectedBackupStatus(), '本机备份状态读取失败', localBackupErrorMessage);
+    if (state.settingsSection === 'account' && native) readSettings(loadDesktopAccountSync(), '账号同步状态读取失败');
     state.error = '';
   } else if (action === 'settings-back') {
     if (state.accountRecovery?.rotation === true) state.accountRecovery = null;
@@ -2747,7 +3968,9 @@ app.addEventListener('click', event => {
   } else if (action === 'toggle-product-setting') {
     const key = target.dataset.key;
     if (Object.hasOwn(state.productSettings, key) && typeof state.productSettings[key] === 'boolean') {
-      const next = !state.productSettings[key];
+      const next = key === 'memoryEnabled'
+        ? !(state.productSettings.memoryEnabled && state.productSettings.memoryRetrievalEnabled)
+        : !state.productSettings[key];
       if (key === 'monitorNotifications' && next && native) {
         void requestReminderNotificationPermission().then(granted => {
           if (granted) writeProductSettings({ monitorNotifications: true });
@@ -2755,7 +3978,9 @@ app.addEventListener('click', event => {
           render();
         });
       } else {
-        writeProductSettings({ [key]: next });
+        writeProductSettings(key === 'memoryEnabled'
+          ? { memoryEnabled: next, memoryRetrievalEnabled: next }
+          : { [key]: next });
       }
       state.status = '';
     }
@@ -2770,20 +3995,33 @@ app.addEventListener('click', event => {
   } else if (action === 'save-custom-instructions-fullscreen') {
     void savePersonalization();
   } else if (action === 'select-model-service-provider') {
-    state.modelProviderId = modelSettingsProviderTarget(state.modelProviderId, target.dataset.providerId || 'OPENROUTER', target.dataset.providerPlatform === 'true', state.modelLastRelayProviderId);
-    if (state.modelProviderId.startsWith('RELAYCORE_')) state.modelLastRelayProviderId = state.modelProviderId;
-    resetModelServiceDraft();
+    const providerId = modelSettingsProviderTarget(state.modelProviderId, target.dataset.providerId, target.dataset.providerPlatform === 'true', state.lastRelayModelProvider || 'RELAYCORE_CLAUDE');
+    if (providerId?.startsWith('RELAYCORE_')) state.lastRelayModelProvider = providerId;
+    if (!state.modelSettingsSaving && !state.modelSettingsTesting && state.modelServiceSettings.some(item => item.providerId === providerId)) {
+      state.modelProviderId = providerId;
+      persistModelProviderTab(providerId);
+      resetModelServiceDraft();
+    }
   } else if (action === 'toggle-model-service-enabled') {
     void setModelServiceEnabled();
+
   } else if (action === 'select-model-service-preset') {
+    void setModelServicePreset(target.dataset.presetId || state.modelServiceDraft?.presetId);
     state.settingsPicker = null;
-    void setModelServicePreset(target.dataset.presetId);
+
   } else if (action === 'reveal-model-service-credential') {
     void revealModelServiceCredential();
   } else if (action === 'save-model-service-settings') {
     void saveModelServiceSettings();
+  } else if (action === 'ask-delete-model-service-credential') {
+    const selected = selectedModelService();
+    if (selected?.credentialStored) state.dialog = { kind: 'model-credential-delete', providerId: selected.providerId, providerDisplayName: selected.providerDisplayName, submitting: false, failure: '' };
+  } else if (action === 'confirm-delete-model-service-credential') {
+    void deleteModelServiceCredential();
   } else if (action === 'test-model-service-connection') {
     void testModelServiceConnection();
+  } else if (action === 'refresh-openrouter-registry') {
+    void refreshOpenrouterRegistry();
   } else if (action === 'select-usage-section') {
     state.usageSection = target.dataset.section || 'conversation';
   }
@@ -2796,7 +4034,7 @@ app.addEventListener('click', async event => {
   event.stopImmediatePropagation();
   const category = target.dataset.category || 'all';
   state.chatSearch = '';
-  state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
+  state.pane = 'chat';
   state.profileOpen = false;
   state.error = '';
   await openFullSearch(category);
@@ -2811,7 +4049,7 @@ async function previewPrivacyCleanup(scope, selectedTaskIds = []) {
     const preview = await invoke('preview_desktop_privacy_deletion', { args: { scope, selectedTaskIds } });
     state.dialog = { kind: 'privacy-cleanup-preview', preview, selectedTaskIds: [...selectedTaskIds], confirmation: '', submitting: false, failure: '' };
     state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
     state.error = `清理范围预览失败：${String(error)}`;
     state.dialog = null;
   }
@@ -2830,6 +4068,13 @@ async function confirmPrivacyCleanup() {
       selectedTaskIds: current.selectedTaskIds || [],
     } });
     const fullDelete = current.preview.scope === 'ALL_LOCAL_BUSINESS_DATA';
+    if (fullDelete && result.restartRequired) {
+      state.dialog = null;
+      state.error = '';
+      state.status = '正在安全退出并删除双区本机数据；应用将重新打开并回读结果。';
+      render();
+      return;
+    }
     if (fullDelete) {
       window.localStorage.clear();
       state.current = null;
@@ -2860,7 +4105,7 @@ async function confirmPrivacyCleanup() {
     await refresh();
     if (fullDelete) await loadDesktopAppSettings();
     await loadDesktopPrivacyInventory();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
     if (state.dialog?.kind === 'privacy-cleanup-preview') {
       state.dialog = { ...state.dialog, submitting: false, failure: String(error) };
     }
@@ -2930,73 +4175,157 @@ app.addEventListener('click', event => {
 }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="confirm-import"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); importPreflighted(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="resume-chatgpt-import"],[data-action="resume-claude-import"],[data-action="resume-nanfeng-knowledge-import"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); state.dialog = null; state.status = '已保留历史导入回执；新的文件选择会直接执行，历史待处理项不会要求二次确认。'; state.error = ''; render(); }, true);
-app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="retry-chatgpt-task"]'); if (!target || !state.chatgptTask) return; event.preventDefault(); event.stopImmediatePropagation(); try { await invoke('retry_chatgpt_import_task', { taskId: state.chatgptTask.id }); await commitPendingImport({ taskKey: 'chatgptTask', readCommand: 'read_chatgpt_import_task', confirmCommand: 'confirm_chatgpt_import_item', label: 'ChatGPT' }); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `ChatGPT 重试未完成：${String(error)}`; } render(); }, true);
-async function importPreflighted() { try { state.current = await invoke('import_staged_exchange_as_new_workspace', { args: { stagingId: state.preflight.stagingId, workspaceTitle: document.querySelector('#workspace-title')?.value || '' } }); state.dialog = null; state.status = '导入完成：stable ID、revision、关系与资产 hash 已保真保存。'; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `导入失败：${String(error)}`; render(); } }
-async function mutate(args, success) { if (!native || !state.current) return; try { await invoke('mutate_desktop_domain', { args: { ...args, intentId: intent('intent'), workspaceId: state.current.summary.id } }); state.status = success; state.error = ''; state.dialog = null; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `写入被拒绝：${String(error)}`; render(); } }
+app.addEventListener('click', async event => {
+  const target = event.target.closest?.('[data-action="retry-chatgpt-task"]');
+  if (!target || !state.chatgptTask) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const taskId = owner.chatgptTask.id;
+  try {
+    await invoke('retry_chatgpt_import_task', { taskId, workspaceId });
+    if (importRouteIsCurrent(owner, workspaceId)) await commitPendingImport({ taskKey: 'chatgptTask', readCommand: 'read_chatgpt_import_task', confirmCommand: 'confirm_chatgpt_import_item', label: 'ChatGPT', owner, workspaceId });
+  } catch (error) { if (state === owner) owner.error = `ChatGPT 重试未完成：${String(error)}`; }
+  if (state === owner) render();
+}, true);
+async function importPreflighted() { try { state.current = await invoke('import_staged_exchange_as_new_workspace', { args: { stagingId: state.preflight.stagingId, workspaceTitle: document.querySelector('#workspace-title')?.value || '' } }); state.dialog = null; state.status = '导入完成：stable ID、revision、关系与资产 hash 已保真保存。'; await refresh(); } catch (error) { state.error = `导入失败：${String(error)}`; render(); } }
+async function mutate(args, success, onSaved = null) {
+  if (!native || !state.current) return;
+  const owner = state;
+  const workspaceId = owner.current.summary.id;
+  const dialog = owner.dialog;
+  const currentRoute = () => state === owner && owner.current?.summary?.id === workspaceId;
+  try {
+    const receipt = await invoke('mutate_desktop_domain', { args: { ...args, intentId: intent('intent'), workspaceId } }, owner);
+    if (!currentRoute()) return;
+    if (typeof onSaved === 'function') onSaved(receipt);
+    owner.status = success;
+    owner.error = '';
+    if (owner.dialog === dialog) owner.dialog = null;
+    await refresh();
+  } catch (error) {
+    if (!currentRoute() || error?.code === 'STALE_DATA_AREA') return;
+    owner.error = `写入被拒绝：${String(error)}`;
+    render();
+    if (error?.code === 'REVISION_CONFLICT' || String(error).includes('REVISION_CONFLICT')) {
+      if (owner.dialog === dialog) { recordDomainConflict(dialog, args, {}); render(); }
+      const conflictMessage = owner.error;
+      try {
+        const current = await invoke('read_desktop_workspace', { workspaceId }, owner);
+        if (!currentRoute()) return;
+        owner.current = current;
+        if (owner.dialog === dialog) recordDomainConflict(dialog, args, current);
+      } catch (readError) {
+        if (!currentRoute() || readError?.code === 'STALE_DATA_AREA') return;
+        owner.error = `${conflictMessage}；最新版本未回读：${String(readError)}`;
+      }
+      render();
+    }
+
+  }
+}
 function saveProject() { const item = state.dialog.item; mutate({ entity: 'project', action: item ? 'update' : 'create', objectId: item?.id, expectedRevision: item?.revision, fields: { title: document.querySelector('#project-title')?.value || '', description: document.querySelector('#project-description')?.value || '' } }, item ? 'Project 已保存为新的本地 revision。' : 'Project 已创建；可撤销。'); }
-function saveKnowledge() { const item = state.dialog.item; const tags = (document.querySelector('#knowledge-tags')?.value || '').split(',').map(value => value.trim()).filter(Boolean); const fields = { title: document.querySelector('#knowledge-title')?.value || '', body: document.querySelector('#knowledge-body')?.value || '', ...(item ? { tags } : { tags, scope: 'GLOBAL', projectId: null }) }; mutate({ entity: 'knowledge', action: item ? 'update' : 'create', objectId: item?.id, expectedRevision: item?.revision, fields }, item ? 'Knowledge 已保存为新的本地 revision。' : 'Knowledge 已创建；可撤销。'); }
-function saveMemory() { const item = state.dialog.item; mutate({ entity: 'memory', action: item ? 'update' : 'create', objectId: item?.id, expectedRevision: item?.revision, fields: item ? { body: document.querySelector('#memory-body')?.value || '' } : { body: document.querySelector('#memory-body')?.value || '', scope: 'GLOBAL', scopeId: null } }, item ? 'Memory 已保存为新的本地 revision。' : 'Memory 已创建；可撤销。'); }
+function saveKnowledge() { const item = state.dialog.item; const tags = (document.querySelector('#knowledge-tags')?.value || '').split(',').map(value => value.trim()).filter(Boolean); const projectId = document.querySelector('#knowledge-project')?.value || null; const fields = { title: document.querySelector('#knowledge-title')?.value || '', body: document.querySelector('#knowledge-body')?.value || '', ...(item ? { tags } : { tags, scope: projectId ? 'PROJECT' : 'GLOBAL', projectId }) }; mutate({ entity: 'knowledge', action: item ? 'update' : 'create', objectId: item?.id, expectedRevision: item?.revision, fields }, item ? 'Knowledge 已保存为新的本地 revision。' : 'Knowledge 已创建；可撤销。'); }
+function saveMemory() { const item = state.dialog.item; const projectId = document.querySelector('#memory-project')?.value || null; const title = document.querySelector('#memory-title')?.value || ''; const body = document.querySelector('#memory-body')?.value || ''; mutate({ entity: 'memory', action: item ? 'update' : 'create', objectId: item?.id, expectedRevision: item?.revision, fields: item ? { title, body } : { title, body, scope: projectId ? 'PROJECT' : 'GLOBAL', scopeId: projectId } }, item ? 'Memory 已保存为新的本地 revision。' : 'Memory 已创建；可撤销。'); }
+app.addEventListener('change', event => {
+  if (state.dialog?.kind === 'relation' && ['relation-from','relation-to','relation-kind'].includes(event.target?.id)) {
+    state.dialog.draft ??= {};
+    state.dialog.draft[event.target.id] = event.target.value;
+  }
+}, true);
 function saveRelation() { mutate({ entity: 'relation', action: 'create', fields: { fromId: document.querySelector('#relation-from')?.value || '', toId: document.querySelector('#relation-to')?.value || '', kind: document.querySelector('#relation-kind')?.value || '' } }, 'Knowledge relation 已显式建立；可撤销。'); }
-async function undo(redo = false) { if (!native || !state.current) return; try { await invoke(redo ? 'redo_desktop_domain' : 'undo_desktop_domain', { args: { intentId: intent(redo ? 'redo' : 'undo'), workspaceId: state.current.summary.id } }); state.status = redo ? '已重做为新 revision。' : '已撤销为新 revision。'; state.error = ''; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `历史动作不可应用：${String(error)}`; render(); } }
-async function saveMetadata() { if (!native || !state.current) return; try { const providerId = document.querySelector('#provider-id')?.value || ''; const modelId = document.querySelector('#model-id')?.value || ''; const existing = state.history.modelMetadata.find(item => item.providerId === providerId && item.modelId === modelId); await invoke('upsert_desktop_model_metadata', { args: { intentId: intent('metadata'), workspaceId: state.current.summary.id, expectedRevision: existing?.revision || 0, providerId, modelId, metadata: { capabilities: ['TEXT'], priceVersion: document.querySelector('#price-version')?.value || '', currency: document.querySelector('#price-currency')?.value || '', source: '用户手工本地配置', updatedAt: '2026-08-13T00:00:00Z', pricingStatus: 'MANUAL', safeUsage: { knownCostMicros: null } } } }); state.status = '本地 metadata 已保存；不是实时价格或真实费用。'; state.dialog = null; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `metadata 被拒绝：${String(error)}`; render(); } }
-async function exportCurrent() { if (!native || !state.current) return; const selectedPath = await dialogInvoke('save', { defaultPath: `${state.current.summary.id}.nfai-exchange`, filters: [{ name: '南枫 AI 交换包', extensions: ['nfai-exchange'] }] }); if (!selectedPath) return; try { const receipt = await invoke('export_desktop_workspace_to_selected_path', { workspaceId: state.current.summary.id, selectedPath }); state.status = `导出完成并严格回读：${short(receipt.semanticHash)} · ${bytes(receipt.byteCount)}`; } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `导出失败：${String(error)}`; } render(); }
+async function undo(redo = false) {
+  if (!native || !state.current) return;
+  const owner = state;
+  const workspaceId = owner.current.summary.id;
+  const currentRoute = () => state === owner && owner.current?.summary?.id === workspaceId;
+  try {
+    await invoke(redo ? 'redo_desktop_domain' : 'undo_desktop_domain', {
+      args: { intentId: intent(redo ? 'redo' : 'undo'), workspaceId },
+    }, owner);
+    if (!currentRoute()) return;
+    owner.status = redo ? '已重做为新 revision。' : '已撤销为新 revision。';
+    owner.error = '';
+    await refresh();
+  } catch (error) {
+    if (!currentRoute() || error?.code === 'STALE_DATA_AREA') return;
+    owner.error = `历史动作不可应用：${String(error)}`;
+    render();
+  }
+}
+async function saveMetadata() { if (!native || !state.current) return; try { const providerId = document.querySelector('#provider-id')?.value || ''; const modelId = document.querySelector('#model-id')?.value || ''; const existing = state.history.modelMetadata.find(item => item.providerId === providerId && item.modelId === modelId); await invoke('upsert_desktop_model_metadata', { args: { intentId: intent('metadata'), workspaceId: state.current.summary.id, expectedRevision: existing?.revision || 0, providerId, modelId, metadata: { capabilities: ['TEXT'], priceVersion: document.querySelector('#price-version')?.value || '', currency: document.querySelector('#price-currency')?.value || '', source: '用户手工本地配置', updatedAt: '2026-08-13T00:00:00Z', pricingStatus: 'MANUAL', safeUsage: { knownCostMicros: null } } } }); state.status = '本地 metadata 已保存；不是实时价格或真实费用。'; state.dialog = null; await refresh(); } catch (error) { state.error = `metadata 被拒绝：${String(error)}`; render(); } }
+async function exportCurrent() { if (!native || !state.current) return; const selectedPath = await dialogInvoke('save', { defaultPath: `${state.current.summary.id}.nfai-exchange`, filters: [{ name: '南枫 AI 交换包', extensions: ['nfai-exchange'] }] }); if (!selectedPath) return; try { const receipt = await invoke('export_desktop_workspace_to_selected_path', { workspaceId: state.current.summary.id, selectedPath }); state.status = `导出完成并严格回读：${short(receipt.semanticHash)} · ${bytes(receipt.byteCount)}`; } catch (error) { state.error = `导出失败：${String(error)}`; } render(); }
+function localBackupErrorMessage(error) {
+  let detail = error;
+  if (typeof detail === 'string' && detail.trimStart().startsWith('{')) {
+    try { detail = JSON.parse(detail); } catch { /* A plain native message remains readable. */ }
+  }
+  if (detail && typeof detail === 'object' && typeof detail.message === 'string' && detail.message.trim()) return detail.message;
+  return String(error);
+}
 async function exportLocalBackup() {
-  if (!native || state.localBackup.working || state.localBackup.restartRequired) return;
+  const owner = selectedBackupAreaState();
+  if (!native || owner.localBackup.working || owner.localBackup.restartRequired || owner.localBackup.rollbackPending) return;
   const selectedPath = await dialogInvoke('save', { defaultPath: 'nanfeng-ai-local-backup.nfai-backup', filters: [{ name: '南枫 AI 本机备份', extensions: ['nfai-backup'] }] });
-  if (!selectedPath) return;
-  state.localBackup = { ...state.localBackup, working: true, operation: 'EXPORT', notice: '', error: '' };
+  if (!selectedPath || selectedBackupAreaState() !== owner) return;
+  owner.localBackup = { ...owner.localBackup, working: true, operation: 'EXPORT', notice: '', error: '' };
   render();
   try {
-    const artifact = await invoke('export_desktop_local_backup', { selectedPath });
-    state.localBackup = { ...state.localBackup, working: false, operation: null, notice: `备份已系统位置回读校验：${artifact.sha256.slice(0, 12)}… · Schema ${artifact.schemaVersion}`, error: '' };
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.localBackup = { ...state.localBackup, working: false, operation: null, notice: '', error: `备份失败：${String(error)}` };
+    const artifact = await invokeSelectedBackup(owner, 'export_desktop_local_backup', { selectedPath });
+    owner.localBackup = { ...owner.localBackup, working: false, operation: null, notice: `所选${owner.dataArea === 'WORK' ? '工作' : '对话'}区备份已回读校验：${artifact.sha256.slice(0, 12)}… · Schema ${artifact.schemaVersion}`, error: '' };
+  } catch (error) {
+    owner.localBackup = { ...owner.localBackup, working: false, operation: null, notice: '', error: `备份失败：${localBackupErrorMessage(error)}` };
   }
   render();
 }
 async function importLocalBackup() {
-  if (!native || state.localBackup.working || state.localBackup.restartRequired) return;
+  const owner = selectedBackupAreaState();
+  if (!native || owner.localBackup.working || owner.localBackup.restartRequired || owner.localBackup.rollbackPending) return;
   const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 本机备份', extensions: ['nfai-backup'] }] });
-  if (!selectedPath) return;
-  state.localBackup = { ...state.localBackup, working: true, operation: 'RESTORE', preflight: null, replaceLocal: false, notice: '', error: '' };
+  if (!selectedPath || selectedBackupAreaState() !== owner) return;
+  owner.localBackup = { ...owner.localBackup, working: true, operation: 'RESTORE', preflight: null, replaceLocal: false, notice: '', error: '' };
   render();
   try {
-    const preflight = await invoke('preflight_desktop_local_backup', { selectedPath });
-    state.localBackup = { ...state.localBackup, working: false, operation: null, preflight, replaceLocal: !(preflight.conflicts || []).length, notice: `预检通过：Schema ${preflight.schemaVersion}，请确认恢复方式。`, error: '' };
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, notice: '', error: `预检失败：${String(error)}` };
+    const preflight = await invokeSelectedBackup(owner, 'preflight_desktop_local_backup', { selectedPath });
+    owner.localBackup = { ...owner.localBackup, working: false, operation: null, preflight, replaceLocal: !(preflight.conflicts || []).length, notice: `所选${owner.dataArea === 'WORK' ? '工作' : '对话'}区预检通过：Schema ${preflight.schemaVersion}，请确认恢复方式。`, error: '' };
+  } catch (error) {
+    owner.localBackup = { ...owner.localBackup, working: false, operation: null, preflight: null, notice: '', error: `预检失败：${localBackupErrorMessage(error)}` };
   }
   render();
 }
 async function restoreLocalBackup() {
-  const preflight = state.localBackup.preflight;
-  if (!native || !preflight || state.localBackup.working) return;
-  state.localBackup = { ...state.localBackup, working: true, operation: 'RESTORE', notice: '', error: '' };
+  const owner = selectedBackupAreaState();
+  const preflight = owner.localBackup.preflight;
+  if (!native || !preflight || owner.localBackup.working || owner.localBackup.restartRequired || owner.localBackup.rollbackPending) return;
+  owner.localBackup = { ...owner.localBackup, working: true, operation: 'RESTORE', notice: '', error: '' };
   render();
   try {
-    const receipt = await invoke('restore_desktop_local_backup', { fingerprint: preflight.fingerprint, replaceLocal: Boolean(state.localBackup.replaceLocal) });
-    state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, notice: '替换已完成。为避免旧 SQLite 与页面引用，现请手动完全重启 App；不会自动继续任务。', error: '', restartRequired: Boolean(receipt.restartRequired) };
+    const receipt = await invokeSelectedBackup(owner, 'restore_desktop_local_backup', { fingerprint: preflight.fingerprint, replaceLocal: Boolean(owner.localBackup.replaceLocal) });
+    owner.localBackup = { ...owner.localBackup, working: false, operation: null, preflight: null, notice: '替换已完成。为避免旧 SQLite 与页面引用，现请手动完全重启 App；不会自动继续任务。', error: '', restartRequired: Boolean(receipt.restartRequired) };
     if (receipt.restartRequired) state.dialog = { kind: 'local-backup-restart-required' };
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.localBackup = { ...state.localBackup, working: false, operation: null, notice: '', error: `恢复失败：${String(error)}` };
+  } catch (error) {
+    try { applyDesktopLocalBackupStatus(owner, await invokeSelectedBackup(owner, 'read_desktop_local_backup_status')); } catch { /* Keep the actionable native error. */ }
+    owner.localBackup = { ...owner.localBackup, working: false, operation: null, error: `恢复失败：${localBackupErrorMessage(error)}` };
   }
   render();
 }
 async function cancelLocalRestore() {
-  if (!native || state.localBackup.working || state.localBackup.restartRequired) return;
-  state.localBackup = { ...state.localBackup, working: true, operation: 'RESTORE', notice: '', error: '' };
+  const owner = selectedBackupAreaState();
+  if (!native || owner.localBackup.working || owner.localBackup.restartRequired || owner.localBackup.rollbackPending) return;
+  owner.localBackup = { ...owner.localBackup, working: true, operation: 'RESTORE', notice: '', error: '' };
   render();
   try {
-    await invoke('cancel_desktop_local_restore');
-    state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, replaceLocal: false, notice: '已取消；未改动本地数据。', error: '', interrupted: false };
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.localBackup = { ...state.localBackup, working: false, operation: null, error: `取消未完成：${String(error)}` };
+    await invokeSelectedBackup(owner, 'cancel_desktop_local_restore');
+    owner.localBackup = { ...owner.localBackup, working: false, operation: null, preflight: null, replaceLocal: false, notice: '已取消；未改动本地数据。', error: '', interrupted: false };
+  } catch (error) {
+    owner.localBackup = { ...owner.localBackup, working: false, operation: null, error: `取消未完成：${localBackupErrorMessage(error)}` };
   }
   render();
 }
 app.addEventListener('click', event => {
   const action = event.target.closest?.('[data-action]')?.dataset.action;
-  if (!['new-chat', 'select-chat', 'select-workspace'].includes(action)) return;
+  if (!['new-chat', 'select-chat', 'select-workspace', 'select-chat-source'].includes(action)) return;
   state.pendingNewConversationModelId = undefined;
   if (action === 'new-chat') state.p6gSelection = null;
 }, true);
@@ -3011,8 +4340,87 @@ app.addEventListener('click', event => {
   state.searchAnchorMessageId = null;
   state.searchAnchorAttachmentId = null;
 }, true);
-async function saveLocalMessage() { const text = state.composerDraft.trim(); if (!text) { state.error = '请输入非空内容。'; render(); return; } if (!native || !state.current) { state.error = native ? '先导入一个本地工作区。' : 'Web 预览不会写入 Desktop SQLite。'; render(); return; } const conversation = resolveConversation(state.current, state.selectedConversationId); try { if (conversation) { await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-message'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'appendMessage', objectId: conversation.id, expectedRevision: conversation.revision, fields: { text, role: 'user' } } }); } else { const receipt = await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-create'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'create', fields: { title: text.replace(/\s+/g, ' ').slice(0, 36), projectId: state.pane === 'work' ? state.selectedWorkProjectId : null, firstMessage: text } } }); state.selectedConversationId = receipt.objectId; } state.composerDraft = ''; state.error = ''; state.status = '已保存为本地记录；没有调用模型。'; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `本地保存被拒绝：${String(error)}`; render(); } }
-app.addEventListener('click', async event => { const target = event.target.closest('[data-action]'); const action = target?.dataset.action; if (!action) return; const data = workspace(); if (action === 'new-chat') { state.settingsConversationReturn = null; state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; state.composerDraft = ''; state.profileOpen = false; state.error = ''; state.status = '新对话将先保存到本地；联网回答需另行配置并确认。'; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); render(); } else if (action === 'select-chat') { const settingsPage = target.closest('.android-settings-main') ? state.settingsSection : null; if (settingsPage && ['favorites', 'archived', 'recycle'].includes(settingsPage)) state.settingsConversationReturn = { page: settingsPage, label: settingsPage === 'favorites' ? '收藏' : settingsPage === 'archived' ? '已归档' : '回收站', readOnly: ['archived', 'recycle'].includes(settingsPage) }; else state.settingsConversationReturn = null; state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.selectedConversationId = target.dataset.id; if (native && state.current) { state.p6gSelection = await invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId }); state.conversationPreferences = state.p6gSelection.conversationOverride; } else { state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; } if (!state.chatScrollPositions.has(target.dataset.id)) state.pendingChatScrollToLatestId = target.dataset.id; state.profileOpen = false; state.error = ''; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); if (!state.settingsConversationReturn?.readOnly) await markConversationOpened(target.dataset.id); render(); } else if (action === 'show-chat') { state.settingsConversationReturn = null; state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.profileOpen = false; render(); } else if (action === 'show-work') { state.settingsConversationReturn = null; state.pane = 'work'; state.selectedConversationId = null; state.selectedWorkProjectId = null; state.profileOpen = false; render(); } else if (action === 'show-connections') { state.pane = 'connections'; state.profileOpen = false; render(); } else if (action === 'toggle-profile') { state.profileOpen = !state.profileOpen; render(); } else if (action === 'save-local-message') saveLocalMessage(); else if (action === 'start-import') pickExchange(); else if (action === 'confirm-import') importPreflighted(); else if (action === 'close-dialog') { if (state.dialog?.kind === 'custom-instructions-fullscreen') { state.personalizationDraft = { ...state.dialog.previousDraft }; state.personalizationDirty = state.dialog.previousDirty; } state.dialog = null; render(); } else if (action === 'select-workspace') { state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.id }); state.history = await invoke('read_desktop_workbench_history', { workspaceId: target.dataset.id }); state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; reloadFavoriteConversationIds(); await loadConversationReadState({ observeSelected: false }); state.status = '已切换到独立本地工作区。'; state.error = ''; render(); } else if (action === 'show-conversation') { state.pane = 'conversation'; state.treeOpen = false; render(); } else if (action === 'show-knowledge') { state.pane = 'knowledge'; state.treeOpen = false; render(); } else if (action === 'toggle-inspector') { state.inspectorOpen = !state.inspectorOpen; render(); } else if (action === 'toggle-tree') { state.treeOpen = !state.treeOpen; render(); } else if (action === 'toggle-scale') { state.scale = state.scale === 1 ? 2 : 1; state.status = `应用缩放已切换为 ${state.scale.toFixed(1)}×。`; render(); } else if (action === 'about') { state.dialog = 'about'; render(); } else if (action === 'new-project') { state.dialog = { kind: 'project', item: null }; render(); } else if (action === 'edit-project') { state.dialog = { kind: 'project', item: data.exchange.projects.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-project') saveProject(); else if (action === 'new-knowledge') { state.dialog = { kind: 'knowledge', item: null }; render(); } else if (action === 'edit-knowledge') { state.dialog = { kind: 'knowledge', item: data.exchange.knowledge.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-knowledge') saveKnowledge(); else if (action === 'new-memory') { state.dialog = { kind: 'memory', item: null }; render(); } else if (action === 'edit-memory') { state.dialog = { kind: 'memory', item: data.exchange.memory.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-memory') saveMemory(); else if (action === 'new-relation') { state.dialog = { kind: 'relation' }; render(); } else if (action === 'save-relation') saveRelation(); else if (action === 'delete-knowledge') mutate({ entity: 'knowledge', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Knowledge 已软删除；可在回收站恢复。'); else if (action === 'delete-memory') mutate({ entity: 'memory', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Memory 已软删除；可在回收站恢复。'); else if (action === 'delete-relation') mutate({ entity: 'relation', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'relation 已撤销；可在回收站恢复。'); else if (action === 'restore') mutate({ entity: target.dataset.entity, action: 'restore', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, '对象已恢复为新的 revision。'); else if (action === 'undo') undo(); else if (action === 'redo') undo(true); else if (action === 'recycle') { state.dialog = 'recycle'; render(); } else if (action === 'metadata') { state.dialog = 'metadata'; render(); } else if (action === 'save-metadata') saveMetadata(); else if (action === 'start-export') exportCurrent(); });
+// Local CHAT rows own their route here so a delayed model projection cannot
+// overwrite the next conversation. Cloud rows keep their dedicated opener.
+app.addEventListener('click', event => {
+  const target = event.target.closest?.('[data-action="select-chat"]');
+  if (!target || target.dataset.workspaceId || state.pane === 'work') return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const conversationId = target.dataset.id;
+  const generation = ++conversationSelectionGeneration;
+  const navigationGeneration = ++desktopEntryRouteGeneration;
+  const areaGeneration = cloudOpenAreaGeneration;
+  const ownsRoute = () => state === owner && generation === conversationSelectionGeneration
+    && navigationGeneration === desktopEntryRouteGeneration && areaGeneration === cloudOpenAreaGeneration
+    && owner.current?.summary?.id === workspaceId && owner.selectedConversationId === conversationId;
+  const settingsPage = target.closest('.android-settings-main') ? owner.settingsSection : null;
+  owner.settingsConversationReturn = settingsPage && ['favorites', 'archived', 'recycle'].includes(settingsPage)
+    ? { page: settingsPage, label: settingsPage === 'favorites' ? '收藏' : settingsPage === 'archived' ? '已归档' : '回收站', readOnly: ['archived', 'recycle'].includes(settingsPage) }
+    : null;
+  owner.pane = owner.dataArea === 'WORK' ? 'work' : 'chat';
+  owner.selectedConversationId = conversationId;
+  owner.newConversationDraftWorkspaceId = null;
+  owner.p6gSelection = null;
+  owner.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+  if (!owner.chatScrollPositions.has(conversationId)) owner.pendingChatScrollToLatestId = conversationId;
+  owner.profileOpen = false;
+  owner.error = '';
+  owner.conversationFindOpen = false;
+  owner.conversationFindQuery = '';
+  recomputeConversationFind({ resetIndex: true });
+  resetComposerPresentation();
+  render();
+  void Promise.all([
+    loadConversationSelectionProjection(owner, workspaceId, conversationId, generation),
+    loadOrdinaryComposerDraft(),
+    owner.settingsConversationReturn?.readOnly ? Promise.resolve() : markConversationOpened(conversationId, ownsRoute),
+  ]).catch(error => {
+    if (!ownsRoute()) return;
+    owner.error = `会话未完全读取：${String(error)}`;
+  }).finally(() => { if (ownsRoute()) render(); });
+}, true);
+async function saveLocalMessage() { const text = state.composerDraft.trim(); if (!text) { state.error = '请输入非空内容。'; render(); return; } if (!native || !state.current) { state.error = native ? '本机聊天数据尚未就绪，请关闭后重新打开应用。' : 'Web 预览不会写入 Desktop SQLite。'; render(); return; } const conversation = resolveConversation(state.current, state.selectedConversationId); try { if (conversation) { await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-message'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'appendMessage', objectId: conversation.id, expectedRevision: conversation.revision, fields: { text, role: 'user' } } }); } else { const receipt = await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-create'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'create', fields: { title: text.replace(/\s+/g, ' ').slice(0, 36), projectId: state.pane === 'work' ? state.selectedWorkProjectId : null, firstMessage: text } } }); state.selectedConversationId = receipt.objectId; } state.composerDraft = ''; state.error = ''; state.status = '已保存为本地记录；没有调用模型。'; await refresh(); } catch (error) { state.error = `本地保存被拒绝：${String(error)}`; render(); } }
+async function selectOrdinaryConversation(target) {
+  const owner = state;
+  const areaGeneration = cloudOpenAreaGeneration;
+  const generation = ++desktopEntryRouteGeneration;
+  const workspaceId = owner.current?.summary?.id;
+  const conversationId = target.dataset.id;
+  const ownsRoute = () => state === owner && areaGeneration === cloudOpenAreaGeneration && generation === desktopEntryRouteGeneration
+    && owner.current?.summary?.id === workspaceId && owner.selectedConversationId === conversationId;
+  const settingsPage = target.closest('.android-settings-main') ? owner.settingsSection : null;
+  owner.settingsConversationReturn = settingsPage && ['favorites', 'archived', 'recycle'].includes(settingsPage)
+    ? { page: settingsPage, label: settingsPage === 'favorites' ? '收藏' : settingsPage === 'archived' ? '已归档' : '回收站', readOnly: ['archived', 'recycle'].includes(settingsPage) } : null;
+  owner.pane = owner.dataArea === 'WORK' ? 'work' : 'chat';
+  owner.selectedConversationId = conversationId;
+  owner.p6gSelection = null;
+  owner.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+  if (!owner.chatScrollPositions.has(conversationId)) owner.pendingChatScrollToLatestId = conversationId;
+  owner.profileOpen = false;
+  owner.error = '';
+  owner.conversationFindOpen = false;
+  owner.conversationFindQuery = '';
+  recomputeConversationFind({ resetIndex: true });
+  render();
+  try {
+    if (native && workspaceId) {
+      const projection = await invoke('read_desktop_p6g_selection', { workspaceId, conversationId }, owner);
+      if (!ownsRoute()) return;
+      applyConversationChoiceProjection({ ...projection, pickerTier: owner.p6gSelection?.pickerTier ?? null });
+    }
+    if (!ownsRoute()) return;
+    if (!owner.settingsConversationReturn?.readOnly) await markConversationOpened(conversationId, ownsRoute);
+    if (ownsRoute()) render();
+  } catch (error) {
+    if (!ownsRoute()) return;
+    owner.error = `会话偏好未读取：${String(error)}`;
+    render();
+  }
+}
+app.addEventListener('click', async event => { const target = event.target.closest('[data-action]'); const action = target?.dataset.action; if (!action) return; const data = workspace(); if (action === 'new-chat') { state.settingsConversationReturn = null; state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; state.composerDraft = ''; state.profileOpen = false; state.error = ''; state.status = '新对话将先保存到本地；联网回答需另行配置并确认。'; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); render(); } else if (action === 'select-chat') { await selectOrdinaryConversation(target); } else if (action === 'show-chat') { state.settingsConversationReturn = null; state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.profileOpen = false; render(); } else if (action === 'show-work') { state.settingsConversationReturn = null; state.pane = 'work'; state.selectedConversationId = null; state.selectedWorkProjectId = null; state.profileOpen = false; render(); } else if (action === 'show-connections') { state.pane = 'connections'; state.profileOpen = false; render(); } else if (action === 'toggle-profile') { state.profileOpen = !state.profileOpen; render(); } else if (action === 'save-local-message') saveLocalMessage(); else if (action === 'start-import') pickExchange(); else if (action === 'confirm-import') importPreflighted(); else if (action === 'close-dialog') { if (state.dialog?.kind === 'custom-instructions-fullscreen') { state.personalizationDraft = { ...state.dialog.previousDraft }; state.personalizationDirty = state.dialog.previousDirty; } state.dialog = null; render(); } else if (action === 'select-workspace' || action === 'select-chat-source') { state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.id }); state.history = await invoke('read_desktop_workbench_history', { workspaceId: target.dataset.id }); state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; reloadFavoriteConversationIds(); await loadConversationReadState({ observeSelected: false }); state.status = workspaceUiEnabled(state.runtimeInfo) ? '已切换到独立本地工作区。' : '已切换聊天记录来源。'; state.error = ''; render(); } else if (action === 'show-conversation') { state.pane = 'conversation'; state.treeOpen = false; render(); } else if (action === 'show-knowledge') { state.pane = 'knowledge'; state.treeOpen = false; render(); } else if (action === 'toggle-inspector') { state.inspectorOpen = !state.inspectorOpen; render(); } else if (action === 'toggle-tree') { state.treeOpen = !state.treeOpen; render(); } else if (action === 'toggle-scale') { state.scale = state.scale === 1 ? 2 : 1; state.status = `应用缩放已切换为 ${state.scale.toFixed(1)}×。`; render(); } else if (action === 'about') { state.dialog = 'about'; render(); } else if (action === 'new-project') { state.dialog = { kind: 'project', item: null }; render(); } else if (action === 'edit-project') { state.dialog = { kind: 'project', item: data.exchange.projects.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-project') saveProject(); else if (action === 'new-knowledge') { state.dialog = { kind: 'knowledge', item: null }; render(); } else if (action === 'edit-knowledge') { state.dialog = { kind: 'knowledge', item: data.exchange.knowledge.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-knowledge') saveKnowledge(); else if (action === 'new-memory') { state.dialog = { kind: 'memory', item: null }; render(); } else if (action === 'edit-memory') { state.dialog = { kind: 'memory', item: data.exchange.memory.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-memory') saveMemory(); else if (action === 'new-relation') { state.dialog = { kind: 'relation' }; render(); } else if (action === 'save-relation') saveRelation(); else if (action === 'delete-knowledge') mutate({ entity: 'knowledge', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Knowledge 已软删除；可在回收站恢复。'); else if (action === 'delete-memory') mutate({ entity: 'memory', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Memory 已软删除；可在回收站恢复。'); else if (action === 'delete-relation') mutate({ entity: 'relation', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'relation 已撤销；可在回收站恢复。'); else if (action === 'restore') mutate({ entity: target.dataset.entity, action: 'restore', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, '对象已恢复为新的 revision。'); else if (action === 'undo') undo(); else if (action === 'redo') undo(true); else if (action === 'recycle') { state.dialog = 'recycle'; render(); } else if (action === 'metadata') { state.dialog = 'metadata'; render(); } else if (action === 'save-metadata') saveMetadata(); else if (action === 'start-export') exportCurrent(); });
 app.addEventListener('click', event => {
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'return-workspace-origin') {
@@ -3026,7 +4434,7 @@ app.addEventListener('click', event => {
       state.pane = 'settings';
       state.settingsSection = destination.settingsSection || 'workspace';
       state.settingsPicker = null;
-    } else state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
+    } else state.pane = 'chat';
   } else if (action === 'show-work') {
     state.status = '已选择 LOCAL_OFFLINE / LOCAL_ONLY：继续本地工作；没有调用模型或同步。';
     state.error = '';
@@ -3039,19 +4447,38 @@ app.addEventListener('click', event => {
   }
 });
 app.addEventListener('input', event => {
+  const editorKind = state.dialog?.kind;
+  const reminderField = { 'reminder-title': 'title', 'reminder-instruction': 'instruction', 'reminder-anchor-local': 'anchorLocal', 'reminder-timezone': 'timezoneId', 'reminder-missed-policy': 'missedPolicy', 'reminder-schedule-kind': 'scheduleKind' }[event.target?.id];
+  if (reminderField && state.reminderEditor) {
+    state.reminderEditor = { ...state.reminderEditor, item: { ...state.reminderEditor.item, [reminderField]: event.target.value } };
+  }
+  if ((['project', 'knowledge', 'memory', 'relation'].includes(editorKind) && event.target?.id?.startsWith(`${editorKind}-`)) || (editorKind === 'history-knowledge-review' && ['history-candidate-title', 'history-candidate-body', 'history-candidate-tags'].includes(event.target?.id)) || (editorKind === 'markdown-knowledge-review' && event.target?.id?.startsWith('markdown-knowledge-')) || (editorKind === 'json-knowledge-review' && event.target?.id?.startsWith('json-knowledge-')) || (editorKind === 'pdf-knowledge-review' && event.target?.id?.startsWith('pdf-knowledge-')) || (['web-knowledge-review','web-knowledge-url'].includes(editorKind) && event.target?.id?.startsWith('web-knowledge-'))) {
+    state.dialog.draft ??= {};
+    state.dialog.draft[event.target.id] = event.target.value;
+  }
+  if (event.target.id === 'conversation-rename' && state.dialog?.kind === 'conversation-rename') {
+    // A streaming answer can redraw the modal before Save is clicked. Keep
+    // the edited value in its owner instead of restoring the original title.
+    state.dialog.title = event.target.value;
+  }
+  if (event.target.id === 'conversation-user-message-edit' && state.dialog?.kind === 'edit-conversation-user-message') {
+    state.dialog.text = event.target.value;
+  }
   if (event.target.id === 'chat-composer') {
     state.composerDraft = event.target.value;
     resizeComposer(event.target);
     const send = document.querySelector('[data-action="save-local-message"]');
     const attachmentCount = state.temporaryConversation ? (state.temporaryConversation.draftAttachmentIds || []).length : state.composerAttachments.length;
     if (send) send.disabled = (!state.composerDraft.trim() && !attachmentCount) || !native || (!state.current && !state.temporaryConversation);
+    scheduleOrdinaryEgressPreview();
+    updateOrdinaryEgressDisclosure();
   } else if (event.target.id === 'settings-search') {
     state.settingsSearch = event.target.value;
     scheduleSettingsSearchRender();
   } else if (event.target.id === 'memory-summary-editor' && state.dialog?.kind === 'memory-summary-editor') {
-    state.dialog = { ...state.dialog, value: event.target.value };
+    state.dialog = updateMemorySummaryDraft(state.dialog, event.target.value);
     const save = document.querySelector('[data-action="save-memory-summary-editor"]');
-    if (save) save.disabled = !String(event.target.value || '').trim();
+    if (save) save.disabled = !String(event.target.value || '').trim() || Boolean(state.memorySummarySavePending && state.memorySummarySavePending.workspaceId === state.current?.summary?.id);
     const counter = event.target.closest('.memory-summary-editor')?.querySelector('small');
     if (counter) counter.textContent = `${event.target.value.length} / 2000000 字`;
   } else if (event.target.id === 'conversation-find-input') {
@@ -3066,17 +4493,69 @@ app.addEventListener('input', event => {
     if (save) save.disabled = false;
     if (key === 'customInstructions') {
       const counter = event.target.closest('.android-settings-field, .custom-instructions-fullscreen')?.querySelector('small');
-      if (counter) counter.textContent = `${event.target.value.length} / ${CUSTOM_INSTRUCTIONS_MAX_LENGTH} 字`;
+      if (counter) counter.textContent = `${Array.from(event.target.value).length} / ${CUSTOM_INSTRUCTIONS_MAX_LENGTH} 字`;
     }
   }
 });
 
+let composerImeTarget = null;
+let composerImeRoute = null;
+let composerImePaintPending = false;
+function isCurrentComposerImeRoute() {
+  return composerImeRoute?.owner === state
+    && composerImeRoute.pane === state.pane
+    && composerImeRoute.conversationId === state.selectedConversationId
+    && composerImeRoute.workspaceId === state.current?.summary?.id;
+}
+let composerImeEndedAtMs = Number.NEGATIVE_INFINITY;
+let searchImeTarget = null;
+let searchImeOwner = null;
+let searchImeEndedAtMs = Number.NEGATIVE_INFINITY;
 app.addEventListener('compositionstart', event => {
+  if (event.target.id === 'chat-composer') {
+    composerImeTarget = event.target;
+    composerImeRoute = { owner: state, pane: state.pane,
+      conversationId: state.selectedConversationId, workspaceId: state.current?.summary?.id };
+    composerImePaintPending = false;
+    return;
+  }
+  if (event.target.id === 'chat-search' || event.target.id === 'full-search-input') {
+    searchImeTarget = event.target;
+    searchImeOwner = state;
+    supersedeFullSearch();
+    if (fullSearchDebounce !== null) window.clearTimeout(fullSearchDebounce);
+    fullSearchDebounce = null;
+    return;
+  }
   if (event.target.id !== 'conversation-find-input') return;
   conversationFindInputController.onCompositionStart();
 });
 
 app.addEventListener('compositionend', event => {
+  if (event.target.id === 'chat-composer') {
+    if (composerImeTarget !== event.target) return;
+    const flush = composerImePaintPending && isCurrentComposerImeRoute();
+    const route = composerImeRoute;
+    composerImeTarget = null;
+    composerImeRoute = null;
+    composerImePaintPending = false;
+    composerImeEndedAtMs = Date.now();
+    if (flush) queueMicrotask(() => {
+      if (state === route.owner && state.pane === route.pane
+          && state.selectedConversationId === route.conversationId
+          && state.current?.summary?.id === route.workspaceId) render();
+    });
+    return;
+  }
+  if (event.target.id === 'chat-search' || event.target.id === 'full-search-input') {
+    const stillOwned = searchImeTarget === event.target && searchImeOwner === state;
+    if (searchImeTarget === event.target) { searchImeTarget = null; searchImeOwner = null; }
+    if (!stillOwned) return;
+    searchImeEndedAtMs = Date.now();
+    state.chatSearch = event.target.value;
+    if (state.searchPanel) scheduleFullSearch();
+    return;
+  }
   if (event.target.id !== 'conversation-find-input') return;
   state.conversationFindQuery = event.target.value;
   conversationFindInputController.onCompositionEnd(event.target.value);
@@ -3132,40 +4611,152 @@ app.addEventListener('drop', event => {
   void (target.matches('.transcription-page') ? importDroppedTranscriptionFiles(files) : importComposerClipboardFiles(files));
 });
 
+function memorySummaryEditorValue(memories) {
+  return memorySummaryValue(memories);
+}
+
+function activeGlobalMemoryTopic(memories, title) {
+  return memories.filter(item => (item.status || 'ACTIVE') === 'ACTIVE' && (item.scope || 'GLOBAL') === 'GLOBAL'
+    && !item.scopeId && String(item.title || '概览').trim() === String(title).trim());
+}
+
 async function clearMemorySummary() {
   if (!native || !state.current) return;
   const memories = active(state.current, 'memory').filter(item => (item.status || 'ACTIVE') === 'ACTIVE' && (item.scope || 'GLOBAL') === 'GLOBAL' && !item.scopeId);
-  let removed = 0;
+  if (!memories.length) { state.dialog = null; state.memorySummaryNotice = '没有可删除的记忆摘要。'; render(); return; }
+  const owner = state;
+  const workspaceId = state.current.summary.id;
+  const primary = memories[0];
   try {
-    for (const item of memories) {
-      await invoke('mutate_desktop_domain', { args: { intentId: intent('memory-summary-delete'), workspaceId: state.current.summary.id, entity: 'memory', action: 'softDelete', objectId: item.id, expectedRevision: Number(item.revision), fields: {} } });
-      removed += 1;
+    await invoke('mutate_desktop_domain', { args: { intentId: intent('memory-summary-delete'), workspaceId, entity: 'memory', action: 'deleteMemorySummary', objectId: primary.id, expectedRevision: Number(primary.revision), fields: { expectedEntries: memories.map(item => ({ id: item.id, revision: Number(item.revision) })) } } });
+    if (state === owner && state.current?.summary.id === workspaceId) {
+      state.dialog = null;
+      state.memorySummaryNotice = '记忆摘要已删除。';
+      state.error = '';
     }
-    state.dialog = null;
-    state.memorySummaryNotice = memories.length ? '记忆摘要已删除。' : '没有可删除的记忆摘要。';
-    state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.dialog = null;
-    state.error = `记忆摘要删除在 ${removed} / ${memories.length} 条后停止：${String(error)}`;
+  } catch (error) {
+    if (state === owner && state.current?.summary.id === workspaceId) {
+      state.dialog = null;
+      state.error = `记忆摘要未删除：${String(error)}`;
+    }
   }
-  await refresh();
+  if (state === owner && state.current?.summary.id === workspaceId) await refresh();
 }
 
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   const action = target?.dataset.action;
-  if (!['edit-memory-summary', 'save-memory-summary-editor', 'show-memory-summary-about', 'refresh-memory-summary', 'ask-delete-memory-summary', 'confirm-delete-memory-summary', 'ask-disable-memory-summary', 'confirm-disable-memory-summary'].includes(action)) return;
+  if (!['suggest-memory-summary', 'confirm-memory-summary-suggestion', 'keep-memory-topic', 'parallel-memory-topic', 'revise-memory-topic', 'review-pending-memory-topic', 'resolve-pending-memory-topic', 'show-memory-audit', 'edit-memory-summary', 'save-memory-summary-editor', 'show-memory-summary-about', 'refresh-memory-summary', 'ask-delete-memory-summary', 'confirm-delete-memory-summary', 'ask-disable-memory-summary', 'confirm-disable-memory-summary'].includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  if (action === 'edit-memory-summary') {
+  if (action === 'suggest-memory-summary') {
+    const messages = orderedConversationMessages(currentConversation());
+    const assistant = messages.at(-1);
+    const user = messages.at(-2);
+    if (!native || !state.current || !state.productSettings.memoryEnabled || !state.productSettings.memoryRetrievalEnabled || state.selectedConversationId !== currentConversation()?.id || assistant?.id !== target.dataset.assistantMessageId || user?.id !== target.dataset.userMessageId || String(assistant?.delivery || '') !== 'COMPLETE') return;
+    const draft = memorySummarySuggestion(messagePlainText(user), messagePlainText(assistant));
+    if (!draft) return;
+    state.dialog = { kind: 'memory-summary-suggestion', workspaceId: state.current.summary.id, conversationId: state.selectedConversationId, assistantMessageId: assistant.id, ...draft, submitting: false };
+  } else if (action === 'confirm-memory-summary-suggestion') {
+    const draft = state.dialog;
+    if (draft?.kind !== 'memory-summary-suggestion' || draft.submitting || !native || !state.current || !state.productSettings.memoryEnabled || !state.productSettings.memoryRetrievalEnabled || draft.workspaceId !== state.current.summary.id || draft.conversationId !== state.selectedConversationId || orderedConversationMessages(currentConversation()).at(-1)?.id !== draft.assistantMessageId) return;
+    if ((state.current.exchange?.memory || []).some(item => (item.status || 'ACTIVE') === 'ACTIVE' && String(item.body || '').trim() === draft.body)) { state.dialog = null; render(); return; }
+    const sameTopic = activeGlobalMemoryTopic(state.current.exchange?.memory || [], draft.title);
+    if (sameTopic.length) {
+      draft.kind = 'memory-topic-conflict';
+      draft.existing = [...sameTopic].sort((left, right) => String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')))[0];
+      draft.expectedEntries = sameTopic.map(item => ({ id: item.id, revision: Number(item.revision) }));
+      render();
+      return;
+    }
+    const owner = state;
+    draft.submitting = true;
+    render();
+    void invoke('mutate_desktop_domain', { args: { intentId: intent('memory-suggestion'), workspaceId: draft.workspaceId, entity: 'memory', action: 'saveReviewedMemory', fields: { title: draft.title, body: draft.body, resolution: 'CREATE_NEW', expectedEntries: [] } } }).then(async () => {
+      if (owner.dialog === draft) { owner.dialog = null; owner.status = '记忆摘要已保存到本机。'; }
+      if (state === owner) await refresh();
+    }).catch(error => { if (owner.dialog === draft) { draft.submitting = false; draft.failure = `保存失败：${String(error)}`; if (state === owner) render(); } });
+    return;
+  } else if (['keep-memory-topic', 'parallel-memory-topic', 'revise-memory-topic'].includes(action)) {
+    const draft = state.dialog;
+    if (draft?.kind !== 'memory-topic-conflict' || draft.submitting || !native || !state.current || draft.workspaceId !== state.current.summary.id || draft.conversationId !== state.selectedConversationId || orderedConversationMessages(currentConversation()).at(-1)?.id !== draft.assistantMessageId) return;
+    if (action === 'keep-memory-topic') { state.dialog = null; state.status = '已保留现有记忆，本次内容未写入。'; render(); return; }
+    const owner = state;
+    draft.submitting = true;
+    render();
+    const resolution = action === 'parallel-memory-topic' ? 'CREATE_PARALLEL' : 'REVISE_EXISTING';
+    void invoke('mutate_desktop_domain', { args: { intentId: intent('memory-topic-resolution'), workspaceId: draft.workspaceId,
+      entity: 'memory', action: 'saveReviewedMemory', objectId: draft.existing.id, expectedRevision: Number(draft.existing.revision),
+      fields: { title: draft.title, body: draft.body, resolution, expectedEntries: draft.expectedEntries } } }).then(async () => {
+      if (owner.dialog === draft) { owner.dialog = null; owner.status = resolution === 'CREATE_PARALLEL' ? '已明确并存保存同主题记忆。' : '已修订现有记忆。'; }
+      if (state === owner) await refresh();
+    }).catch(error => { if (owner.dialog === draft) { draft.submitting = false; draft.failure = `保存失败：${String(error)}`; if (state === owner) render(); } });
+    return;
+  } else if (action === 'review-pending-memory-topic') {
+    if (!native || !state.current) return;
+    const candidate = (state.current.exchange?.memory || []).find(item => item.id === target.dataset.id && item.status === 'PENDING_REVIEW');
+    if (!candidate) { state.memorySummaryNotice = '候选已变化，请刷新。'; render(); return; }
+    const matches = activeGlobalMemoryTopic(state.current.exchange?.memory || [], candidate.title);
+    const existing = [...matches].sort((left, right) => String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')))[0];
+    state.dialog = { kind: 'pending-memory-topic', workspaceId: state.current.summary.id, candidate, existing, expectedEntries: matches.map(item => ({ id: item.id, revision: Number(item.revision) })), submitting: false };
+  } else if (action === 'resolve-pending-memory-topic') {
+    const draft = state.dialog;
+    const resolution = target.dataset.resolution;
+    if (draft?.kind !== 'pending-memory-topic' || draft.submitting || !native || !state.current || draft.workspaceId !== state.current.summary.id || !['KEEP_EXISTING', 'CREATE_PARALLEL', 'REVISE_EXISTING'].includes(resolution) || (resolution === 'REVISE_EXISTING' && !draft.existing)) return;
+    const owner = state;
+    draft.submitting = true;
+    render();
+    void invoke('mutate_desktop_domain', { args: { intentId: intent('pending-memory-topic'), workspaceId: draft.workspaceId, entity: 'memory', action: 'resolvePendingMemoryTopic', objectId: draft.candidate.id, expectedRevision: Number(draft.candidate.revision), fields: { resolution, expectedEntries: draft.expectedEntries, ...(resolution === 'REVISE_EXISTING' ? { existingId: draft.existing.id } : {}) } } }).then(async () => {
+      if (owner.dialog === draft) { owner.dialog = null; owner.memorySummaryNotice = resolution === 'KEEP_EXISTING' ? '已保留现有记忆。' : resolution === 'CREATE_PARALLEL' ? '候选已并存。' : '现有记忆已修订。'; }
+      if (state === owner) await refresh();
+    }).catch(error => { if (owner.dialog === draft) { draft.submitting = false; draft.failure = `处理失败：${String(error)}`; if (state === owner) render(); } });
+    return;
+  } else if (action === 'show-memory-audit') {
+    if (!native || !state.current) return;
+    const item = (state.current.exchange?.memory || []).find(memory => memory.id === target.dataset.id && memory.status === 'ACTIVE');
+    if (!item) { state.memorySummaryNotice = '记忆已变化，请刷新。'; render(); return; }
+    const owner = state;
+    const draft = { kind: 'memory-audit', workspaceId: owner.current.summary.id, memoryId: item.id, title: item.title || '概览', loading: true };
+    owner.dialog = draft;
+    render();
+    void invoke('read_desktop_memory_audit', { workspaceId: draft.workspaceId, memoryId: draft.memoryId }).then(audit => {
+      if (owner.dialog === draft) { draft.audit = audit; draft.loading = false; if (state === owner) render(); }
+    }).catch(error => {
+      if (owner.dialog === draft) { draft.failure = `读取失败：${String(error)}`; draft.loading = false; if (state === owner) render(); }
+    });
+    return;
+  } else if (action === 'edit-memory-summary') {
     const memories = active(workspace(), 'memory').filter(item => (item.status || 'ACTIVE') === 'ACTIVE' && (item.scope || 'GLOBAL') === 'GLOBAL' && !item.scopeId);
     const latest = [...memories].sort((left, right) => String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')))[0];
-    state.dialog = { kind: 'memory-summary-editor', memoryId: latest?.id, expectedRevision: latest?.revision, value: memories.map(item => String(item.body || '').trim()).filter(Boolean).join('\n\n') };
+    state.dialog = { kind: 'memory-summary-editor', memoryId: latest?.id, expectedRevision: latest?.revision,
+      expectedEntries: memories.map(item => ({ id: item.id, revision: Number(item.revision) })),
+      multipleEntries: memories.length > 1,
+      value: memorySummaryEditorValue(memories) };
   } else if (action === 'save-memory-summary-editor') {
-    const editor = state.dialog;
+    const owner = state;
+    const workspaceId = owner.current?.summary?.id;
+    const editor = owner.dialog;
     const body = String(editor?.value || '').trim();
-    if (editor?.kind !== 'memory-summary-editor' || !body) return;
-    void mutate({ entity: 'memory', action: editor.memoryId ? 'replaceMemorySummary' : 'create', objectId: editor.memoryId, expectedRevision: editor.expectedRevision, fields: editor.memoryId ? { body } : { body, scope: 'GLOBAL', scopeId: null } }, '记忆摘要已保存，后续检索使用修改后的内容。');
+    if (editor?.kind !== 'memory-summary-editor' || !body || !native || !workspaceId || owner.memorySummarySavePending?.workspaceId === workspaceId) return;
+    const pending = { workspaceId };
+    owner.memorySummarySavePending = pending;
+    editor.pendingSaveBinding = pending;
+    render();
+    void mutate({ entity: 'memory', action: editor.memoryId ? 'replaceMemorySummary' : 'create', objectId: editor.memoryId, expectedRevision: editor.expectedRevision, fields: editor.memoryId ? { body, expectedEntries: editor.expectedEntries, ...(editor.multipleEntries ? { title: '概览' } : {}) } : { body, scope: 'GLOBAL', scopeId: null } }, '记忆摘要已保存，后续检索使用修改后的内容。', receipt => {
+      const current = owner.dialog;
+      if (current?.kind !== 'memory-summary-editor' || current.pendingSaveBinding !== pending
+          || receipt?.workspaceId !== workspaceId || typeof receipt.objectId !== 'string' || !receipt.objectId
+          || !Number.isSafeInteger(receipt.revision) || receipt.revision <= 0
+          || (editor.memoryId && editor.memoryId !== receipt.objectId)) return;
+      current.memoryId = receipt.objectId;
+      current.expectedRevision = receipt.revision;
+      current.expectedEntries = [{ id: receipt.objectId, revision: receipt.revision }];
+      current.multipleEntries = false;
+      current.pendingSaveBinding = null;
+    }).finally(() => {
+      if (owner.memorySummarySavePending === pending) owner.memorySummarySavePending = null;
+      if (state === owner && owner.current?.summary?.id === workspaceId) render();
+    });
     return;
   } else if (action === 'show-memory-summary-about') {
     state.dialog = { kind: 'memory-summary-about' };
@@ -3179,7 +4770,7 @@ app.addEventListener('click', event => {
   } else if (action === 'ask-disable-memory-summary') {
     state.dialog = { kind: 'memory-summary-disable' };
   } else if (action === 'confirm-disable-memory-summary') {
-    writeProductSettings({ memoryEnabled: false });
+    writeProductSettings({ memoryRetrievalEnabled: false });
     state.memorySummaryNotice = '已关闭记忆摘要生成和应用；已保存的记忆仍保留在本机。';
     state.dialog = null;
   }
@@ -3361,17 +4952,71 @@ function menuAnchorRect(target) {
 // in that state, so primary-pointer activation belongs to pointerdown. Keep a
 // keyboard-only click fallback for accessibility.
 const assistantMessageMenuTriggers = new WeakSet();
-function toggleAssistantMessageMenu(trigger) {
+function toggleAssistantMessageMenu(trigger, { anchorRect = null, forceOpen = false } = {}) {
   const messageId = String(trigger?.dataset?.messageId || '');
-  if (!messageId) return;
+  if (!messageId) return false;
+  const message = resolveConversation(state.current, state.selectedConversationId)?.messages
+    ?.find(item => item.id === messageId);
+  if (!message || !['user', 'assistant'].includes(String(message.role || '').toLowerCase())) return false;
+  const conversation = resolveConversation(state.current, state.selectedConversationId);
+  const editable = String(message.role).toLowerCase() === 'user'
+    && !conversation?.archived && !conversation?.deleted
+    && orderedConversationMessages(conversation).some(item => item.id === messageId)
+    && Array.isArray(message.blocks) && message.blocks.length > 0
+    && message.blocks.every(block => block.kind === 'TEXT');
+  const canGenerateAnswer = String(message.role).toLowerCase() === 'user'
+    && conversation?.currentLeafId === messageId
+    && !conversation.archived && !conversation.deleted
+    && !conversation.messages.some(item => item.parentId === messageId);
+  const canRegenerate = String(message.role).toLowerCase() === 'assistant'
+    && conversation?.currentLeafId === messageId
+    && message.delivery === 'COMPLETE' && Boolean(message.attemptId)
+    && !message.compareExecutionId && !conversation.archived && !conversation.deleted;
+  const canChangeModel = String(message.role).toLowerCase() === 'assistant'
+    && conversation?.currentLeafId === messageId
+    && ['COMPLETE', 'FAILED', 'CANCELLED', 'UNKNOWN'].includes(message.delivery)
+    && Boolean(message.attemptId) && !message.compareExecutionId
+    && !conversation.archived && !conversation.deleted;
   state.error = '';
-  if (state.assistantMessageMenu?.messageId === messageId) closeTopOverlay();
-  else openTransientOverlay('assistant-message-menu', trigger, { messageId, anchorRect: menuAnchorRect(trigger) });
+  if (!forceOpen && state.assistantMessageMenu?.messageId === messageId) closeTopOverlay();
+  else openTransientOverlay('assistant-message-menu', trigger, { messageId, role: String(message.role).toLowerCase(), editable, canGenerateAnswer, canRegenerate, canChangeModel, anchorRect: anchorRect || menuAnchorRect(trigger) });
+  return true;
 }
+function handleMessageContextMenu(event) {
+  if (event.defaultPrevented) return false;
+  const message = event.target.closest?.('.chat-message[data-message-id]');
+  if (!message || event.target.closest?.('[data-attachment-id], .chat-message-metadata')
+      || window.getSelection()?.toString()) return false;
+  const pointer = Number.isFinite(event.clientX) && Number.isFinite(event.clientY) && (event.clientX !== 0 || event.clientY !== 0);
+  const anchorRect = pointer ? { left: event.clientX, right: event.clientX + 1, top: event.clientY, bottom: event.clientY + 1 }
+    : menuAnchorRect(message.querySelector('[data-action="open-assistant-message-menu"]') || message);
+  if (!toggleAssistantMessageMenu(message, { anchorRect, forceOpen: true })) return false;
+  event.preventDefault();
+  return true;
+}
+function selectMessageMetadata(event) {
+  const metadata = event.target.closest?.('.chat-message-metadata');
+  if (!metadata || event.defaultPrevented || event.altKey || event.shiftKey || !(event.ctrlKey || event.metaKey) || String(event.key).toLowerCase() !== 'a') return false;
+  const selection = window.getSelection();
+  if (!selection) return false;
+  const range = document.createRange(); range.selectNodeContents(metadata);
+  selection.removeAllRanges(); selection.addRange(range);
+  event.preventDefault(); event.stopPropagation();
+  return true;
+}
+app.addEventListener('contextmenu', handleMessageContextMenu);
+app.addEventListener('keydown', selectMessageMetadata);
+
 function bindAssistantMessageMenuTriggers() {
   document.querySelectorAll('[data-action="open-assistant-message-menu"]').forEach(button => {
     if (assistantMessageMenuTriggers.has(button)) return;
     assistantMessageMenuTriggers.add(button);
+    button.addEventListener('keydown', event => {
+      if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!state.assistantMessageMenu) toggleAssistantMessageMenu(button);
+    });
     button.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       event.preventDefault();
@@ -3399,7 +5044,7 @@ function openConversationContextMenu(row, trigger = row) {
     workspaceId: row.dataset.workspaceId || null,
     source: 'sidebar',
     anchorRect: menuAnchorRect(trigger),
-    title: row.querySelector('.chat-history-title')?.textContent || '',
+    title: row.querySelector('.chat-history-select > span')?.textContent || '',
   });
 }
 
@@ -3474,11 +5119,6 @@ const conversationLongPress = createConversationLongPressController({
 });
 document.addEventListener('pointerdown', event => {
   const row = event.target.closest?.('[data-conversation-row]');
-  if (state.pdfPreview && !editing && !modifier && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
-    event.preventDefault();
-    if (!event.repeat) navigatePdfPage(event.key === 'ArrowRight' ? 1 : -1);
-    return;
-  }
   if (event.target.closest?.('.chat-row-actions')) return;
   if (!row) return;
   conversationLongPress.pointerDown(event, row.dataset.id);
@@ -3500,10 +5140,10 @@ function closeConversationContextMenu() {
 document.addEventListener('pointerdown', event => {
   if (event.target.closest?.('.dialog, .chat-context-menu, .assistant-message-menu, .chat-profile-menu, .composer-transient-sheet, [data-overlay-trigger], [data-action="open-assistant-message-menu"]')) return;
   if (state.assistantMessageMenu) { event.preventDefault(); event.stopImmediatePropagation(); closeTopOverlay(); return; }
-  if (state.videoPreview) { void closeVideoPreview(); return; }
-  if (state.audioPreview) { void closeAudioPreview(); return; }
+  if (state.videoPreview || state.videoPreviewOpening) { void closeVideoPreview(); return; }
+  if (state.audioPreview || state.audioPreviewOpening) { void closeAudioPreview(); return; }
   if (state.textPreview) { state.textPreview = null; render(); return; }
-  if (state.archivePreview) { state.archivePreview = null; render(); return; }
+  if (state.archivePreview) { cancelArchivePreviewLoad(); render(); return; }
   closeTopOverlay();
 }, true);
 document.addEventListener('wheel', event => {
@@ -3511,7 +5151,7 @@ document.addEventListener('wheel', event => {
   if (!event.target.closest?.('.chat-scroll[data-conversation-id]')) return;
   closeTopOverlay({ restoreFocus: false });
 }, true);
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.videoPreview) { event.preventDefault(); void closeVideoPreview(); } else if (event.key === 'Escape' && state.audioPreview) { event.preventDefault(); void closeAudioPreview(); } else if (event.key === 'Escape' && state.textPreview) { event.preventDefault(); state.textPreview = null; render(); } else if (event.key === 'Escape' && state.archivePreview?.entry) { event.preventDefault(); state.archivePreview = { ...state.archivePreview, entry: null }; render(); } else if (event.key === 'Escape' && state.archivePreview) { event.preventDefault(); state.archivePreview = null; render(); } else if (event.key === 'Escape' && closeTopOverlay({ navigateComposerLayerBack: true })) event.preventDefault(); }, true);
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && (state.videoPreview || state.videoPreviewOpening)) { event.preventDefault(); void closeVideoPreview(); } else if (event.key === 'Escape' && (state.audioPreview || state.audioPreviewOpening)) { event.preventDefault(); void closeAudioPreview(); } else if (event.key === 'Escape' && state.textPreview) { event.preventDefault(); state.textPreview = null; render(); } else if (event.key === 'Escape' && state.archivePreview?.entry) { event.preventDefault(); state.archivePreview = { ...state.archivePreview, entry: null }; render(); } else if (event.key === 'Escape' && state.archivePreview) { event.preventDefault(); state.archivePreview = null; render(); } else if (event.key === 'Escape' && closeTopOverlay({ navigateComposerLayerBack: true })) event.preventDefault(); }, true);
 function navigateImagePreview(direction) {
   const preview = state.imagePreview;
   if (!preview || preview.loading) return false;
@@ -3529,9 +5169,19 @@ window.addEventListener('keydown', event => {
   const modifier = event.metaKey || event.ctrlKey;
   const editing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
   const row = event.target.closest?.('[data-conversation-row]');
+  if (state.pdfPreview && !state.imagePreview && !editing && !modifier && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+    event.preventDefault();
+    if (!event.repeat) navigatePdfPage(event.key === 'ArrowRight' ? 1 : -1);
+    return;
+  }
   if (state.imagePreview && !editing && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) { event.preventDefault(); if (!event.repeat) navigateImagePreview(event.key === 'ArrowRight' ? 'next' : 'previous'); }
   else if ((event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) && row) { event.preventDefault(); openConversationContextMenu(row); }
-  else if (event.target.id === 'chat-composer' && event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); saveLocalMessage(); }
+  else if ((event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) && event.target.closest?.('.chat-message[data-message-id]')) { handleMessageContextMenu(event); }
+  else if (event.target.id === 'chat-composer' && event.key === 'Enter' && !event.shiftKey) {
+    if (composerImeTarget === event.target || event.isComposing || event.keyCode === 229 || Date.now() - composerImeEndedAtMs < 100) return;
+    event.preventDefault();
+    saveLocalMessage();
+  }
   else if (modifier && event.key.toLowerCase() === 'f' && currentConversation() && !state.temporaryConversation) { event.preventDefault(); state.conversationFindOpen = true; recomputeConversationFind(); render(); focusCurrentFindMatch(); }
   else if (modifier && event.key.toLowerCase() === 's' && state.dialog?.kind) { event.preventDefault(); if (state.dialog.kind === 'project') saveProject(); else if (state.dialog.kind === 'knowledge') saveKnowledge(); else if (state.dialog.kind === 'memory') saveMemory(); }
   else if (modifier && event.key.toLowerCase() === 'z' && !editing) { event.preventDefault(); undo(event.shiftKey); }
@@ -3547,7 +5197,7 @@ window.addEventListener('scroll', () => {
   if (state.contextMenu) positionConversationContextMenu();
   else conversationLongPress.cancel('scroll');
 }, true);
-restoreTemporaryChat().then(refresh).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `无法打开本地工作区：${String(error)}`; render(); });
+restoreTemporaryChat().then(refresh).catch(error => { state.error = `无法打开本机聊天数据：${String(error)}`; render(); });
 app.addEventListener('click', event => {
   if (event.target.closest('[data-action]')?.dataset.action !== 'show-p8-inspect') return;
   state.pane = 'p8-inspect';
@@ -3556,17 +5206,86 @@ app.addEventListener('click', event => {
   render();
 });
 
+let workspaceSelectionRequestId = 0;
 app.addEventListener('click', async event => {
-  const target = event.target.closest('[data-action="select-workspace"]');
+  const target = event.target.closest('[data-action="select-workspace"], [data-action="select-chat-source"]');
   if (!target || !native) return;
   event.stopImmediatePropagation();
-  state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.id });
-  state.history = await invoke('read_desktop_workbench_history', { workspaceId: target.dataset.id });
-  state.pane = 'work';
-  selectWorkspaceDefaultConversation(state.current);
-  state.status = '已切换到独立本地工作区，并打开该工作区最近对话。';
-  state.error = '';
-  render();
+  const owner = state;
+  const selectionPane = owner.pane;
+  const selectionSettingsSection = owner.settingsSection;
+  const requestId = ++workspaceSelectionRequestId;
+  const workspaceId = target.dataset.id;
+  const isCurrent = () => state === owner && requestId === workspaceSelectionRequestId;
+  finishConversationBatchEditing();
+  if (owner.dialog?.kind === 'conversation-batch-delete') owner.dialog = null;
+  try {
+    await flushOrdinaryComposerDraft();
+    if (!isCurrent()) return;
+    const current = await invoke('read_desktop_workspace', { workspaceId }, owner);
+    if (!isCurrent()) return;
+    owner.current = current;
+    owner.selectedWorkProjectId = null;
+    // Keep a page the user opened while the workspace read was pending.
+    if (owner.pane === selectionPane && owner.settingsSection === selectionSettingsSection) {
+      owner.pane = owner.dataArea === 'WORK' ? 'work' : 'chat';
+    }
+    selectWorkspaceDefaultConversation(current);
+    owner.newConversationDraftWorkspaceId = null;
+    resetComposerPresentation();
+    owner.p6gSelection = null;
+    owner.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+    owner.favoriteConversationIds = new Set();
+    applyConversationReadState({ workspaceId, conversations: [] });
+    const readRequestId = ++conversationReadStateRequestId;
+    owner.history = { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] };
+    owner.contextMenu = null;
+    owner.assistantMessageMenu = null;
+    owner.conversationFindOpen = false;
+    owner.conversationFindQuery = '';
+    recomputeConversationFind({ resetIndex: true });
+    owner.p6kTask = null;
+    owner.chatgptTask = null;
+    owner.claudeTask = null;
+    owner.nanfengKnowledgeTask = null;
+    p6kManualLink = { taskId: null, assetOrdinal: null, conversationId: null, messageId: null };
+    globalThis.__nanfengP6kManualLink = p6kManualLink;
+    render();
+    const selectedConversationId = owner.selectedConversationId;
+    const [history, p6kTask, chatgptTask, claudeTask, nanfengKnowledgeTask, favoriteIds, readState, selection] = await Promise.all([
+      invoke('read_desktop_workbench_history', { workspaceId }, owner),
+      invoke('read_latest_p6k_zip_import_task', { workspaceId }, owner),
+      invoke('read_latest_chatgpt_import_task', { workspaceId }, owner),
+      invoke('read_latest_claude_import_task', { workspaceId }, owner),
+      invoke('read_latest_nanfeng_knowledge_import_task', { workspaceId }, owner),
+      invoke('read_desktop_favorite_conversation_ids', { workspaceId }, owner),
+      invoke('read_desktop_conversation_read_state', { workspaceId, observedConversationId: null }, owner),
+      selectedConversationId ? invoke('read_desktop_p6g_selection', { workspaceId, conversationId: selectedConversationId }, owner) : Promise.resolve(null),
+    ]);
+    if (!isCurrent() || owner.current?.summary?.id !== workspaceId) return;
+    owner.history = history;
+    owner.p6kTask = p6kTask;
+    owner.chatgptTask = chatgptTask;
+    owner.claudeTask = claudeTask;
+    owner.nanfengKnowledgeTask = nanfengKnowledgeTask;
+    owner.favoriteConversationIds = new Set(favoriteIds);
+    if (readRequestId === conversationReadStateRequestId) applyConversationReadState(readState);
+    if (owner.selectedConversationId === selectedConversationId) {
+      owner.p6gSelection = selection;
+      owner.conversationPreferences = selection?.conversationOverride || { revision: 0, toneOverride: null, webSearchOverride: null };
+    }
+    owner.status = workspaceUiEnabled(owner.runtimeInfo)
+      ? '已切换到独立本地工作区，并打开该工作区最近对话。'
+      : '已切换聊天记录来源，并打开最近对话。';
+    owner.error = '';
+    render();
+    await loadOrdinaryComposerDraft();
+    if (isCurrent()) render();
+  } catch (error) {
+    if (!isCurrent() || error?.code === 'STALE_DATA_AREA') return;
+    owner.error = `${workspaceUiEnabled(owner.runtimeInfo) ? '切换工作区' : '切换聊天记录来源'}未完成：${String(error)}`;
+    render();
+  }
 }, true);
 
 function connectionCanvas() { const item = state.connection || previewConnection; return `<section class="canvas knowledge-canvas"><div class="canvas-header"><div><p class="overline">双路径 · 状态与配置边界</p><h1>连接与数据路径</h1><p>本地离线是安全底座；Provider 与加密同步必须分别配置、分别同意。</p></div></div><section class="knowledge-grid"><section><h2>本地离线</h2><p><b>LOCAL_OFFLINE / LOCAL_ONLY</b></p><p>始终可用。断网、取消或联网失败时，本地工作不丢失。</p></section><section><h2>联网模型</h2><p>配置：<b>${escape(item.providerConfiguration)}</b></p><p>Key presence：<b>${escape(item.credentialPresence)}</b>（仅存在性，不读取或显示 Key）</p><p>目录：${escape(item.catalogFreshness)} · consent：${escape(item.egressConsent)}</p><p>此处只显示双路径安全合同；实际模型设置会按服务商和凭据存在性另行读取。无论设置状态，联网请求仍需逐次确认，未经验证不会标记成功。</p></section><section class="memory-rail"><h2>账号同步</h2><p><b>ENCRYPTED_SYNC</b> · ${escape(item.syncCapability)}</p><p>同步与 Provider 独立；不会因模型设置自动上传本地数据。</p><p>当前原因：${item.degradedReasons.map(escape).join(' · ')}</p></section></section></section>`; }
@@ -3598,12 +5317,12 @@ function knowledgeOnlyCanvas(data) {
     return `<article class="knowledge-item history-knowledge-candidate"><header><div><p class="overline">${escape(statusText[item.status] || item.status)} · 历史对话自动整理</p><h2>${escape(item.title || '没有生成可采纳候选')}</h2></div><span>${escape(item.providerId || '本机检查')} · ${escape(model)}</span></header>${item.body ? `<pre>${escape(item.body)}</pre>` : ''}<p class="security-note">来源会话 ${escape(item.conversationId)} · 消息 ${Number(item.sourceMessageIds?.length || 0)} 条 · ${escape(usage)} · checkpoint ${escape(short(item.checkpointId))}${item.safeErrorCode ? ` · 失败原因 ${escape(item.safeErrorCode)}` : ''}</p><div class="item-actions">${actions}</div></article>`;
   }).join('');
   const autoSection = `<section class="history-knowledge-review-list"><div class="section-head"><div><h2>资料候选</h2><p>只显示自动整理的审阅记录；未经采纳不会混入下方本地知识。</p></div></div>${candidateCards || '<p class="empty-copy">暂无资料候选。开启“历史资料库”后，每 12 小时最多整理一条成功完成的当前对话分支。</p>'}</section>`;
-  return `<section class="canvas work-knowledge-canvas"><div class="workspace-content-actions"><button class="primary" data-action="new-knowledge">新建知识</button><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立关系</button></div>${autoSection}<div class="knowledge-list">${knowledge.map(item => `<article class="knowledge-item"><header><div><p class="overline">${escape(item.status)} · r${item.revision} · ${escape(item.classification)}</p><h2>${escape(item.title)}</h2></div><span>${escape((item.tags || []).join(' · '))}</span></header><pre>${escape(item.body)}</pre><div class="item-actions"><button data-action="edit-knowledge" data-id="${escape(item.id)}">编辑</button><button data-action="delete-knowledge" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></div></article>`).join('') || '<p class="empty-copy">尚无已保存的本地知识。</p>'}</div><section class="memory-rail"><div class="section-head"><h2>Knowledge relation</h2><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立</button></div><ul>${relations.map(item => `<li><span>${escape(item.kind)} · r${item.revision}</span>${escape(name(item.fromId))} → ${escape(name(item.toId))}<button data-action="delete-relation" data-id="${escape(item.id)}" data-revision="${item.revision}">撤销</button></li>`).join('') || '<li>暂无活动 relation。</li>'}</ul></section></section>`;
+  return `<section class="canvas work-knowledge-canvas"><div class="workspace-content-actions"><button class="primary" data-action="new-knowledge">新建知识</button><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立关系</button></div>${autoSection}${markdownKnowledgeTaskCard(state.markdownKnowledgeTask)}${jsonKnowledgeTaskCard(state.jsonKnowledgeTask)}${pdfKnowledge.card(state.pdfKnowledgeTask)}${webKnowledge.card(state.webKnowledgeTask)}<div class="knowledge-list">${knowledge.map(item => `<article class="knowledge-item"><header><div><p class="overline">${escape(item.status)} · r${item.revision} · ${escape(item.classification)}</p><h2>${escape(item.title)}</h2></div><span>${escape((item.tags || []).join(' · '))}</span></header><pre>${escape(item.body)}</pre><div class="item-actions"><button data-action="edit-knowledge" data-id="${escape(item.id)}">编辑</button><button data-action="delete-knowledge" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></div></article>`).join('') || '<p class="empty-copy">尚无已保存的本地知识。</p>'}</div><section class="memory-rail"><div class="section-head"><h2>Knowledge relation</h2><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立</button></div><ul>${relations.map(item => `<li><span>${escape(item.kind)} · r${item.revision}</span>${escape(name(item.fromId))} → ${escape(name(item.toId))}<button data-action="delete-relation" data-id="${escape(item.id)}" data-revision="${item.revision}">撤销</button></li>`).join('') || '<li>暂无活动 relation。</li>'}</ul></section></section>`;
 }
 
 function memoryCanvas(data) {
   const memory = active(data || { exchange: { memory: [] } }, 'memory');
-  return `<section class="canvas work-memory-canvas"><div class="workspace-content-actions"><button class="primary" data-action="new-memory">新建 Memory</button></div><section class="memory-rail"><ul>${memory.map(item => `<li><span>${escape(item.scope)} · r${item.revision}</span><button class="memory-button" data-action="edit-memory" data-id="${escape(item.id)}">${escape(item.body)}</button><button data-action="delete-memory" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></li>`).join('') || '<li>暂无活动 Memory。</li>'}</ul></section></section>`;
+  return `<section class="canvas work-memory-canvas"><div class="workspace-content-actions"><button class="primary" data-action="new-memory">新建 Memory</button></div><section class="memory-rail"><ul>${memory.map(item => `<li><span>${escape(item.title || '概览')} · ${escape(item.scope)} · r${item.revision}</span><button class="memory-button" data-action="edit-memory" data-id="${escape(item.id)}">${escape(item.body)}</button><button data-action="delete-memory" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></li>`).join('') || '<li>暂无活动 Memory。</li>'}</ul></section></section>`;
 }
 
 function rememberChatScroll() {
@@ -3629,14 +5348,13 @@ function rememberSettingsScroll() {
 
 function restoreSettingsScroll() {
   document.querySelectorAll('[data-settings-scroll-key]').forEach(element => {
-    const top = state.settingsScrollPositions.get(element.dataset.settingsScrollKey) || 0;
-    if (element.scrollTop !== top) element.scrollTop = top;
+    element.scrollTop = state.settingsScrollPositions.get(element.dataset.settingsScrollKey) || 0;
   });
 }
 
 function restoreSidebarScroll() {
   const sidebarScroll = document.querySelector('.chat-sidebar-scroll');
-  if (sidebarScroll && sidebarScroll.scrollTop !== state.sidebarScrollTop) sidebarScroll.scrollTop = state.sidebarScrollTop;
+  if (sidebarScroll) sidebarScroll.scrollTop = state.sidebarScrollTop;
 }
 
 function restoreChatScroll() {
@@ -3667,22 +5385,161 @@ function restoreChatScroll() {
   }
 }
 
+const ordinaryEgressPreviews = new WeakMap();
+function ordinaryEgressPreviewInput(owner = state) {
+  const text = owner.composerDraft?.trim() || '';
+  if (!native || !owner.current?.summary?.id || owner.temporaryConversation
+      || (!text && !owner.composerAttachments.length)) return null;
+  const conversation = resolveConversation(owner.current, owner.selectedConversationId);
+  const input = {
+    workspaceId: owner.current.summary.id,
+    conversationId: conversation?.id || null,
+    text,
+    attachmentIds: owner.composerAttachments.map(item => item.id),
+    modelId: conversation ? null : newConversationModelId(owner),
+    toneOverride: conversation ? null : owner.conversationPreferences?.toneOverride ?? null,
+    webSearchOverride: conversation ? null : owner.conversationPreferences?.webSearchOverride ?? null,
+  };
+  const signature = JSON.stringify({
+    dataArea: owner.dataArea, input, conversationRevision: conversation?.revision ?? null,
+    attachments: owner.composerAttachments.map(item => [item.id, item.sha256, item.mimeType, item.byteCount]),
+    selection: owner.p6gSelection?.conversationOverride,
+    preferences: owner.conversationPreferences,
+    globalDefault: owner.p6gGlobalDefault,
+    services: owner.modelServiceSettings?.map(item => [item.providerId, item.enabled, item.credentialStored, item.revision, item.presetId]),
+    registry: [owner.openrouterRegistryStatus?.status, owner.openrouterRegistryStatus?.catalogVersion],
+  });
+  return { input, signature };
+}
+function currentOrdinaryEgressPreview(owner = state) {
+  const route = ordinaryEgressPreviewInput(owner);
+  const saved = ordinaryEgressPreviews.get(owner);
+  return route && saved?.signature === route.signature && saved.status === 'ready' ? saved.preview : null;
+}
+function ordinaryEgressPreviewErrorCopy(error) {
+  const failure = String(error);
+  if (failure.includes('普通聊天暂不支持直接发送音频或视频')) return '普通聊天暂不支持直接发送音频或视频，请先转成文字后再发送';
+  if (failure.includes('附件识读需要') || failure.includes('附件识读模型')) return '附件识读需要 OpenRouter，请在“设置 → 模型与联网”检查服务和模型目录。';
+  if (failure.includes('不能处理本次附件')) return '当前模型不能处理本次附件，请更换模型或移除附件';
+  if (failure.includes('请启用OpenRouter并保存API Key，供GPT-6 Luna检索') || failure.includes('OpenRouter配置不存在')) {
+    return '协作检索需要 OpenRouter。请在“设置 → 模型与联网”启用 OpenRouter 并保存 API Key，或关闭联网后再发送。';
+  }
+  if (failure.includes('GPT-6 Luna不在已核验OpenRouter目录')) {
+    return 'GPT-6 Luna 当前不在可用目录。请在“设置 → 模型与联网”检查 OpenRouter 模型目录，或关闭联网后再发送。';
+  }
+  return '当前接收方不可用，请检查模型设置';
+}
+function scheduleOrdinaryEgressPreview(owner = state) {
+  const route = ordinaryEgressPreviewInput(owner);
+  const previous = ordinaryEgressPreviews.get(owner);
+  if (!route) {
+    if (previous?.timer) clearTimeout(previous.timer);
+    ordinaryEgressPreviews.delete(owner);
+    return;
+  }
+  if (previous?.signature === route.signature && previous.status !== 'cancelled') return;
+  if (previous?.timer) clearTimeout(previous.timer);
+  const next = { signature: route.signature, status: 'pending', preview: null, errorCopy: null, timer: null };
+  ordinaryEgressPreviews.set(owner, next);
+  next.timer = setTimeout(async () => {
+    next.timer = null;
+    if (state !== owner) { next.status = 'cancelled'; return; }
+    try {
+      const preview = await invokeForAuthorizedDataAreaOperation(tauriBridge,
+        'preview_desktop_ordinary_chat_egress', { args: route.input }, owner);
+      if (ordinaryEgressPreviews.get(owner) !== next
+          || ordinaryEgressPreviewInput(owner)?.signature !== next.signature) return;
+      next.preview = preview;
+      next.status = 'ready';
+    } catch (error) {
+      if (ordinaryEgressPreviews.get(owner) !== next
+          || ordinaryEgressPreviewInput(owner)?.signature !== next.signature) return;
+      next.status = 'unavailable';
+      next.errorCopy = ordinaryEgressPreviewErrorCopy(error);
+    }
+    if (state === owner) render();
+  }, 160);
+}
+function updateOrdinaryEgressDisclosure(owner = state) {
+  if (state !== owner) return;
+  const controls = document.querySelector('.chat-composer-actions');
+  const existing = controls?.querySelector('.chat-composer-route');
+  const route = ordinaryEgressPreviewInput(owner);
+  if (!controls || !route) { existing?.remove(); return; }
+  const saved = ordinaryEgressPreviews.get(owner);
+  const preview = saved?.signature === route.signature && saved.status === 'ready' ? saved.preview : null;
+  const trigger=controls.querySelector('[data-action="toggle-p6g-model-picker"]');
+  if (preview && !route.input.modelId && trigger) {
+    const rc=relayCoreModel(preview.recipientChoiceId) || RELAYCORE_MODELS.find(model=>model.providerId===preview.recipientProviderId && model.modelId===preview.recipientModelId);
+    const label=rc ? relayCoreFooterName(rc) : preview.recipientDisplayName;
+    const text=trigger.querySelector('span');if(text)text.textContent=label;
+    trigger.setAttribute('aria-label',`选择模型：${label}`);trigger.title=`选择模型 · ${label}`;
+  }
+  const line = existing || document.createElement('div');
+  if (!existing) {
+    line.className = 'chat-composer-route';
+    line.setAttribute('role', 'status');
+    line.setAttribute('aria-live', 'polite');
+    controls.append(line);
+  }
+  const providerName = owner.modelServiceSettings?.find(item => item.providerId === preview?.recipientProviderId)?.providerDisplayName
+    || preview?.recipientProviderId || '';
+  const recipientText = preview ? `${preview.recipientChoiceId === 'AUTO' ? '自动 · ' : ''}${providerName} · ${preview.recipientDisplayName}` : '';
+  const retrieval = preview?.retrievalRecipient;
+  const retrievalProviderName = owner.modelServiceSettings?.find(item => item.providerId === retrieval?.providerId)?.providerDisplayName
+    || retrieval?.providerId || '';
+  const retrievalModelName = retrieval?.presetId === 'GPT_6_LUNA' ? 'GPT-6 Luna' : retrieval?.modelId;
+  const readers = preview?.attachmentReading?.recipients || [];
+  const readingText = readers.map(r => `${r.presetId === 'CLAUDE_HAIKU_5_5' ? 'Haiku 5.5' : 'Gemini 4 Argon'} · OpenRouter`).join('、');
+  line.textContent = preview
+    ? readers.length ? `识读：${readingText}；${retrieval ? 'Luna 检索；' : ''}回答：${recipientText}（分别计费）` : retrieval ? `检索：${retrievalProviderName} · ${retrievalModelName}；回答：${recipientText}` : recipientText
+    : saved?.signature === route.signature && saved.status === 'unavailable'
+      ? saved.errorCopy
+      : '正在确认本次接收方…';
+  line.dataset.routeReady = String(Boolean(preview));
+  const send = controls.querySelector('[data-action="save-local-message"]');
+  if (send && !preview) send.disabled = true;
+}
+
+let inlineTitleEditor = null;
 function renderUnified() {
+  conversationFindInputController.setScope(state, state.pane, state.current?.summary?.id,
+    state.selectedConversationId, state.conversationFindOpen, areaSwitchPending);
+  if (inlineTitleEditor?.prepareRender()) return;
+  if (areaSwitchPending) {
+    app.innerHTML = '<main class="desktop-area-switch" role="status" aria-live="polite">正在切换数据区…</main>';
+    return;
+  }
+  if (isCurrentComposerImeRoute() && composerImeTarget?.isConnected
+      && document.activeElement === composerImeTarget && !state.searchPanel
+      && !state.dialog && !state.accountSyncProgress && !state.contextMenu
+      && !state.assistantMessageMenu && !state.composerAddOpen && !state.p6gModelPickerOpen) {
+    composerImePaintPending = true;
+    updateOrdinaryEgressDisclosure();
+    return;
+  }
+  // Async readbacks may finish just after search opens. Keep the focused IME
+  // input connected until its candidate is committed; the queued search then
+  // paints the latest owner state. Explicit navigation and dialogs still paint.
+  if (searchImeOwner === state && searchImeTarget?.isConnected
+      && document.activeElement === searchImeTarget && state.searchPanel
+      && !state.dialog && !state.accountSyncProgress && !state.contextMenu
+      && !state.assistantMessageMenu) return;
+  if (composerCameraOwner && !isCurrentComposerAttachmentRoute(composerCameraOwner, composerCameraRoute)) stopComposerCamera();
+  const runtimeRefresh = arguments[0]?.runtimeRefresh === true;
   clearModelCredentialDraftOutsideEditor();
-  const { runtimeRefresh = false } = arguments[0] || {};
   queueMicrotask(() => resizeComposer(document.getElementById('chat-composer')));
+  preserveSearchInputFocus();
+  preserveModelSettingsFocus(document, captureModelSettingsFocusScope());
+  preserveSettingsPickerFocus(document, captureSettingsPickerFocusScope());
   const focusedComposer = document.activeElement?.id === 'chat-composer' ? document.activeElement : null;
   const composerSelection = focusedComposer ? [focusedComposer.selectionStart, focusedComposer.selectionEnd] : null;
-  const focusedInlineRename = document.activeElement?.matches?.('[data-inline-conversation-rename]') ? document.activeElement : null;
-  const inlineRenameSelection = focusedInlineRename ? [focusedInlineRename.selectionStart, focusedInlineRename.selectionEnd] : null;
-  if (inlineRenameSelection) queueMicrotask(() => {
-    if (!state.inlineConversationRename) return;
-    const replacement = app.querySelector('[data-inline-conversation-rename]');
-    if (replacement && !replacement.isSameNode(focusedInlineRename)) {
-      replacement.focus({ preventScroll: true });
-      replacement.setSelectionRange(...inlineRenameSelection);
-    }
-  });
+  const focusedDialogControl = document.activeElement?.closest?.('.dialog') ? document.activeElement : null;
+  const focusedDialogOwner = focusedDialogControl ? state.dialog : null;
+  const focusedDialogId = focusedDialogControl?.id || '';
+  const dialogSelection = focusedDialogControl && Number.isInteger(focusedDialogControl.selectionStart)
+    ? [focusedDialogControl.selectionStart, focusedDialogControl.selectionEnd, focusedDialogControl.selectionDirection]
+    : null;
   if (composerSelection) queueMicrotask(() => {
     if (state.dialog || state.contextMenu || state.assistantMessageMenu || state.composerAddOpen || state.p6gModelPickerOpen) return;
     const replacement = document.getElementById('chat-composer');
@@ -3691,6 +5548,14 @@ function renderUnified() {
       replacement.setSelectionRange(...composerSelection);
     }
   });
+  if (!workspaceUiEnabled(state.runtimeInfo)) {
+    if (state.dataArea === 'WORK' && !areaSwitchPending) {
+      void switchDataArea('CHAT', 'chat');
+      return;
+    }
+    const uiRoute = chatUiRoute(state.pane, state.settingsSection, state.runtimeInfo);
+    state.pane = uiRoute.pane; state.settingsSection = uiRoute.settingsPage;
+  }
   rememberChatScroll();
   rememberSidebarScroll();
   rememberSettingsScroll();
@@ -3706,8 +5571,8 @@ function renderUnified() {
   const workPanel = state.pane === 'projects' ? projectsCanvas(data)
     : state.pane === 'knowledge' ? knowledgeOnlyCanvas(data)
         : state.pane === 'memory' ? memoryCanvas(data)
-          : state.pane === 'reminders' ? renderDesktopRemindersPage({ loading: utilityPagesLoading.has('reminders'), projection: state.reminders, notificationEnabled: Boolean(state.productSettings.monitorNotifications), notificationPermission: state.reminderNotificationPermission, native, previewInteractive: Boolean(c09ReminderPreview), evidenceLabel: c09ReminderPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', editor: state.reminderEditor, embedded: true })
-            : state.pane === 'transcription' ? renderDesktopTranscriptionPage({ loading: utilityPagesLoading.has('transcription'), projection: state.transcription, selectedTaskId: state.selectedTranscriptionTaskId, native, busyTaskId: state.transcriptionBusyTaskId, previewInteractive: Boolean(c10TranscriptionPreview), evidenceLabel: c10TranscriptionPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', embedded: true })
+          : state.pane === 'reminders' ? renderDesktopRemindersPage({ loading: Boolean(utilityPagesLoading.get(state)?.has('reminders')), projection: state.reminders, notificationEnabled: Boolean(state.productSettings.monitorNotifications), notificationPermission: state.reminderNotificationPermission, native, previewInteractive: Boolean(c09ReminderPreview), evidenceLabel: c09ReminderPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', editor: state.reminderEditor, embedded: true })
+            : state.pane === 'transcription' ? renderDesktopTranscriptionPage({ loading: Boolean(utilityPagesLoading.get(state)?.has('transcription')), projection: state.transcription, selectedTaskId: state.selectedTranscriptionTaskId, native, busyTaskId: state.transcriptionBusyTaskId, previewInteractive: Boolean(c10TranscriptionPreview), evidenceLabel: c10TranscriptionPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', embedded: true })
           : state.pane === 'p8-inspect' ? p8InspectCanvas({ agentRuns: state.agentRuns, native, escape, short })
             : null;
   const standaloneWorkspacePage = (!utilityPane && Boolean(workPanel)) || (data?.dataArea !== 'WORK' && isWorkspaceRoot(data, visiblePane, state.selectedWorkProjectId, state.selectedConversationId));
@@ -3715,9 +5580,8 @@ function renderUnified() {
   const existingTranscript = document.querySelector('.chat-scroll[data-conversation-id]');
   const preserveTranscript = !runtimeRefresh && canRetainTranscript(renderedTranscriptRetention, nextTranscriptRetention)
     && existingTranscript?.dataset.conversationId === nextTranscriptRetention.conversation.id;
-  // Most shell interactions (menus, sidebar, dialogs and header controls) do
-  // not change a transcript. Keep its scroll owner connected during shell patches;
-  // detaching/reinserting still forces a long WebKit layout and loses selection.
+  // Most shell interactions do not change the transcript. Patch around the
+  // connected scroll owner so opening a menu also preserves text selection.
   const retainedTranscript = preserveTranscript ? existingTranscript : null;
   const retainedTranscriptTop = retainedTranscript?.scrollTop;
   const nextSidebarRetention = currentSidebarRetention(data);
@@ -3733,17 +5597,17 @@ function renderUnified() {
   const previewScrolls = retainedPreview ? [retainedPreview, ...retainedPreview.querySelectorAll('*')]
     .filter(node => node.scrollTop || node.scrollLeft)
     .map(node => ({ node, top: node.scrollTop, left: node.scrollLeft })) : [];
-  if (retainedPreview) retainedPreview.remove();
   app.className = `app-shell chat-first ${standaloneWorkspacePage ? 'workspace-standalone-shell' : ''} ${visiblePane === 'settings' ? 'settings-mode' : ''} ${sidebarWorkMode ? 'work-mode' : ''} ${state.sidebarOpen ? 'fallback-sidebar-open' : ''} ${state.searchPanel ? 'search-mode' : ''}`;
-  const nextShellHtml = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialEdited: state.modelCredentialEdited, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: newConversationModelId(), chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, syncedConversationKeys: new Set(state.accountSync?.syncedConversationKeys || []), conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
-  const runtimePatched = runtimeRefresh && commitRuntimeChatShell(app, nextShellHtml);
-  const shellPatched = !runtimeRefresh && commitRetainedChatShell(app, nextShellHtml, retainedTranscript, retainedSidebar);
+  const nextShellHtml = renderChatFirstShell({ data, native, inlineRename: state.inlineConversationRename, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelCredentialEdited: state.modelCredentialEdited, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, openrouterRegistryStatus: state.openrouterRegistryStatus, openrouterRegistryRefreshing: state.openrouterRegistryRefreshing, openrouterRegistryNotice: state.openrouterRegistryNotice, openrouterRegistryError: state.openrouterRegistryError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: selectedBackupAreaState().localBackup, localBackupArea: selectedBackupAreaState().dataArea, backupAreaBusy: [...dataAreaStates.values()].some(owner => owner.localBackup?.working), accountSync: { ...state.accountSync, signInPending: accountSignInPending }, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: newConversationModelId(), chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, nanfengKnowledgeTask: state.nanfengKnowledgeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, syncedConversationKeys: new Set(state.accountSync?.syncedConversationKeys || []), conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
+  const runtimePatched = runtimeRefresh && commitRuntimeChatShell(app, nextShellHtml, retainedPreview);
+  const shellPatched = !runtimePatched && (!runtimeRefresh || retainedPreview)
+    && commitRetainedChatShell(app, nextShellHtml, retainedTranscript, retainedSidebar, retainedPreview);
   if (!runtimePatched && !shellPatched) {
+    if (retainedPreview) retainedPreview.remove();
     if (retainedTranscript) retainedTranscript.replaceWith(document.createComment('retained-transcript'));
     if (retainedSidebar) retainedSidebar.replaceWith(document.createComment('retained-sidebar'));
     app.innerHTML = nextShellHtml;
   }
-  scheduleComposerModelPricingRefresh();
   if (retainedTranscript && !shellPatched) {
     const slot = app.querySelector('[data-preserved-transcript-slot]');
     if (slot) slot.replaceWith(retainedTranscript);
@@ -3763,8 +5627,11 @@ function renderUnified() {
     if (state.contextMenu?.source === 'header') positionConversationContextMenu();
   });
   const modal = accountSyncProgressDialog() || cameraCaptureDialog() || dialog() || imagePreviewDialog() || pdfPreviewDialog() || videoPreviewDialog() || audioPreviewDialog() || textPreviewDialog() || archivePreviewDialog() || previewBoundaryDialog();
-  if (retainedPreview) app.append(retainedPreview);
+  if (retainedPreview) { if (!retainedPreview.isConnected) app.append(retainedPreview); }
   else if (modal) app.insertAdjacentHTML('beforeend', modal);
+  app.querySelectorAll('.desktop-transient-toast').forEach(node => node.remove());
+  const toastMarkup = transientToastMarkup();
+  if (toastMarkup) app.insertAdjacentHTML('beforeend', toastMarkup);
   const attachmentMenu = app.querySelector('.search-attachment-menu');
   if (attachmentMenu && state.dialog?.anchor) {
     const bounds = attachmentMenu.getBoundingClientRect();
@@ -3778,19 +5645,27 @@ function renderUnified() {
     document.querySelector('.dialog-actions')?.insertAdjacentHTML('afterbegin', '<button data-action="retry-chatgpt-task">重试解析</button>');
   }
   queueMicrotask(() => {
-    // Reinserted scroll nodes may lose their scroll offset in WebKit.
-    // Restore synchronously above; fresh nodes use the conversation owner here.
-    // Explicit navigation must run after reinsertion, which cancels WebKit's
-    // in-flight smooth scroll. Passive rerenders still preserve the viewport.
+    // Fallback reinsertion restores its offset above. Fresh nodes use the
+    // conversation owner; runtime patches keep the live viewport themselves.
+    // Explicit bottom navigation still runs after the shell commit.
     if ((!retainedTranscript && !runtimePatched) || state.pendingChatScrollToLatestId || state.pendingChatSendScrollToLatestId) restoreChatScroll();
     restoreSidebarScroll();
     restoreSettingsScroll();
     if (state.searchPanel) restoreFullSearchScroll();
-    if (state.dialog) document.querySelector('.dialog input, .dialog textarea, .dialog select, .dialog button')?.focus({ preventScroll: true });
+    if (state.dialog) {
+      const replacement = focusedDialogId && state.dialog === focusedDialogOwner
+        ? document.getElementById(focusedDialogId) : null;
+      const focusTarget = replacement?.closest('.dialog') ? replacement
+        : document.querySelector('.dialog input, .dialog textarea, .dialog select, .dialog button');
+      focusTarget?.focus({ preventScroll: true });
+      if (focusTarget === replacement && dialogSelection && typeof replacement.setSelectionRange === 'function') {
+        replacement.setSelectionRange(...dialogSelection);
+      }
+    }
     // The menu is rendered after the retained transcript.  WebKit's default
     // focus scroll can otherwise move the surrounding document to the menu's
     // DOM position even though the visible menu itself is fixed.
-    else if (state.assistantMessageMenu) document.querySelector('.assistant-message-menu [role="menuitem"]')?.focus({ preventScroll: true });
+    // The message-menu owner restores the exact control after late renders.
     attachComposerCameraStream();
     scheduleImageThumbnailReads({ composerOnly: Boolean(retainedTranscript), retainObserved: Boolean(retainedTranscript) });
     // Retained transcript cards already belong to the active observers. The
@@ -3801,13 +5676,16 @@ function renderUnified() {
       scheduleAttachmentCardPreviewReads();
     }
   });
+  scheduleComposerModelPricingRefresh();
+  scheduleOrdinaryEgressPreview();
+  updateOrdinaryEgressDisclosure();
 }
 
 function cameraCaptureDialog() {
   if (!state.cameraCaptureOpen) return '';
   const body = state.cameraCaptureError
     ? `<p class="camera-capture-error" role="alert">${escape(state.cameraCaptureError)}</p>`
-    : `<div class="camera-capture-stage"><video data-composer-camera-video autoplay playsinline muted aria-label="当前相机画面"></video>${state.cameraCaptureReady ? '' : '<p role="status">正在请求本机相机；尚未拍摄或写入草稿。</p>'}</div>`;
+    : `<div class="camera-capture-stage"><video data-composer-camera-video autoplay playsinline muted aria-label="当前相机画面"></video>${state.cameraCaptureReady ? '' : '<p data-composer-camera-pending role="status">正在请求本机相机；尚未拍摄或写入草稿。</p>'}</div>`;
   return `<div class="scrim"><section class="dialog camera-capture-dialog" role="dialog" aria-modal="true" aria-label="相机"><button class="icon-button close" data-action="close-composer-camera" aria-label="停止相机并关闭">${icon(icons.close, '停止相机')}</button><h2>相机</h2><p>只有点击“拍照并加入草稿”后，当前画面才会私有保存；不会自动发送。</p>${body}<div class="dialog-actions"><button data-action="close-composer-camera">取消</button><button class="primary" data-action="capture-composer-camera" ${state.cameraCaptureReady && !state.cameraCaptureBusy ? '' : 'disabled'}>${state.cameraCaptureBusy ? '正在私有保存…' : '拍照并加入草稿'}</button></div></section></div>`;
 }
 
@@ -3871,8 +5749,8 @@ function videoPreviewDialog() {
   const content = preview.loading
     ? '<div class="media-preview-loading" role="status" aria-label="正在读取视频"></div>'
     : preview.error
-      ? `<p class="image-preview-error">${escape(preview.error)}</p>`
-      : `<div class="video-preview-stage"><video class="video-preview-frame" autoplay playsinline preload="auto" data-video-preview data-action="toggle-video-playback" src="${escape(preview.mediaUrl)}" aria-label="${escape(preview.displayName)} 视频播放器"></video><div class="preview-playback-controls video-preview-controls" aria-label="视频播放控制"><button class="preview-playback-toggle" data-action="toggle-video-playback" aria-label="暂停视频">${icon('M7 5h3v14H7zM14 5h3v14h-3z', '暂停')}</button><time data-video-preview-elapsed>${formatDuration(preview.positionMillis || 0)}</time>${previewProgressRange('video', preview, '视频播放进度')}${previewVolumeControl('video')}<time data-video-preview-duration>${formatDuration(preview.durationMillis)}</time></div></div><p class="pdf-preview-note">${escape(preview.displayName)} · ${bytes(preview.byteCount)} · ${formatDuration(preview.durationMillis)}</p>`;
+      ? `<div class="video-preview-error" role="alert"><strong>${escape(preview.error)}</strong>${preview.displayName ? `<small>${escape(preview.displayName)} · MP4 · ${bytes(preview.byteCount)}</small>` : ''}</div>`
+      : `<div class="video-preview-stage"><video class="video-preview-frame" autoplay playsinline preload="auto" data-video-preview data-action="toggle-video-playback" src="${escape(preview.mediaUrl)}" aria-label="${escape(preview.displayName)} 视频播放器"></video><div class="preview-playback-controls video-preview-controls" aria-label="视频播放控制"><button class="preview-playback-toggle" data-action="toggle-video-playback" aria-label="暂停视频">${icon('M7 5h3v14H7zM14 5h3v14h-3z', '暂停')}</button><time data-video-preview-elapsed>${formatDuration(preview.positionMillis || 0)}</time>${previewProgressRange('video', preview, '视频播放进度')}${previewVolumeControl('video')}<time data-video-preview-duration>${preview.durationMillis ? formatDuration(preview.durationMillis) : '--:--'}</time></div></div><p class="pdf-preview-note">${escape(preview.displayName)} · ${bytes(preview.byteCount)} · <span data-video-preview-duration-note>${preview.durationMillis ? formatDuration(preview.durationMillis) : '--:--'}</span></p>`;
   return `<div class="scrim attachment-preview-overlay"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="视频预览">${previewTopActions('video', preview)}${content}</section></div>`;
 }
 
@@ -3880,9 +5758,9 @@ function audioPreviewDialog() {
   const preview = state.audioPreview;
   if (!preview) return '';
   const content = preview.loading ? '<div class="media-preview-loading" role="status" aria-label="正在读取本地音频"></div>'
-    : preview.error ? `<p class="image-preview-error">${escape(preview.error)}</p>`
+    : preview.error ? `<p class="image-preview-error audio-preview-error" role="alert">${escape(preview.error)}</p>`
       : `<div class="audio-preview-player"><audio autoplay preload="auto" data-audio-preview src="${escape(preview.mediaUrl)}" aria-label="${escape(preview.displayName)} 音频播放器"></audio><button class="audio-preview-toggle" data-action="toggle-audio-playback" aria-label="暂停音频">${icon('M7 5h3v14H7zM14 5h3v14h-3z', '暂停')}</button><div class="audio-preview-progress-row">${previewProgressRange('audio', preview, '音频播放进度')}${previewVolumeControl('audio')}</div><div class="audio-preview-times"><time data-audio-preview-elapsed>${formatDuration(preview.positionMillis || 0)}</time><time data-audio-preview-duration>${formatDuration(preview.durationMillis || 0)}</time></div></div>`;
-  const identity = !preview.loading && !preview.error
+  const identity = preview.attachmentId && preview.displayName
     ? `<div class="audio-preview-identity"><strong>${escape(preview.displayName)}</strong><small>${escape(String(preview.mimeType || '').split('/').pop()?.toUpperCase() || '音频')} · ${bytes(preview.byteCount)}</small></div>`
     : '';
   return `<div class="scrim attachment-preview-overlay audio-preview-overlay"><section class="dialog image-preview-dialog audio-preview-dialog" role="dialog" aria-modal="true" aria-label="音频播放"><header class="audio-preview-header">${identity}${previewTopActions('audio', preview)}</header>${content}</section></div>`;
@@ -3892,15 +5770,18 @@ function textPreviewDialog() {
   const preview = state.textPreview;
   if (!preview) return '';
   const ready = Boolean(preview.attachmentId && preview.workspaceId && !preview.loading && !preview.error);
-  const menuItem = (action, glyph, label) => `<button class="text-preview-menu-item" data-action="${action}" data-preview-kind="text" ${ready ? '' : 'disabled'}>${icon(glyph, label)}<span>${label}</span></button>`;
+  const menuItem = (action, glyph, label) => `<button class="text-preview-menu-item" data-action="${action}" data-preview-kind="text" role="menuitem" ${ready ? '' : 'disabled'}>${sharedIcon(glyph, label)}<span>${label}</span></button>`;
   const facts = !preview.loading && !preview.error ? `<p class="pdf-preview-note text-preview-facts">${escape(preview.mimeType)} · ${bytes(preview.byteCount)}${preview.truncated ? ' · 仅显示前 128 KiB' : ''}</p>` : '';
-  const title = /^\s*#\s+/.test(preview.text || '') ? '' : `<h1>${escape((preview.displayName || '文件').replace(/\.[^.]+$/, ''))}</h1>`;
+  const officeText = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'].includes(preview.mimeType)
+    || ['application/octet-stream', ''].includes(preview.mimeType || '') && /[.。]\s*(?:docx|xlsx|pptx)\s*$/i.test(preview.displayName || '');
+  const sourceText = ['application/xml', 'text/xml', 'application/x-yaml', 'text/yaml', 'text/html'].includes(preview.mimeType);
+  const title = !officeText && !sourceText && /^\s*#\s+/.test(preview.text || '') ? '' : `<h1>${escape(((preview.displayName || '文件').replace(/\.[^.]+$/, '') || preview.displayName || '文件'))}</h1>`;
   const content = preview.loading ? '<div class="media-preview-loading" role="status" aria-label="正在读取文本"></div>'
     : preview.error ? `<p class="image-preview-error">${escape(preview.error)}</p>`
-      : /[.。]\s*zip\s*$/i.test(preview.displayName || '') || ['application/zip', 'application/x-zip-compressed'].includes(preview.mimeType)
-        ? `<article class="local-text-preview" aria-label="压缩包目录">${title}<pre>${escape(preview.text)}</pre></article>`
+      : officeText || sourceText || /[.。]\s*zip\s*$/i.test(preview.displayName || '') || ['application/zip', 'application/x-zip-compressed'].includes(preview.mimeType)
+        ? `<article class="local-text-preview" aria-label="${officeText ? '文档原文' : sourceText ? '文件原文' : '压缩包目录'}">${title}<pre>${escape(preview.text)}</pre></article>`
         : `<article class="local-text-preview local-markdown-preview chat-markdown">${title}${renderSafeMarkdown(preview.text, { inert: true })}</article>`;
-  return `<div class="scrim attachment-preview-overlay text-preview-overlay"><section class="dialog image-preview-dialog text-preview-surface" role="dialog" aria-modal="true" aria-label="文本预览"><header class="text-preview-header"><button class="file-preview-action" data-action="close-text-preview" aria-label="返回">${icon(icons.chevronLeft, '返回')}</button><span class="text-preview-title">${escape(preview.displayName || '文件')}</span><details class="text-preview-menu"><summary class="file-preview-action" aria-label="文件菜单">${icon(icons.moreVertical, '文件菜单')}</summary><div class="text-preview-menu-items">${menuItem('save-preview-attachment', icons.download, '下载文件')}${menuItem('share-preview-attachment', icons.share, '分享文件')}${menuItem('copy-text-preview', icons.copy, '复制文本')}${facts}</div></details></header>${content}</section></div>`;
+  return `<div class="scrim attachment-preview-overlay text-preview-overlay"><section class="dialog image-preview-dialog text-preview-surface" role="dialog" aria-modal="true" aria-label="文本预览"><header class="text-preview-header"><button class="file-preview-action" data-action="close-text-preview" aria-label="返回">${sharedIcon(sharedIcons.chevronLeft, '返回')}</button><span class="text-preview-title">${escape(preview.displayName || '文件')}</span><details class="text-preview-menu"><summary class="file-preview-action" aria-label="文件菜单" aria-haspopup="menu">${sharedIcon(sharedIcons.moreVertical, '文件菜单')}</summary><div class="text-preview-menu-items" role="menu" aria-label="文件操作">${menuItem('save-preview-attachment', sharedIcons.download, '下载文件')}${menuItem('share-preview-attachment', sharedIcons.share, '分享文件')}${menuItem('copy-text-preview', sharedIcons.copy, '复制文本')}${facts}</div></details></header>${content}</section></div>`;
 }
 
 function archiveDirectoryRows(entries, directory = '') {
@@ -3969,6 +5850,7 @@ function formatDuration(milliseconds) { const seconds = Math.max(0, Math.floor((
 let imageThumbnailObserver = null;
 let imageThumbnailQueue = [];
 let imageThumbnailInFlight = 0;
+let imageThumbnailGeneration = 0;
 function pumpImageThumbnailReads() {
   while (imageThumbnailInFlight < 2 && imageThumbnailQueue.length) {
     const job = imageThumbnailQueue.shift();
@@ -3980,36 +5862,46 @@ function scheduleImageThumbnailReads({ composerOnly = false, retainObserved = fa
   // A retained transcript keeps both its cards and this observer alive. A
   // surrounding menu/dialog render may only create a fresh Composer; do not
   // rescan several hundred preserved attachment nodes just to observe it.
+  const owner = state;
   if (!retainObserved) {
     imageThumbnailObserver?.disconnect();
+    imageThumbnailGeneration += 1;
     imageThumbnailObserver = null;
-    imageThumbnailQueue.forEach(job => state.imageThumbnailPending.delete(job.thumbnailKey));
+    imageThumbnailQueue.forEach(job => job.owner.imageThumbnailPending.delete(job.thumbnailKey));
     imageThumbnailQueue = [];
   }
   if (!native || state.imagePreview) return;
+  const generation = imageThumbnailGeneration;
   const selector = composerOnly ? '.chat-composer [data-image-thumbnail]' : '[data-image-thumbnail]';
   const enqueue = element => {
+    if (state !== owner || generation !== imageThumbnailGeneration || !element.isConnected) return;
     const attachmentId = element.dataset.imageThumbnail;
-    const workspaceId = element.dataset.thumbnailWorkspaceId || state.current?.summary?.id;
-    const thumbnailKey = `${workspaceId || 'unknown'}:${attachmentId || 'unknown'}`;
+    const workspaceId = element.dataset.thumbnailWorkspaceId;
+    const thumbnailKey = attachmentPreviewKey(workspaceId, attachmentId);
     if (!workspaceId || !attachmentId) return;
-    if (state.imageThumbnails[attachmentId]) { hydrateImageThumbnail(attachmentId, state.imageThumbnails[attachmentId]); return; }
+    if (state.imageThumbnails[thumbnailKey]) { hydrateImageThumbnail(workspaceId, attachmentId, state.imageThumbnails[thumbnailKey]); return; }
     if (state.imageThumbnailPending.has(thumbnailKey)) return;
     state.imageThumbnailPending.add(thumbnailKey);
     const job = () => {
-      if (!element.isConnected) { state.imageThumbnailPending.delete(thumbnailKey); return Promise.resolve(); }
-      return withFullSearchDeadline(invoke('read_desktop_image_preview', { args: { workspaceId, attachmentId, fullSize: false } }))
+      if (state !== owner || generation !== imageThumbnailGeneration || !element.isConnected) { owner.imageThumbnailPending.delete(thumbnailKey); return Promise.resolve(); }
+      const temporaryId = owner.temporaryConversation?.temporaryId === workspaceId ? workspaceId : null;
+      const command = temporaryId ? 'read_desktop_temporary_image_preview' : 'read_desktop_image_preview';
+      const args = temporaryId ? { temporaryId, attachmentId, fullSize: false } : { workspaceId, attachmentId, fullSize: false };
+      return withFullSearchDeadline(invoke(command, { args }, owner))
       .then(preview => {
-        state.imageThumbnails = { ...state.imageThumbnails, [attachmentId]: preview };
-        hydrateImageThumbnail(attachmentId, preview);
+        if (state !== owner) return;
+        owner.imageThumbnails = { ...owner.imageThumbnails, [thumbnailKey]: preview };
+        hydrateImageThumbnail(workspaceId, attachmentId, preview);
       })
-      .catch(() => {
+      .catch(error => {
+        if (state !== owner || error?.code === 'STALE_DATA_AREA') return;
         const preview = { error: '本地缩略图不可用' };
-        state.imageThumbnails = { ...state.imageThumbnails, [attachmentId]: preview };
-        hydrateImageThumbnail(attachmentId, preview);
+        owner.imageThumbnails = { ...owner.imageThumbnails, [thumbnailKey]: preview };
+        hydrateImageThumbnail(workspaceId, attachmentId, preview);
       })
-      .finally(() => { state.imageThumbnailPending.delete(thumbnailKey); });
+      .finally(() => { owner.imageThumbnailPending.delete(thumbnailKey); });
     };
+    job.owner = owner;
     job.thumbnailKey = thumbnailKey;
     imageThumbnailQueue.push(job);
     pumpImageThumbnailReads();
@@ -4017,20 +5909,22 @@ function scheduleImageThumbnailReads({ composerOnly = false, retainObserved = fa
   const elements = [...document.querySelectorAll(selector)];
   if (!('IntersectionObserver' in globalThis)) { elements.slice(0, 12).forEach(enqueue); return; }
   if (!imageThumbnailObserver) {
-    imageThumbnailObserver = new IntersectionObserver(entries => {
+    const observer = new IntersectionObserver(entries => {
+      if (generation !== imageThumbnailGeneration) return;
       for (const entry of entries) if (entry.isIntersecting) {
-        imageThumbnailObserver?.unobserve(entry.target);
+        observer.unobserve(entry.target);
         enqueue(entry.target);
       }
     }, { root: state.searchPanel ? document.querySelector('[data-search-scroll-owner]') : null, rootMargin: '160px' });
+    imageThumbnailObserver = observer;
   }
   elements.forEach(element => imageThumbnailObserver.observe(element));
 }
 
-function hydrateImageThumbnail(attachmentId, preview) {
+function hydrateImageThumbnail(workspaceId, attachmentId, preview) {
   if (!preview) return;
   document.querySelectorAll('[data-image-thumbnail]').forEach(element => {
-    if (element.dataset.imageThumbnail !== String(attachmentId)) return;
+    if (element.dataset.imageThumbnail !== String(attachmentId) || element.dataset.thumbnailWorkspaceId !== String(workspaceId)) return;
     const placeholder = element.querySelector('.chat-image-placeholder, .chat-assistant-image-gallery-placeholder, .chat-composer-image-placeholder, .desktop-search-image-preview > .desktop-search-file-preview');
     if (!placeholder) return;
     if (preview.error) {
@@ -4051,7 +5945,7 @@ app.addEventListener('click', event => {
   const element = event.target.closest?.('[data-retry-image-thumbnail]');
   if (!element) return;
   event.preventDefault(); event.stopImmediatePropagation();
-  delete state.imageThumbnails[element.dataset.retryImageThumbnail];
+  delete state.imageThumbnails[attachmentPreviewKey(element.dataset.thumbnailWorkspaceId, element.dataset.retryImageThumbnail)];
   delete element.dataset.retryImageThumbnail;
   const placeholder = element.querySelector('.chat-image-placeholder, .chat-assistant-image-gallery-placeholder, .chat-composer-image-placeholder');
   if (placeholder) placeholder.textContent = '正在读取本地缩略图';
@@ -4063,48 +5957,102 @@ const MAX_VIDEO_THUMBNAIL_READS = 2;
 let videoThumbnailReadQueue = [];
 let videoThumbnailReadsInFlight = 0;
 let videoThumbnailGeneration = 0;
+const videoThumbnailActiveReads = new Map();
+
+function cancelVideoThumbnailJob(job) {
+  if (!job || job.cancelled) return;
+  job.cancelled = true;
+  if (job.requestId != null) {
+    void invokePreviewOwner(job.owner, 'cancel_desktop_video_thumbnail', { requestId: job.requestId }).catch(() => {});
+  }
+}
+
+async function runVideoThumbnailJob(job) {
+  try {
+    const requestId = await invokePreviewOwner(job.owner, 'begin_desktop_video_thumbnail');
+    job.requestId = requestId;
+    if (job.cancelled || state !== job.owner) {
+      await invokePreviewOwner(job.owner, 'cancel_desktop_video_thumbnail', { requestId }).catch(() => {});
+      return;
+    }
+    const preview = await invokePreviewOwner(job.owner, 'read_desktop_video_thumbnail', {
+      args: { workspaceId: job.workspaceId, attachmentId: job.attachmentId },
+      requestId,
+    });
+    if (job.cancelled || state !== job.owner) return;
+    job.owner.videoThumbnails = { ...job.owner.videoThumbnails, [job.thumbnailKey]: preview };
+    hydrateVideoThumbnail(job.workspaceId, job.attachmentId, preview);
+  } catch (error) {
+    if (!job.cancelled && state === job.owner && error?.code !== 'STALE_DATA_AREA') {
+      job.owner.videoThumbnails = {
+        ...job.owner.videoThumbnails,
+        [job.thumbnailKey]: { error: '本地视频缩略图不可用' },
+      };
+    }
+  } finally {
+    if (videoThumbnailActiveReads.get(job.thumbnailKey) === job) {
+      videoThumbnailActiveReads.delete(job.thumbnailKey);
+    }
+    videoThumbnailReadsInFlight = Math.max(0, videoThumbnailReadsInFlight - 1);
+    job.owner.videoThumbnailPending.delete(job.thumbnailKey);
+    pumpVideoThumbnailReads();
+    // The card may have returned while the cancelled native worker was still
+    // releasing its decoder. Re-scan only then so that it is not left blank.
+    const cardReturned = state === job.owner && job.cancelled && [...document.querySelectorAll('[data-video-thumbnail]')].some(element =>
+      element.dataset.videoThumbnail === String(job.attachmentId)
+      && element.dataset.thumbnailWorkspaceId === String(job.workspaceId));
+    if (cardReturned) {
+      queueMicrotask(scheduleVideoThumbnailReads);
+    }
+  }
+}
 
 function pumpVideoThumbnailReads() {
   while (videoThumbnailReadsInFlight < MAX_VIDEO_THUMBNAIL_READS && videoThumbnailReadQueue.length) {
     const job = videoThumbnailReadQueue.shift();
-    if (job.generation !== videoThumbnailGeneration) {
-      state.videoThumbnailPending.delete(job.thumbnailKey);
+    if (state !== job.owner || job.cancelled || job.generation !== videoThumbnailGeneration) {
+      job.owner.videoThumbnailPending.delete(job.thumbnailKey);
       continue;
     }
     videoThumbnailReadsInFlight += 1;
-    invoke('read_desktop_video_thumbnail', { args: { workspaceId: job.workspaceId, attachmentId: job.attachmentId } })
-      .then(preview => {
-        state.videoThumbnails = { ...state.videoThumbnails, [job.attachmentId]: preview };
-        hydrateVideoThumbnail(job.attachmentId, preview);
-      })
-      .catch(() => {
-        state.videoThumbnails = { ...state.videoThumbnails, [job.attachmentId]: { error: '本地视频缩略图不可用' } };
-      })
-      .finally(() => {
-        videoThumbnailReadsInFlight = Math.max(0, videoThumbnailReadsInFlight - 1);
-        state.videoThumbnailPending.delete(job.thumbnailKey);
-        pumpVideoThumbnailReads();
-      });
+    videoThumbnailActiveReads.set(job.thumbnailKey, job);
+    void runVideoThumbnailJob(job);
   }
 }
 
 function scheduleVideoThumbnailReads() {
+  const owner = state;
   videoThumbnailObserver?.disconnect();
   videoThumbnailObserver = null;
   videoThumbnailGeneration += 1;
-  videoThumbnailReadQueue.forEach(job => state.videoThumbnailPending.delete(job.thumbnailKey));
-  videoThumbnailReadQueue = [];
+  const cards = native && !state.videoPreview ? [...document.querySelectorAll('[data-video-thumbnail]')] : [];
+  const currentKeys = new Set(cards.map(card => attachmentPreviewKey(card.dataset.thumbnailWorkspaceId, card.dataset.videoThumbnail)));
+  videoThumbnailReadQueue = videoThumbnailReadQueue.filter(job => {
+    if (job.owner === owner && currentKeys.has(job.thumbnailKey)) {
+      job.generation = videoThumbnailGeneration;
+      return true;
+    }
+    job.cancelled = true;
+    job.owner.videoThumbnailPending.delete(job.thumbnailKey);
+    return false;
+  });
+  for (const [thumbnailKey, job] of videoThumbnailActiveReads) {
+    if (job.owner !== owner || !currentKeys.has(thumbnailKey)) cancelVideoThumbnailJob(job);
+  }
   if (!native || state.videoPreview) return;
-  const cards = [...document.querySelectorAll('[data-video-thumbnail]')];
   if (!cards.length) return;
   const generation = videoThumbnailGeneration;
   const enqueue = element => {
+    if (state !== owner || generation !== videoThumbnailGeneration || !element.isConnected) return;
     const attachmentId = element.dataset.videoThumbnail;
-    const workspaceId = element.dataset.thumbnailWorkspaceId || state.current?.summary?.id;
-    const thumbnailKey = `${workspaceId || 'unknown'}:${attachmentId || 'unknown'}`;
-    if (!workspaceId || !attachmentId || state.videoThumbnails[attachmentId] || state.videoThumbnailPending.has(thumbnailKey)) return;
+    const workspaceId = element.dataset.thumbnailWorkspaceId;
+    const thumbnailKey = attachmentPreviewKey(workspaceId, attachmentId);
+    if (!workspaceId || !attachmentId) return;
+    const cached = state.videoThumbnails[thumbnailKey];
+    if (cached) { hydrateVideoThumbnail(workspaceId, attachmentId, cached); return; }
+    if (state.videoThumbnailPending.has(thumbnailKey)) return;
     state.videoThumbnailPending.add(thumbnailKey);
-    videoThumbnailReadQueue.push({ attachmentId, workspaceId, thumbnailKey, generation });
+    videoThumbnailReadQueue.push({ owner, attachmentId, workspaceId, thumbnailKey, generation, requestId: null, cancelled: false });
     pumpVideoThumbnailReads();
   };
   if (!('IntersectionObserver' in globalThis)) {
@@ -4114,19 +6062,21 @@ function scheduleVideoThumbnailReads() {
   const root = state.searchPanel
     ? document.querySelector('[data-search-scroll-owner]')
     : document.querySelector('.chat-scroll[data-scroll-owner="message-list"]');
-  videoThumbnailObserver = new IntersectionObserver(entries => {
+  const observer = new IntersectionObserver(entries => {
+    if (generation !== videoThumbnailGeneration) return;
     entries.filter(entry => entry.isIntersecting).forEach(entry => {
-      videoThumbnailObserver?.unobserve(entry.target);
+      observer.unobserve(entry.target);
       enqueue(entry.target);
     });
   }, { root, rootMargin: '160px 0px' });
-  cards.forEach(card => videoThumbnailObserver.observe(card));
+  videoThumbnailObserver = observer;
+  cards.forEach(card => observer.observe(card));
 }
 
-function hydrateVideoThumbnail(attachmentId, preview) {
+function hydrateVideoThumbnail(workspaceId, attachmentId, preview) {
   if (!preview?.dataUrl) return;
   document.querySelectorAll('[data-video-thumbnail]').forEach(element => {
-    if (element.dataset.videoThumbnail !== String(attachmentId)) return;
+    if (element.dataset.videoThumbnail !== String(attachmentId) || element.dataset.thumbnailWorkspaceId !== String(workspaceId)) return;
     const placeholder = element.querySelector('.desktop-search-video-preview > .desktop-search-file-preview, .chat-video-frame > .chat-file-preview-fallback');
     if (!placeholder) return;
     const image = document.createElement('img');
@@ -4142,10 +6092,10 @@ let searchAttachmentPreviewReadsInFlight = 0;
 let searchAttachmentPreviewGeneration = 0;
 const MAX_SEARCH_ATTACHMENT_PREVIEW_READS = 2;
 
-function hydrateAttachmentCardPreview(attachmentId, preview) {
+function hydrateAttachmentCardPreview(workspaceId, attachmentId, preview) {
   document.querySelectorAll('[data-search-attachment-preview], [data-chat-attachment-preview]').forEach(element => {
     const requestedId = element.dataset.searchAttachmentPreview || element.dataset.chatAttachmentPreview;
-    if (requestedId !== String(attachmentId)) return;
+    if (requestedId !== String(attachmentId) || element.dataset.thumbnailWorkspaceId !== String(workspaceId)) return;
     if (Number(preview?.durationMillis) > 0) {
       const duration = Math.floor(Number(preview.durationMillis) / 1000);
       const time = element.querySelector('.desktop-search-audio-heading time, .chat-audio-heading time');
@@ -4185,44 +6135,54 @@ function hydrateAttachmentCardPreview(attachmentId, preview) {
 function pumpSearchAttachmentPreviewReads() {
   while (searchAttachmentPreviewReadsInFlight < MAX_SEARCH_ATTACHMENT_PREVIEW_READS && searchAttachmentPreviewQueue.length) {
     const job = searchAttachmentPreviewQueue.shift();
-    if (job.generation !== searchAttachmentPreviewGeneration) {
-      state.searchAttachmentPreviewPending.delete(job.previewKey);
+    if (state !== job.owner || job.generation !== searchAttachmentPreviewGeneration) {
+      job.owner.searchAttachmentPreviewPending.delete(job.previewKey);
       continue;
     }
     searchAttachmentPreviewReadsInFlight += 1;
-    invoke('read_desktop_search_attachment_preview', { args: { workspaceId: job.workspaceId, attachmentId: job.attachmentId } })
+    invoke('read_desktop_search_attachment_preview', { args: { workspaceId: job.workspaceId, attachmentId: job.attachmentId } }, job.owner)
       .then(preview => {
-        state.searchAttachmentPreviews = { ...state.searchAttachmentPreviews, [job.attachmentId]: preview };
-        hydrateAttachmentCardPreview(job.attachmentId, preview);
+        if (state !== job.owner) return;
+        job.owner.searchAttachmentPreviews = { ...job.owner.searchAttachmentPreviews, [job.previewKey]: preview };
+        // Renders replace DOM nodes while the same read remains in flight.
+        // Match current nodes by both owners instead of discarding useful work
+        // solely because the render generation changed.
+        hydrateAttachmentCardPreview(job.workspaceId, job.attachmentId, preview);
       })
-      .catch(() => {
-        state.searchAttachmentPreviews = { ...state.searchAttachmentPreviews, [job.attachmentId]: { error: '本地附件预览不可用' } };
+      .catch(error => {
+        if (state !== job.owner || error?.code === 'STALE_DATA_AREA') return;
+        job.owner.searchAttachmentPreviews = { ...job.owner.searchAttachmentPreviews, [job.previewKey]: { error: '本地附件预览不可用' } };
       })
       .finally(() => {
         searchAttachmentPreviewReadsInFlight = Math.max(0, searchAttachmentPreviewReadsInFlight - 1);
-        state.searchAttachmentPreviewPending.delete(job.previewKey);
+        job.owner.searchAttachmentPreviewPending.delete(job.previewKey);
         pumpSearchAttachmentPreviewReads();
       });
   }
 }
 
 function scheduleAttachmentCardPreviewReads() {
+  const owner = state;
   searchAttachmentPreviewObserver?.disconnect();
   searchAttachmentPreviewObserver = null;
   searchAttachmentPreviewGeneration += 1;
-  searchAttachmentPreviewQueue.forEach(job => state.searchAttachmentPreviewPending.delete(job.previewKey));
+  searchAttachmentPreviewQueue.forEach(job => job.owner.searchAttachmentPreviewPending.delete(job.previewKey));
   searchAttachmentPreviewQueue = [];
   if (!native) return;
   const cards = [...document.querySelectorAll('[data-search-attachment-preview], [data-chat-attachment-preview]')];
   if (!cards.length) return;
   const generation = searchAttachmentPreviewGeneration;
   const enqueue = element => {
+    if (state !== owner || generation !== searchAttachmentPreviewGeneration || !element.isConnected) return;
     const attachmentId = element.dataset.searchAttachmentPreview || element.dataset.chatAttachmentPreview;
-    const workspaceId = element.dataset.thumbnailWorkspaceId || state.current?.summary?.id;
-    const previewKey = `${workspaceId || 'unknown'}:${attachmentId || 'unknown'}`;
-    if (!workspaceId || !attachmentId || state.searchAttachmentPreviews[attachmentId] || state.searchAttachmentPreviewPending.has(previewKey)) return;
+    const workspaceId = element.dataset.thumbnailWorkspaceId;
+    if (!workspaceId || !attachmentId) return;
+    const previewKey = attachmentPreviewKey(workspaceId, attachmentId);
+    const cached = state.searchAttachmentPreviews[previewKey];
+    if (cached) { hydrateAttachmentCardPreview(workspaceId, attachmentId, cached); return; }
+    if (state.searchAttachmentPreviewPending.has(previewKey)) return;
     state.searchAttachmentPreviewPending.add(previewKey);
-    searchAttachmentPreviewQueue.push({ attachmentId, workspaceId, previewKey, generation });
+    searchAttachmentPreviewQueue.push({ owner, attachmentId, workspaceId, previewKey, generation });
     pumpSearchAttachmentPreviewReads();
   };
   if (!('IntersectionObserver' in globalThis)) {
@@ -4232,13 +6192,15 @@ function scheduleAttachmentCardPreviewReads() {
   const root = state.searchPanel
     ? document.querySelector('[data-search-scroll-owner]')
     : document.querySelector('.chat-scroll[data-scroll-owner="message-list"]');
-  searchAttachmentPreviewObserver = new IntersectionObserver(entries => {
+  const observer = new IntersectionObserver(entries => {
+    if (generation !== searchAttachmentPreviewGeneration) return;
     entries.filter(entry => entry.isIntersecting).forEach(entry => {
-      searchAttachmentPreviewObserver?.unobserve(entry.target);
+      observer.unobserve(entry.target);
       enqueue(entry.target);
     });
   }, { root, rootMargin: '160px 0px' });
-  cards.forEach(card => searchAttachmentPreviewObserver.observe(card));
+  searchAttachmentPreviewObserver = observer;
+  cards.forEach(card => observer.observe(card));
 }
 
 async function openAttachmentPreview(attachment, workspaceId = state.current?.summary?.id) {
@@ -4269,8 +6231,8 @@ const imagePreviewPayloadCache = new Map();
 const MAX_IMAGE_PREVIEW_PAYLOAD_CACHE_ENTRIES = 2;
 let imagePreviewLoadRequest = null;
 
-function imagePreviewPayloadKey(workspaceId, attachmentId) {
-  return `${workspaceId}:${attachmentId}`;
+function imagePreviewPayloadKey(dataArea, workspaceId, attachmentId) {
+  return `${dataArea}:${workspaceId}:${attachmentId}`;
 }
 
 function retainImagePreviewPayload(key, payload) {
@@ -4298,19 +6260,22 @@ async function decodeImagePreviewPayload(dataUrl) {
   await loaded;
 }
 
-function loadImagePreviewPayload(workspaceId, attachmentId) {
-  const key = imagePreviewPayloadKey(workspaceId, attachmentId);
+function loadImagePreviewPayload(owner, workspaceId, attachmentId) {
+  const key = imagePreviewPayloadKey(owner.dataArea, workspaceId, attachmentId);
   const cached = imagePreviewPayloadCache.get(key);
   if (cached) {
     retainImagePreviewPayload(key, cached);
     return cached;
   }
-  const request = invoke('read_desktop_image_preview', { args: { workspaceId, attachmentId, fullSize: true } })
+  const temporaryId = owner.temporaryConversation?.temporaryId === workspaceId ? workspaceId : null;
+  const command = temporaryId ? 'read_desktop_temporary_image_preview' : 'read_desktop_image_preview';
+  const args = temporaryId ? { temporaryId, attachmentId, fullSize: true } : { workspaceId, attachmentId, fullSize: true };
+  const request = invoke(command, { args }, owner)
     .then(async result => {
       await decodeImagePreviewPayload(result.dataUrl);
       return result;
     })
-    .catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
+    .catch(error => {
       if (imagePreviewPayloadCache.get(key) === request) imagePreviewPayloadCache.delete(key);
       throw error;
     });
@@ -4318,14 +6283,14 @@ function loadImagePreviewPayload(workspaceId, attachmentId) {
   return request;
 }
 
-function warmImagePreviewNeighbors(preview) {
+function warmImagePreviewNeighbors(preview, owner) {
   if (!preview?.dataUrl || !preview.workspaceId || !preview.attachmentId) return;
   const navigation = imagePreviewNavigation(preview.imageIds, preview.attachmentId);
   const neighbors = [navigation.nextId, navigation.previousId].filter(Boolean);
   if (!neighbors.length) return;
   const warm = () => {
-    if (state.imagePreview?.attachmentId !== preview.attachmentId || state.imagePreview?.workspaceId !== preview.workspaceId) return;
-    neighbors.forEach(attachmentId => { void loadImagePreviewPayload(preview.workspaceId, attachmentId).catch(() => {}); });
+    if (state !== owner || state.imagePreview?.attachmentId !== preview.attachmentId || state.imagePreview?.workspaceId !== preview.workspaceId) return;
+    neighbors.forEach(attachmentId => { void loadImagePreviewPayload(owner, preview.workspaceId, attachmentId).catch(() => {}); });
   };
   if (typeof requestIdleCallback === 'function') requestIdleCallback(warm, { timeout: 700 });
   else setTimeout(warm, 0);
@@ -4337,12 +6302,13 @@ function cancelImagePreviewLoad() {
 
 async function openImagePreview(attachmentId, workspaceId = state.current?.summary?.id, imageIds = relatedImageIds(currentConversation(), attachmentId)) {
   if (!native || !workspaceId || !attachmentId) return;
+  const owner = state;
   const normalizedAttachmentId = String(attachmentId);
   const normalizedImageIds = Array.isArray(imageIds) ? imageIds.map(String) : [];
   const safeImageIds = normalizedImageIds.includes(normalizedAttachmentId) ? normalizedImageIds : [normalizedAttachmentId];
-  if (imagePreviewLoadRequest?.attachmentId === normalizedAttachmentId && imagePreviewLoadRequest.workspaceId === workspaceId) return;
+  if (imagePreviewLoadRequest?.owner === owner && imagePreviewLoadRequest.attachmentId === normalizedAttachmentId && imagePreviewLoadRequest.workspaceId === workspaceId) return;
   const previousPreview = state.imagePreview?.dataUrl ? state.imagePreview : null;
-  const request = { attachmentId: normalizedAttachmentId, workspaceId, imageIds: safeImageIds };
+  const request = { owner, attachmentId: normalizedAttachmentId, workspaceId, imageIds: safeImageIds };
   imagePreviewLoadRequest = request;
   // Keep the current decoded frame in place while the next original is read.
   // Initial opening still has an honest loading state.
@@ -4351,12 +6317,18 @@ async function openImagePreview(attachmentId, workspaceId = state.current?.summa
     render();
   }
   try {
-    const result = await loadImagePreviewPayload(workspaceId, normalizedAttachmentId);
-    if (imagePreviewLoadRequest !== request) return;
+    const result = await loadImagePreviewPayload(owner, workspaceId, normalizedAttachmentId);
+    if (imagePreviewLoadRequest !== request || state !== owner) {
+      if (imagePreviewLoadRequest === request) imagePreviewLoadRequest = null;
+      return;
+    }
     imagePreviewLoadRequest = null;
     state.imagePreview = { ...result, ...request, zoom: 1, panX: 0, panY: 0, navigationError: '' };
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    if (imagePreviewLoadRequest !== request) return;
+  } catch (error) {
+    if (imagePreviewLoadRequest !== request || state !== owner) {
+      if (imagePreviewLoadRequest === request) imagePreviewLoadRequest = null;
+      return;
+    }
     imagePreviewLoadRequest = null;
     // A failed adjacent read must not blank the image already being viewed.
     state.imagePreview = previousPreview
@@ -4364,7 +6336,7 @@ async function openImagePreview(attachmentId, workspaceId = state.current?.summa
       : { error: '本地原图不可用或校验失败。', ...request };
   }
   render();
-  if (state.imagePreview?.dataUrl) warmImagePreviewNeighbors(state.imagePreview);
+  if (state.imagePreview?.dataUrl) warmImagePreviewNeighbors(state.imagePreview, owner);
 }
 
 let imagePanGesture = null;
@@ -4458,13 +6430,39 @@ app.addEventListener('wheel', event => {
   applyImagePreviewTransform(viewport);
 }, { passive: false });
 
+let pdfPreviewPreparation = Promise.resolve();
+const invokePreviewOwner = (owner, command, args = {}) =>
+  invokeForAuthorizedDataAreaOperation(tauriBridge, command, args, owner);
+function cancelPdfPreviewLoad() {
+  const owner = state;
+  const requestId = state.pdfPreview?.request?.id;
+  state.pdfPreview = null;
+  if (native && requestId) void invokePreviewOwner(owner, 'cancel_desktop_pdf_preview', { requestId }).catch(() => {});
+}
+
 async function openPdfPreview(attachmentId, pageNumber = undefined, workspaceId = state.current?.summary?.id) {
   if (!native || !workspaceId || !attachmentId) return;
-  state.pdfPreview = { loading: true }; render();
+  const owner = state;
+  cancelPdfPreviewLoad();
+  const request = {};
+  state.pdfPreview = { loading: true, request }; render();
   try {
-    state.pdfPreview = { ...await invoke('read_desktop_pdf_preview', { args: { workspaceId, attachmentId, pageNumber } }), workspaceId };
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    // Serialize only native ID allocation. Old readers are cancelled separately;
+    // their slow render must not delay the newest reader's cancellation handle.
+    const preparation = pdfPreviewPreparation.catch(() => {}).then(() => invokePreviewOwner(owner, 'begin_desktop_pdf_preview'));
+    pdfPreviewPreparation = preparation;
+    request.id = await preparation;
+    if (state !== owner || state.pdfPreview?.request !== request) return;
+    const preview = await invoke('read_desktop_pdf_preview', { requestId: request.id, args: { workspaceId, attachmentId, pageNumber } }, owner);
+    if (state !== owner || state.pdfPreview?.request !== request) return;
+    state.pdfPreview = { ...preview, workspaceId };
+  } catch (error) {
+    if (state !== owner || state.pdfPreview?.request !== request) return;
     state.pdfPreview = { error: '本地 PDF 不可用或校验失败。' };
+  } finally {
+    // Also releases a reservation if the panel closed before begin returned or
+    // the read was rejected before its Rust worker started.
+    if (request.id) void invokePreviewOwner(owner, 'cancel_desktop_pdf_preview', { requestId: request.id }).catch(() => {});
   }
   render();
 }
@@ -4491,106 +6489,190 @@ app.addEventListener('wheel', event => {
   }
 }, { passive: false });
 
-function persistVideoPreviewPosition(force = false) {
-  const preview = state.videoPreview;
-  const video = document.querySelector('[data-video-preview]');
-  if (!native || !preview?.attachmentId || !preview.workspaceId || !video?.isConnected || !preview.resumeReady || video.readyState < 1) return;
-  const positionMillis = Math.max(0, Math.round(video.currentTime * 1000));
-  if (!Number.isFinite(positionMillis)) return;
-  preview.lastPlaybackPositionMillis = positionMillis;
-  if (!force && Date.now() - (preview.lastResumeSaveAt || 0) < 2000) return;
-  preview.lastResumeSaveAt = Date.now();
-  const args = { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis };
-  // Serialize writes so an older checkpoint cannot replace a later seek.
-  videoResumeWrite = videoResumeWrite.catch(() => {}).then(() => invoke('save_desktop_video_preview_position', { args }));
-  void videoResumeWrite.catch(() => {});
-}
 let videoResumeWrite = Promise.resolve();
-
+function enqueueVideoPreviewPosition(owner, preview, positionMillis) {
+  if (!preview?.attachmentId || !preview.workspaceId || !Number.isFinite(positionMillis) || positionMillis < 0) return videoResumeWrite;
+  const args = { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis: Math.round(positionMillis) };
+  videoResumeWrite = videoResumeWrite.catch(() => {}).then(() => invokePreviewOwner(owner, 'save_desktop_video_preview_position', { args }));
+  void videoResumeWrite.catch(() => {});
+  return videoResumeWrite;
+}
+function ownsVideoPreview(owner, preview, video) {
+  return state === owner && owner.videoPreview === preview && video?.isConnected
+    && document.querySelector('[data-video-preview]') === video;
+}
+function persistVideoPreviewPosition(force = false) {
+  const owner = state, preview = owner.videoPreview;
+  const video = document.querySelector('[data-video-preview]');
+  if (!native || !preview?.resumeReady || !ownsVideoPreview(owner, preview, video) || video.readyState < 1) return videoResumeWrite;
+  const positionMillis = Math.max(0, Math.round(video.currentTime * 1000));
+  if (!Number.isFinite(positionMillis)) return videoResumeWrite;
+  preview.lastPlaybackPositionMillis = positionMillis;
+  if (!force && preview.lastResumeSaveAt != null && Date.now() - preview.lastResumeSaveAt < 2000) return videoResumeWrite;
+  preview.lastResumeSaveAt = Date.now();
+  return enqueueVideoPreviewPosition(owner, preview, positionMillis);
+}
+function seekVideoPreviewPosition(positionMillis) {
+  const owner = state, preview = owner.videoPreview;
+  const video = document.querySelector('[data-video-preview]');
+  if (!preview || !ownsVideoPreview(owner, preview, video) || !Number.isFinite(positionMillis)) return;
+  preview.pendingSeekMillis = Math.max(0, positionMillis);
+  if (!preview.resumeReady || video.readyState < 1) return;
+  video.currentTime = Math.min(preview.pendingSeekMillis / 1000, Math.max(0, video.duration || preview.pendingSeekMillis / 1000));
+  syncPreviewPlaybackUi('video', video);
+  void persistVideoPreviewPosition(true).catch(() => {});
+}
+function checkpointVideoOnExit() {
+  void persistVideoPreviewPosition(true).catch(() => {});
+  document.querySelector('[data-video-preview]')?.pause();
+  return videoResumeWrite.catch(() => {});
+}
 async function openVideoPreview(attachmentId, positionMillis = undefined, workspaceId = state.current?.summary?.id) {
   if (!native || !workspaceId || !attachmentId) return;
-  const request = {};
-  state.videoPreview = { loading: true, request }; render();
+  const owner = state, request = {};
+  owner.videoPreviewOpening = request;
+  if (owner.videoPreview) await closeVideoPreview({ openingRequest: request });
+  if (state !== owner || owner.videoPreviewOpening !== request) return;
+  owner.videoPreview = { loading: true, request, workspaceId, attachmentId }; render();
+  let preview;
   try {
-    const preview = await invoke('read_desktop_video_preview', { args: { workspaceId, attachmentId, positionMillis } });
-    if (state.videoPreview?.request !== request) return;
-    if (!preview?.attachmentId || !preview?.mediaUrl || !Number.isFinite(Number(preview.byteCount)) || !Number.isFinite(Number(preview.durationMillis))) throw new Error('本地视频预览状态无效');
-    state.videoPreview = { ...preview, workspaceId };
+    // A close/seek already authorized in this renderer must commit before a
+    // same-attachment reopen reads the persisted checkpoint.
+    await videoResumeWrite.catch(() => {});
+    if (state !== owner || owner.videoPreview?.request !== request) return;
+    const value = await invoke('read_desktop_video_preview', { args: { workspaceId, attachmentId, positionMillis } }, owner);
+    if (state !== owner || owner.videoPreview?.request !== request) return;
+    if (!value?.attachmentId || !value?.mediaUrl || !Number.isFinite(Number(value.byteCount)) || !Number.isFinite(Number(value.durationMillis))) throw new Error('本地视频预览状态无效');
+    preview = owner.videoPreview = { ...value, workspaceId };
+  } catch (_) {
+    if (state !== owner || owner.videoPreview?.request !== request) return;
+    owner.videoPreview = { error: '本地视频不可用、已损坏或校验失败。' }; render(); return;
   }
-  catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (state.videoPreview?.request !== request) return; state.videoPreview = { error: '本地视频不可用、已损坏或校验失败。' }; }
   render();
-  const restorePosition = Math.max(0, Number(state.videoPreview?.positionMillis) || 0) / 1000;
   queueMicrotask(() => {
     const video = document.querySelector('[data-video-preview]');
-    if (!video || state.videoPreview?.attachmentId !== attachmentId || state.videoPreview?.workspaceId !== workspaceId) return;
-    const syncVideoUi = () => syncPreviewPlaybackUi('video', video);
+    if (!ownsVideoPreview(owner, preview, video)) return;
+    const current = () => ownsVideoPreview(owner, preview, video);
+    const syncVideoUi = () => { if (current()) syncPreviewPlaybackUi('video', video); };
     const restoreAndPlay = async () => {
-      if (!video.isConnected || state.videoPreview?.attachmentId !== attachmentId || state.videoPreview?.workspaceId !== workspaceId) return;
-      const desiredPosition = (state.videoPreview.pendingSeekMillis ?? restorePosition * 1000) / 1000;
-      if (desiredPosition >= 0) video.currentTime = Math.min(desiredPosition, Math.max(0, video.duration || desiredPosition));
-      state.videoPreview.resumeReady = true;
+      if (!current() || video.readyState < 1) return;
+      const desiredPosition = Math.max(0, Number(preview.pendingSeekMillis ?? preview.positionMillis) || 0) / 1000;
+      try { video.currentTime = Math.min(desiredPosition, Math.max(0, video.duration || desiredPosition)); }
+      catch (_) { return; }
+      preview.resumeReady = true;
+      preview.lastPlaybackPositionMillis = Math.max(0, Math.round(video.currentTime * 1000));
       try { if (!document.hidden) await video.play(); }
-      catch (_) { video.dataset.autoplayFailed = 'true'; }
+      catch (_) { if (current()) video.dataset.autoplayFailed = 'true'; }
       syncVideoUi();
     };
     if (video.readyState >= 1) void restoreAndPlay();
     else video.addEventListener('loadedmetadata', () => { void restoreAndPlay(); }, { once: true });
-    video?.addEventListener('timeupdate', () => {
-      if (!video.isConnected || state.videoPreview?.attachmentId !== attachmentId || state.videoPreview?.workspaceId !== workspaceId) return;
-      const milliseconds = Math.round(video.currentTime * 1000);
-      syncVideoUi();
-      if (state.videoPreview.resumeReady) state.videoPreview.lastPlaybackPositionMillis = milliseconds;
-      persistVideoPreviewPosition();
-    });
+    video.addEventListener('timeupdate', () => { if (current()) { syncVideoUi(); void persistVideoPreviewPosition().catch(() => {}); } });
     video.addEventListener('play', syncVideoUi);
-    video.addEventListener('pause', () => { syncVideoUi(); persistVideoPreviewPosition(true); });
-    video.addEventListener('seeked', () => persistVideoPreviewPosition(true));
+    video.addEventListener('pause', () => { if (current()) { syncVideoUi(); void persistVideoPreviewPosition(true).catch(() => {}); } });
+    video.addEventListener('seeked', () => { if (current()) void persistVideoPreviewPosition(true).catch(() => {}); });
+    let errorHandled = false;
+    const handleVideoError = () => {
+      if (errorHandled || !current()) return;
+      errorHandled = true;
+      owner.videoPreview = { ...preview, mediaUrl: '', error: '当前系统无法解码此视频。' }; render();
+    };
+    video.addEventListener('error', handleVideoError, { once: true });
+    if (video.error) handleVideoError();
   });
 }
-
-async function closeVideoPreview() {
+async function closeVideoPreview({ openingRequest = null } = {}) {
+  const owner = state, preview = owner.videoPreview;
+  owner.videoPreviewOpening = openingRequest;
   const video = document.querySelector('[data-video-preview]');
-  const preview = state.videoPreview;
-  const currentPosition = preview?.resumeReady && video?.readyState >= 1 ? Math.round(video.currentTime * 1000) : undefined;
-  const positionMillis = currentPosition ?? preview?.lastPlaybackPositionMillis ?? preview?.positionMillis ?? 0;
-  state.videoPreview = null;
+  const currentPosition = preview?.resumeReady && ownsVideoPreview(owner, preview, video) && video.readyState >= 1
+    ? Math.round(video.currentTime * 1000) : undefined;
+  // Before metadata restoration, the persisted position already remains intact.
+  // Do not manufacture a new zero checkpoint from an uninitialized element.
+  const positionMillis = currentPosition ?? preview?.lastPlaybackPositionMillis;
+  owner.videoPreview = null;
+  if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
   render();
-  if (!preview?.attachmentId || !preview.workspaceId) return;
-  try { await (videoResumeWrite = videoResumeWrite.catch(() => {}).then(() => invoke('save_desktop_video_preview_position', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis } }))); }
-  catch (_) { /* Closing an overlay never waits for a non-critical resume write. */ }
+  if (!Number.isFinite(positionMillis) || positionMillis < 0) return;
+  try { await enqueueVideoPreviewPosition(owner, preview, positionMillis); }
+  catch (_) { /* Resume failure never blocks closing the overlay. */ }
 }
 
+let audioResumeWrite = Promise.resolve();
+function enqueueAudioPreviewPosition(owner, preview, positionMillis) {
+  if (!preview?.attachmentId || !preview.workspaceId || !Number.isFinite(positionMillis) || positionMillis < 0) return audioResumeWrite;
+  const args = { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis };
+  audioResumeWrite = audioResumeWrite.catch(() => {}).then(() => invokePreviewOwner(owner, 'save_desktop_audio_preview_position', { args }));
+  void audioResumeWrite.catch(() => {});
+  return audioResumeWrite;
+}
+function checkpointAudioOnExit() {
+  const owner = state, preview = owner.audioPreview;
+  const audio = document.querySelector('[data-audio-preview]');
+  if (native && preview && ownsAudioPreview(owner, preview, audio)) {
+    if (preview?.resumeReady && audio.readyState >= 1) {
+      const positionMillis = Math.round(audio.currentTime * 1000);
+      if (Number.isFinite(positionMillis) && positionMillis >= 0) {
+        preview.lastPlaybackPositionMillis = positionMillis;
+        void enqueueAudioPreviewPosition(owner, preview, positionMillis);
+      }
+    }
+    audio.pause();
+  }
+  return audioResumeWrite.catch(() => {});
+}
+function ownsAudioPreview(owner, preview, audio) {
+  return state === owner && owner.audioPreview === preview && audio?.isConnected
+    && document.querySelector('[data-audio-preview]') === audio;
+}
 async function openAudioPreview(attachmentId, positionMillis = undefined, workspaceId = state.current?.summary?.id) {
   if (!native || !workspaceId || !attachmentId) return;
-  const request = {};
-  state.audioPreview = { loading: true, request }; render();
+  const owner = state, request = {};
+  owner.audioPreviewOpening = request;
+  if (owner.audioPreview) await closeAudioPreview({ openingRequest: request });
+  if (state !== owner || owner.audioPreviewOpening !== request) return;
+  owner.audioPreview = { loading: true, request, workspaceId, attachmentId }; render();
+  let preview;
   try {
-    const preview = await invoke('read_desktop_audio_preview', { args: { workspaceId, attachmentId, positionMillis } });
-    if (state.audioPreview?.request !== request) return;
-    if (!preview?.attachmentId || !preview?.mediaUrl) throw new Error('本地音频预览状态无效');
-    state.audioPreview = { ...preview, workspaceId };
+    await audioResumeWrite.catch(() => {});
+    if (state !== owner || owner.audioPreview?.request !== request) return;
+    const value = await invoke('read_desktop_audio_preview', { args: { workspaceId, attachmentId, positionMillis } }, owner);
+    if (state !== owner || owner.audioPreview?.request !== request) return;
+    if (!value?.attachmentId || !value?.mediaUrl) throw new Error('本地音频预览状态无效');
+    preview = owner.audioPreview = { ...value, workspaceId };
+  } catch (_) {
+    if (state !== owner || owner.audioPreview?.request !== request) return;
+    owner.audioPreview = { error: '本地音频不可用、已损坏或校验失败。' }; render(); return;
   }
-  catch (_) { if (state.audioPreview?.request !== request) return; state.audioPreview = { error: '本地音频不可用、已损坏或校验失败。' }; }
   render();
   queueMicrotask(() => {
     const audio = document.querySelector('[data-audio-preview]');
-    const syncAudioUi = () => syncPreviewPlaybackUi('audio', audio);
+    const current = () => ownsAudioPreview(owner, preview, audio);
+    if (!current()) return;
+    const syncAudioUi = () => { if (current()) syncPreviewPlaybackUi('audio', audio); };
     const seekAndPlay = async () => {
-      if (!audio) return;
-      audio.currentTime = Math.min(Math.max(0, Number(state.audioPreview?.positionMillis) || 0) / 1000, Math.max(0, audio.duration || 0));
+      if (!current() || audio.readyState < 1) return;
+      const desiredPosition = Math.max(0, Number(preview.positionMillis) || 0) / 1000;
+      try { audio.currentTime = Math.min(desiredPosition, Math.max(0, audio.duration || desiredPosition)); }
+      catch (_) { return; }
+      preview.resumeReady = true;
+      preview.lastPlaybackPositionMillis = Math.max(0, Math.round(audio.currentTime * 1000));
       try { await audio.play(); }
-      catch (_) { audio.dataset.autoplayFailed = 'true'; }
+      catch (_) { if (current()) audio.dataset.autoplayFailed = 'true'; }
       syncAudioUi();
     };
-    if (audio?.readyState >= 1) void seekAndPlay(); else audio?.addEventListener('loadedmetadata', () => { void seekAndPlay(); }, { once: true });
-    audio?.addEventListener('timeupdate', () => { if (!audio.isConnected || state.audioPreview?.attachmentId !== attachmentId || state.audioPreview?.workspaceId !== workspaceId) return; const ms = Math.round(audio.currentTime * 1000); syncAudioUi(); if (ms > 0 && ms < Math.round(audio.duration * 1000)) state.audioPreview = { ...state.audioPreview, lastPlaybackPositionMillis: ms }; });
-    audio?.addEventListener('play', syncAudioUi);
-    audio?.addEventListener('pause', syncAudioUi);
-    audio?.addEventListener('error', () => {
-      const active = state.audioPreview;
-      if (!active || active.attachmentId !== attachmentId) return;
-      state.audioPreview = { ...active, mediaUrl: '', error: '当前系统无法解码此音频。' };
-      render();
+    if (audio.readyState >= 1) void seekAndPlay(); else audio.addEventListener('loadedmetadata', () => { void seekAndPlay(); }, { once: true });
+    audio.addEventListener('timeupdate', () => {
+      if (!current() || !preview.resumeReady) return;
+      const ms = Math.round(audio.currentTime * 1000);
+      syncAudioUi();
+      if (Number.isFinite(ms) && ms >= 0 && ms < Math.round(audio.duration * 1000)) preview.lastPlaybackPositionMillis = ms;
+    });
+    audio.addEventListener('play', syncAudioUi);
+    audio.addEventListener('pause', syncAudioUi);
+    audio.addEventListener('error', () => {
+      if (!current()) return;
+      preview.mediaUrl = ''; preview.error = '当前系统无法解码此音频。'; render();
     }, { once: true });
   });
 }
@@ -4602,6 +6684,7 @@ function syncPreviewPlaybackUi(kind, media) {
   const range = document.querySelector(`[data-${kind}-preview-range]`);
   const elapsed = document.querySelector(`[data-${kind}-preview-elapsed]`);
   const duration = document.querySelector(`[data-${kind}-preview-duration]`);
+  const durationNote = kind === 'video' ? document.querySelector('[data-video-preview-duration-note]') : null;
   const toggle = document.querySelector(`button[data-action="toggle-${kind}-playback"]`);
   if (range) {
     const positionMillis = Math.min(currentMillis, durationMillis);
@@ -4619,6 +6702,7 @@ function syncPreviewPlaybackUi(kind, media) {
   }
   if (elapsed) elapsed.textContent = formatDuration(currentMillis);
   if (duration) duration.textContent = formatDuration(durationMillis);
+  if (durationNote) durationNote.textContent = formatDuration(durationMillis);
   if (toggle) {
     const paused = media.paused;
     toggle.setAttribute('aria-label', paused ? `播放${kind === 'audio' ? '音频' : '视频'}` : `暂停${kind === 'audio' ? '音频' : '视频'}`);
@@ -4634,42 +6718,98 @@ async function togglePreviewPlayback(kind) {
   syncPreviewPlaybackUi(kind, media);
 }
 
-async function closeAudioPreview() {
-  const audio = document.querySelector('[data-audio-preview]'); const preview = state.audioPreview;
+async function closeAudioPreview({ openingRequest = null } = {}) {
+  const owner = state, preview = owner.audioPreview;
+  owner.audioPreviewOpening = openingRequest;
   if (!preview) return;
-  const positionMillis = preview.lastPlaybackPositionMillis || Math.round((audio?.currentTime || 0) * 1000);
-  state.audioPreview = null;
+  const audio = document.querySelector('[data-audio-preview]');
+  const currentPosition = preview.resumeReady && ownsAudioPreview(owner, preview, audio) && audio.readyState >= 1
+    ? Math.round(audio.currentTime * 1000) : undefined;
+  const positionMillis = currentPosition ?? preview.lastPlaybackPositionMillis;
+  owner.audioPreview = null;
+  if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
   render();
-  if (!preview.attachmentId || !preview.workspaceId) return;
-  try { await invoke('save_desktop_audio_preview_position', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis } }); }
+  if (!preview.attachmentId || !preview.workspaceId || !Number.isFinite(positionMillis) || positionMillis < 0) return;
+  try { await enqueueAudioPreviewPosition(owner, preview, positionMillis); }
   catch (_) { /* Closing an overlay never depends on a non-critical resume write. */ }
 }
 
 async function openTextPreview(attachmentId, workspaceId = state.current?.summary?.id) {
   if (!native || !workspaceId || !attachmentId) return;
-  state.textPreview = { loading: true }; render();
-  try { state.textPreview = { ...await invoke('read_desktop_text_preview', { args: { workspaceId, attachmentId } }), workspaceId }; }
-  catch (_) { state.textPreview = { error: '本地文本不可用、编码无效或校验失败。' }; }
+  const owner = state;
+  const request = {};
+  state.textPreview = { loading: true, request }; render();
+  try {
+    const preview = await invoke('read_desktop_text_preview', { args: { workspaceId, attachmentId } }, owner);
+    if (state !== owner || state.textPreview?.request !== request) return;
+    state.textPreview = { ...preview, workspaceId };
+  } catch (_) {
+    if (state !== owner || state.textPreview?.request !== request) return;
+    state.textPreview = { error: '本地文本不可用、编码无效或校验失败。' };
+  }
   render();
+}
+
+let archivePreviewPreparation = Promise.resolve();
+function cancelArchivePreviewLoad() {
+  const owner = state;
+  const requestId = state.archivePreview?.request?.id;
+  state.archivePreview = null;
+  if (native && requestId) void invokePreviewOwner(owner, 'cancel_desktop_archive_preview', { requestId }).catch(() => {});
+}
+
+function showArchiveDirectory(directory = state.archivePreview?.directory || '') {
+  const preview = state.archivePreview;
+  if (!preview) return;
+  cancelArchivePreviewLoad();
+  state.archivePreview = { ...preview, request: null, directory, entry: null };
+  render();
+}
+
+async function reserveArchivePreviewRequest(request, owner) {
+  const preparation = archivePreviewPreparation.catch(() => {}).then(() => invokePreviewOwner(owner, 'begin_desktop_archive_preview'));
+  archivePreviewPreparation = preparation;
+  request.id = await preparation;
+  return state === owner && state.archivePreview?.request === request;
 }
 
 async function openArchivePreview(attachmentId, workspaceId = state.current?.summary?.id) {
   if (!native || !workspaceId || !attachmentId) return;
-  state.archivePreview = { loading: true, attachmentId, workspaceId, directory: '', entry: null }; render();
-  try { state.archivePreview = { ...await invoke('read_desktop_archive_preview', { args: { workspaceId, attachmentId } }), workspaceId, directory: '', entry: null }; }
-  catch (_) { state.archivePreview = { error: '本地压缩包不可用、结构无效或校验失败。' }; }
+  const owner = state;
+  cancelArchivePreviewLoad();
+  const request = {};
+  state.archivePreview = { loading: true, request, attachmentId, workspaceId, directory: '', entry: null }; render();
+  try {
+    if (!await reserveArchivePreviewRequest(request, owner)) return;
+    const preview = await invoke('read_desktop_archive_preview', { requestId: request.id, args: { workspaceId, attachmentId } }, owner);
+    if (state !== owner || state.archivePreview?.request !== request) return;
+    state.archivePreview = { ...preview, workspaceId, directory: '', entry: null };
+  } catch (_) {
+    if (state !== owner || state.archivePreview?.request !== request) return;
+    state.archivePreview = { error: '本地压缩包不可用、结构无效或校验失败。' };
+  } finally {
+    if (request.id) void invokePreviewOwner(owner, 'cancel_desktop_archive_preview', { requestId: request.id }).catch(() => {});
+  }
   render();
 }
 
 async function openArchiveEntryPreview(entryPath, pageNumber = 1) {
   const preview = state.archivePreview;
   if (!native || !preview?.workspaceId || !preview?.attachmentId || !entryPath) return;
-  state.archivePreview = { ...preview, entry: { loading: true } }; render();
+  const owner = state;
+  cancelArchivePreviewLoad();
+  const request = {};
+  state.archivePreview = { ...preview, request, entry: { loading: true } }; render();
   try {
-    const entry = await invoke('read_desktop_archive_entry_preview', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, entryPath, pageNumber } });
-    state.archivePreview = { ...state.archivePreview, entry };
+    if (!await reserveArchivePreviewRequest(request, owner)) return;
+    const entry = await invoke('read_desktop_archive_entry_preview', { requestId: request.id, args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, entryPath, pageNumber } }, owner);
+    if (state !== owner || state.archivePreview?.request !== request) return;
+    state.archivePreview = { ...state.archivePreview, request: null, entry };
   } catch (_) {
+    if (state !== owner || state.archivePreview?.request !== request) return;
     state.archivePreview = { ...state.archivePreview, entry: { error: 'ZIP 内文件不可用、路径不安全、内容损坏或超过预览上限。' } };
+  } finally {
+    if (request.id) void invokePreviewOwner(owner, 'cancel_desktop_archive_preview', { requestId: request.id }).catch(() => {});
   }
   render();
 }
@@ -4679,15 +6819,18 @@ function safeAttachmentSaveName(value) {
   return leaf.replace(/[\u0000-\u001f:]/g, '-').slice(0, 180) || '附件';
 }
 
-async function saveAttachmentCopy({ workspaceId, attachmentId, displayName }) {
+async function saveAttachmentCopy({ workspaceId, attachmentId, displayName }, { isCurrent } = {}) {
   if (!native || !workspaceId || !attachmentId) return false;
+  const owner = state;
   const defaultPath = safeAttachmentSaveName(displayName);
   const extension = defaultPath.includes('.') ? defaultPath.split('.').pop().toLowerCase() : '';
   const selectedPath = await dialogInvoke('save', { defaultPath, ...(extension ? { filters: [{ name: '附件副本', extensions: [extension] }] } : {}) });
   if (!selectedPath) return false;
-  await invoke('export_desktop_attachment_to_selected_path', { args: { workspaceId, attachmentId, selectedPath } });
-  state.status = `已保存经 hash 回读的附件副本“${defaultPath}”。`;
-  state.error = '';
+  await invokePreviewOwner(owner, 'export_desktop_attachment_to_selected_path', { args: { workspaceId, attachmentId, selectedPath } });
+  if (!isCurrent || isCurrent()) {
+    owner.status = `已保存经 hash 回读的附件副本“${defaultPath}”。`;
+    owner.error = '';
+  }
   return true;
 }
 
@@ -4703,6 +6846,23 @@ async function sharePreviewAttachment(preview) {
   }
   if (typeof navigator.share !== 'function') throw new Error('当前预览环境不支持系统分享');
   await navigator.share({ title: preview.displayName, ...(preview.text ? { text: preview.text } : {}) });
+}
+
+function preserveSearchInputFocus() {
+  const input = document.activeElement;
+  if (!['chat-search', 'full-search-input'].includes(input?.id)) return;
+  const owner = state;
+  const searchPanel = owner.searchPanel;
+  const dialog = owner.dialog;
+  const selection = [input.selectionStart, input.selectionEnd, input.selectionDirection];
+  queueMicrotask(() => {
+    if (state !== owner || owner.searchPanel !== searchPanel || owner.dialog !== dialog) return;
+    const next = document.getElementById(input.id);
+    if (!next || next === input || !next.isConnected) return;
+    if (document.activeElement !== document.body && document.activeElement !== next) return;
+    next.focus({ preventScroll: true });
+    if (Number.isInteger(selection[0]) && Number.isInteger(selection[1])) next.setSelectionRange(...selection);
+  });
 }
 
 function focusSearchAfterHistoryDismissal() {
@@ -4756,7 +6916,7 @@ function showCopyIconFeedback(button) {
   button.classList.add('is-copy-success');
   button.setAttribute('aria-label', '已复制');
   button.setAttribute('title', '已复制');
-  button.innerHTML = icon(icons.check, '已复制') + (prior.html.includes('code-copy-label') ? '<span class="code-copy-label">已复制</span>' : '');
+  button.innerHTML = icon(icons.check, '已复制');
   window.setTimeout(() => {
     if (!button.isConnected || button.__copyIconFeedbackToken !== token) return;
     button.innerHTML = prior.html;
@@ -4782,7 +6942,8 @@ function openChatAttachmentMenu(card) {
   if (!asset) return;
   const mime = asset.mimeType || '';
   const category = mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'file';
-  const duration = state.videoThumbnails?.[attachmentId]?.durationMillis || state.searchAttachmentPreviews?.[attachmentId]?.durationMillis;
+  const previewKey = attachmentPreviewKey(state.current?.summary?.id, attachmentId);
+  const duration = state.videoThumbnails?.[previewKey]?.durationMillis || state.searchAttachmentPreviews?.[previewKey]?.durationMillis;
   const item = { workspaceId: state.current.summary.id, conversationId: currentConversation()?.id, messageId, attachmentId, displayName: asset.displayName || '附件', category,
     details: [({ image: '图片', video: '视频', audio: '音频', file: '文件' })[category], duration ? formatDuration(duration) : '', bytes(Number(asset.byteCount) || 0)].filter(Boolean).join(' · '),
     sentAt: message.createdAt ? `发送于 ${new Date(message.createdAt).toLocaleString('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '' };
@@ -4844,33 +7005,56 @@ app.addEventListener('pointermove', event => {
 });
 
 const render = renderUnified;
+async function readInlineTitleConflict(target,{isCurrent}) {
+  const owner=state,workspaceId=target.workspaceId || owner.current?.summary?.id;
+  if(!workspaceId || !isCurrent())return null;
+  const projection=await invokeForAuthorizedDataAreaOperation(tauriBridge,'read_desktop_workspace',{workspaceId},owner);
+  if(state!==owner || !isCurrent())return null;
+  const row=projection.exchange?.conversations?.find(row=>row.id===target.id);
+  return row && !row.archived && !row.deleted ? {id:row.id,revision:row.revision,title:row.title} : null;
+}
+inlineTitleEditor = createInlineTitleEditor({host:app,document,getState:()=>state,native,render,
+  routeKey:()=>`${state.dataArea}:${state.current?.summary?.id}:${state.selectedConversationId}:${state.pane}:${desktopEntryRouteGeneration}:${conversationSelectionGeneration}`,
+  navigationKey:()=>`${state.dataArea}:${state.pane}:${desktopEntryRouteGeneration}:${conversationSelectionGeneration}`,
+  prepare:(target,{isCurrent})=>ensureConversationActionWorkspace({dataset:target},{presentationCurrent:isCurrent}),
+  mutate:(...args)=>mutateConversationLifecycle(...args),
+  readCurrent:(target,options)=>readInlineTitleConflict(target,options),
+  resolveHeader:()=>{const conversation=currentConversation();return conversation && !state.temporaryConversation && !state.searchPanel ? {id:conversation.id,revision:conversation.revision,title:conversation.title,surface:'header'} : null;},
+});
+const pdfKnowledge = createPdfKnowledgeController({ getState: () => state, native, invoke, dialogInvoke, render, refresh, escape, document });
+const webKnowledge = createWebKnowledgeController({ getState: () => state, native, invoke, render, refresh, escape, document });
+app.addEventListener('click', event => { void webKnowledge.handle(event); }, true);
+app.addEventListener('change', event => { if (event.target.matches?.('[data-action=select-web-knowledge-task]')) void webKnowledge.handle(event); }, true);
+app.addEventListener('click', event => { void pdfKnowledge.handle(event); }, true);
+app.addEventListener('change', event => { if (event.target.matches?.('[data-action=select-pdf-knowledge-task]')) void pdfKnowledge.handle(event); }, true);
 
-let ordinaryComposerDraftQueue = Promise.resolve();
+
+const ordinaryComposerDraftQueue = createDraftWriteQueue({
+  routeKey: args => JSON.stringify([args.dataArea, args.workspaceId, args.conversationId ?? null]),
+  prepare: async args => {
+    if (args.workspaceId) return args;
+    // Initialization is part of the first explicit input, including diagnostic
+    // mode. A failed initialization retains the same snapshot for a later retry.
+    const projection = await tauriBridge.invoke('ensure_desktop_local_workspace', {}, {
+      headers: { 'x-nanfeng-data-area': args.dataArea },
+    });
+    if (state.dataArea === args.dataArea && !state.current) {
+      state.current = projection;
+      state.workspaces = [projection.summary];
+      state.newConversationDraftWorkspaceId = projection.summary.id;
+      render();
+    }
+    return { ...args, workspaceId: projection.summary.id };
+  },
+  write: ({ dataArea, ...args }) => tauriBridge.invoke('save_desktop_conversation_draft', { args }, {
+    headers: { 'x-nanfeng-data-area': dataArea },
+  }),
+});
 let ordinaryComposerDraftTimer = null;
 let scheduledOrdinaryComposerDraft = null;
 let composerDraftRouteGeneration = 0;
-function ordinaryComposerDraftArgs() {
-  if (!native || state.temporaryConversation || !state.current) return null;
-  return {
-    workspaceId: state.current.summary.id,
-    conversationId: state.selectedConversationId || null,
-    text: state.composerDraft,
-    attachmentIds: state.composerAttachments.map(item => item.id),
-  };
-}
-function persistOrdinaryComposerDraft() {
-  const args = arguments.length ? arguments[0] : ordinaryComposerDraftArgs();
-  if (!args) return Promise.resolve();
-  const owner = state;
-  const save = ordinaryComposerDraftQueue.catch(() => {}).then(() => invoke('save_desktop_conversation_draft', { args }, owner));
-  ordinaryComposerDraftQueue = save;
-  return save;
-}
-function resetComposerPresentation() {
-  composerDraftRouteGeneration += 1;
-  state.composerDraft = '';
-  state.composerAttachments = [];
-}
+let composerPresentationIdentity = {};
+let pendingOrdinaryComposerDraftRead = null;
 let newConversationDraftExpiryTimer = null;
 function armNewConversationDraftExpiry(expiresAtMs) {
   if (newConversationDraftExpiryTimer) clearTimeout(newConversationDraftExpiryTimer);
@@ -4879,32 +7063,98 @@ function armNewConversationDraftExpiry(expiresAtMs) {
   const generation = composerDraftRouteGeneration;
   const workspaceId = state.current?.summary?.id;
   newConversationDraftExpiryTimer = setTimeout(() => {
+    newConversationDraftExpiryTimer = null;
     if (generation !== composerDraftRouteGeneration || state.selectedConversationId || state.current?.summary?.id !== workspaceId) return;
-    void loadOrdinaryComposerDraft().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `草稿未读取：${String(error)}`; render(); });
+    void loadOrdinaryComposerDraft().then(render).catch(error => {
+      state.error = `新对话草稿未读取：${String(error)}`;
+      render();
+    });
   }, Math.max(0, expiresAtMs - Date.now()));
+}
+function ordinaryComposerDraftArgs() {
+  if (!native || state.temporaryConversation) return null;
+  return {
+    dataArea: state.dataArea,
+    workspaceId: state.current?.summary?.id || null,
+    conversationId: state.selectedConversationId || null,
+    text: state.composerDraft,
+    attachmentIds: state.composerAttachments.map(item => item.id),
+    modelId: state.selectedConversationId ? null : newConversationModelId(),
+    toneOverride: state.selectedConversationId ? null : state.conversationPreferences.toneOverride,
+    webSearchOverride: state.selectedConversationId ? null : state.conversationPreferences.webSearchOverride,
+  };
+}
+function persistOrdinaryComposerDraft() {
+  const args = arguments.length ? arguments[0] : ordinaryComposerDraftArgs();
+  if (!args) return Promise.resolve();
+  return ordinaryComposerDraftQueue.save(args);
+}
+function resetComposerPresentation() {
+  composerPresentationIdentity = {};
+  composerDraftRouteGeneration += 1;
+  armNewConversationDraftExpiry(null);
+  state.composerDraft = '';
+  state.composerAttachments = [];
+}
+function restoreOrdinaryComposerDraft(errorPrefix, operation = loadOrdinaryComposerDraft) {
+  const owner=state,navigation=desktopEntryRouteGeneration,pane=owner.pane,dialog=owner.dialog;
+  const current=()=>owner===state && navigation===desktopEntryRouteGeneration && owner.pane===pane && owner.dialog===dialog;
+  return operation().then(()=>{if(current())render();}).catch(error=>{
+    if(!current() || error?.code==='STALE_DATA_AREA')return;
+    owner.error=errorPrefix+String(error);render();
+  });
 }
 function resetNewConversationComposer() {
   resetComposerPresentation();
-  void loadOrdinaryComposerDraft().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `新对话草稿未读取：${String(error)}`;
-    render();
-  });
+  if (!native || state.temporaryConversation || state.selectedConversationId) return;
+  void restoreOrdinaryComposerDraft('新对话草稿未读取：');
 }
-function scheduleOrdinaryComposerDraft() {
-  const args = ordinaryComposerDraftArgs();
-  if (!args) return;
-  // Persist each edit immediately; route changes and normal exit have no debounce gap.
+function scheduleOrdinaryComposerDraft(changedField = 'text', removedAttachmentId = null) {
   composerDraftRouteGeneration += 1;
-  armNewConversationDraftExpiry(args.text && !args.conversationId ? Date.now() + 3_600_000 : null);
+  armNewConversationDraftExpiry(null);
   const generation = composerDraftRouteGeneration;
-  void persistOrdinaryComposerDraft(args).then(draft => {
-    if (generation === composerDraftRouteGeneration) armNewConversationDraftExpiry(draft?.expiresAtMs);
-  }).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `草稿未保存：${String(error)}`;
-    render();
-  });
+  const args = ordinaryComposerDraftArgs();
+  const owner = state;
+  if (!args) return;
+  const pending = pendingOrdinaryComposerDraftRead;
+  if (pending && pending.owner === state && pending.args.workspaceId === args.workspaceId
+      && pending.args.conversationId === args.conversationId) {
+    pending.changedFields.add(changedField);
+    if (changedField === 'attachments') {
+      if (removedAttachmentId) pending.removedAttachmentIds.add(removedAttachmentId);
+      else for (const id of args.attachmentIds) pending.removedAttachmentIds.delete(id);
+    }
+    pending.editedArgs = args;
+    return;
+  }
+  scheduledOrdinaryComposerDraft = args;
+  if (ordinaryComposerDraftTimer) clearTimeout(ordinaryComposerDraftTimer);
+  ordinaryComposerDraftTimer = setTimeout(() => {
+    ordinaryComposerDraftTimer = null;
+    const scheduled = scheduledOrdinaryComposerDraft;
+    scheduledOrdinaryComposerDraft = null;
+    void persistOrdinaryComposerDraft(scheduled).then(draft => {
+      if (owner !== state || generation !== composerDraftRouteGeneration) return;
+      armNewConversationDraftExpiry(draft?.expiresAtMs);
+      // A selection-only write can discover that the unbound text has just expired.
+      // The native owner has already cleared it; do not keep the stale text visible.
+      if (!scheduled.conversationId && draft && draft.text !== scheduled.text) {
+        state.composerDraft = draft.text;
+        render();
+      }
+    }).catch(error => {
+      if (owner !== state || generation !== composerDraftRouteGeneration) return;
+      state.error = `普通会话草稿未保存：${String(error)}`;
+      render();
+    });
+  }, 180);
 }
 async function flushOrdinaryComposerDraft() {
+  const pending = pendingOrdinaryComposerDraftRead;
+  if (pending?.changedFields.size) {
+    const result = await pending.finished;
+    if (result.error) throw result.error;
+  }
   if (ordinaryComposerDraftTimer) {
     clearTimeout(ordinaryComposerDraftTimer);
     ordinaryComposerDraftTimer = null;
@@ -4914,44 +7164,146 @@ async function flushOrdinaryComposerDraft() {
   if (scheduled) {
     await persistOrdinaryComposerDraft(scheduled);
   }
-  await ordinaryComposerDraftQueue;
+  await ordinaryComposerDraftQueue.flush();
 }
-async function loadOrdinaryComposerDraft() {
+async function loadOrdinaryComposerDraft({ preferUnbound = false } = {}) {
+  const owner = state;
   const args = ordinaryComposerDraftArgs();
-  if (!args) return;
+  if (!args?.workspaceId) return;
+  const navigationGeneration=desktopEntryRouteGeneration;
+  const ownsDraftRoute=()=>owner===state && navigationGeneration===desktopEntryRouteGeneration
+    && !state.temporaryConversation && state.current?.summary?.id===args.workspaceId
+    && (state.selectedConversationId||null)===args.conversationId;
   const routeGeneration = ++composerDraftRouteGeneration;
-  await flushOrdinaryComposerDraft();
-  if (routeGeneration !== composerDraftRouteGeneration) return;
-  const draft = await invoke('read_desktop_conversation_draft', { workspaceId: args.workspaceId, conversationId: args.conversationId });
-  if (routeGeneration !== composerDraftRouteGeneration || state.current?.summary?.id !== args.workspaceId || (state.selectedConversationId || null) !== args.conversationId) return;
-  if (!draft) {
-    state.composerDraft = '';
-    state.composerAttachments = [];
-    return;
+  try {
+    await flushOrdinaryComposerDraft();
+    if (!ownsDraftRoute() || routeGeneration !== composerDraftRouteGeneration) return;
+    let finishRead;
+    const pending = {
+      owner, args, changedFields: new Set(), removedAttachmentIds: new Set(), editedArgs: null,
+      finished: new Promise(resolve => { finishRead = resolve; }),
+    };
+    pendingOrdinaryComposerDraftRead = pending;
+    let readError = null;
+    try {
+    const recovered = await readComposerDraftRoute({
+      workspaceId: args.workspaceId, conversationId: args.conversationId, preferUnbound,
+      readDraft: (workspaceId, conversationId) => invoke('read_desktop_conversation_draft', { workspaceId, conversationId }, owner),
+    });
+    if (pending.changedFields.size) {
+      if (recovered.conversationId !== args.conversationId) throw new Error('草稿读取期间范围改变；未覆盖已有草稿');
+      const draft = recovered.draft || {};
+      const changed = pending.changedFields;
+      const edited = pending.editedArgs;
+      const recoveredModelId = recovered.draft ? draft.modelId || null
+        : args.conversationId ? null : newConversationModelId(owner);
+      const recoveredAttachmentIds = (draft.attachments || []).map(item => item.id);
+      const mergedAttachmentIds = changed.has('attachments')
+        ? [...new Set([...recoveredAttachmentIds, ...edited.attachmentIds])]
+          .filter(id => !pending.removedAttachmentIds.has(id))
+        : recoveredAttachmentIds;
+      const merged = {
+        dataArea: owner.dataArea,
+        workspaceId: args.workspaceId, conversationId: args.conversationId,
+        text: changed.has('text') ? edited.text : draft.text || '',
+        attachmentIds: mergedAttachmentIds,
+        modelId: changed.has('model') ? edited.modelId : recoveredModelId,
+        toneOverride: changed.has('tone') ? edited.toneOverride : draft.toneOverride || null,
+        webSearchOverride: changed.has('web') ? edited.webSearchOverride : draft.webSearchOverride ?? null,
+      };
+      if (pendingOrdinaryComposerDraftRead === pending) pendingOrdinaryComposerDraftRead = null;
+      const editGeneration = composerDraftRouteGeneration;
+      const stillVisible = ownsDraftRoute();
+      if (stillVisible) {
+        const attachmentsById = new Map([...(draft.attachments || []), ...state.composerAttachments]
+          .map(item => [item.id, item]));
+        state.composerDraft = merged.text;
+        state.composerAttachments = merged.attachmentIds.map(id => attachmentsById.get(id)).filter(Boolean);
+        if (!state.selectedConversationId) {
+          state.pendingNewConversationModelId = merged.modelId;
+          state.conversationPreferences = {
+            revision: 0, toneOverride: merged.toneOverride,
+            webSearchOverride: merged.webSearchOverride,
+          };
+        }
+        render();
+      }
+      // A data-area switch may already have changed the visible owner. Keep the
+      // captured area on this local write instead of resolving it from state.
+      const saved = await persistOrdinaryComposerDraft(merged);
+      if (!ownsDraftRoute() || editGeneration !== composerDraftRouteGeneration) return;
+      state.composerDraft = saved?.text || '';
+      state.composerAttachments = Array.isArray(saved?.attachments) ? saved.attachments : [];
+      if (!state.selectedConversationId) {
+        state.pendingNewConversationModelId = saved?.modelId || null;
+        state.conversationPreferences = {
+          revision: 0, toneOverride: saved?.toneOverride || null,
+          webSearchOverride: typeof saved?.webSearchOverride === 'boolean' ? saved.webSearchOverride : null,
+        };
+      }
+      armNewConversationDraftExpiry(saved?.expiresAtMs);
+      return;
+    }
+    if (!ownsDraftRoute() || routeGeneration !== composerDraftRouteGeneration) return;
+    const { draft } = recovered;
+    if (recovered.conversationId !== args.conversationId) {
+      state.selectedConversationId = recovered.conversationId;
+      state.newConversationDraftWorkspaceId = args.workspaceId;
+      state.p6gSelection = null;
+      state.pendingNewConversationModelId = undefined;
+      state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+    }
+    if (!draft) {
+      armNewConversationDraftExpiry(null);
+      state.composerDraft = '';
+      state.composerAttachments = [];
+      if (!state.selectedConversationId) {
+        state.pendingNewConversationModelId = undefined;
+        state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+      }
+      return;
+    }
+    state.composerDraft = draft.text || '';
+    state.composerAttachments = Array.isArray(draft.attachments) ? draft.attachments : [];
+    if (!state.selectedConversationId) {
+      state.pendingNewConversationModelId = draft.modelId || null;
+      state.conversationPreferences = {
+        revision: 0,
+        toneOverride: draft.toneOverride || null,
+        webSearchOverride: typeof draft.webSearchOverride === 'boolean' ? draft.webSearchOverride : null,
+      };
+    }
+    armNewConversationDraftExpiry(draft.expiresAtMs);
+    } catch (error) { readError = error; throw error; }
+    finally {
+      if (pendingOrdinaryComposerDraftRead === pending) pendingOrdinaryComposerDraftRead = null;
+      finishRead({ error: readError });
+    }
+  } catch (error) {
+    if (!ownsDraftRoute() || error?.code === 'STALE_DATA_AREA') return;
+    throw error;
   }
-  state.composerDraft = draft.text || '';
-  state.composerAttachments = Array.isArray(draft.attachments) ? draft.attachments : [];
-  armNewConversationDraftExpiry(draft.expiresAtMs);
 }
-function writeComposerAttachments() { scheduleOrdinaryComposerDraft(); }
+function writeComposerAttachments(removedAttachmentId = null) { scheduleOrdinaryComposerDraft('attachments', removedAttachmentId); }
 
 // Composer drafts have exactly one route owner. This listener runs after the route action has
 // selected its destination and never consults browser storage, eliminating click-order races.
 app.addEventListener('click', event => {
   const action = event.target.closest?.('[data-action]')?.dataset.action;
   if (action === 'new-chat') {
-    void flushOrdinaryComposerDraft();
+    state.newConversationDraftWorkspaceId = state.current?.summary?.id || null;
+    if (!native || state.temporaryConversation || state.selectedConversationId) {
+      void restoreOrdinaryComposerDraft('普通会话草稿未保存：', flushOrdinaryComposerDraft);
+    }
     resetNewConversationComposer();
     render();
     return;
   }
   if (action !== 'select-chat') return;
+  state.newConversationDraftWorkspaceId = null;
   resetComposerPresentation();
   render();
-  void loadOrdinaryComposerDraft().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `普通会话草稿未读取：${String(error)}`;
-    render();
-  });
+  void restoreOrdinaryComposerDraft('普通会话草稿未读取：');
 });
 
 const MAX_COMPOSER_ATTACHMENT_BYTES = 20 * 1024 * 1024;
@@ -4995,14 +7347,42 @@ function pastedComposerFiles(clipboardData) {
   return files;
 }
 
+function captureComposerAttachmentRoute(owner = state) {
+  return {
+    presentation: composerPresentationIdentity,
+    workspaceId: owner.current?.summary?.id ?? null,
+    conversationId: owner.selectedConversationId ?? null,
+    temporaryId: owner.temporaryConversation?.temporaryId ?? null,
+  };
+}
+
+function isCurrentComposerAttachmentRoute(owner, route) {
+  return state === owner
+    && composerPresentationIdentity === route.presentation
+    && (state.current?.summary?.id ?? null) === route.workspaceId
+    && (state.selectedConversationId ?? null) === route.conversationId
+    && (state.temporaryConversation?.temporaryId ?? null) === route.temporaryId;
+}
+
 async function importPastedComposerClipboardFiles(clipboardData, fallbackFiles) {
+  const owner = state;
+  const route = captureComposerAttachmentRoute(owner);
   let files = fallbackFiles;
   // macOS frequently exposes one copied image as TIFF, AVIF, JPEG and PNG at once. Prefer the
   // standard raster representation while handling this exact paste gesture; a failed read keeps
-  // the concrete File delivered by the paste event as the only fallback.
-  if (fallbackFiles.some(file => String(file?.type || '').toLowerCase().startsWith('image/')) && navigator.clipboard?.read) {
+  // the concrete File delivered by the paste event as the only fallback. Windows WebView2 can
+  // expose Clipboard.read() while leaving its promise pending without a permission surface, so
+  // it must use the concrete event file immediately instead of making paste appear unresponsive.
+  const clipboardPlatform = String(navigator.userAgentData?.platform || navigator.platform || '');
+  if (/^mac/i.test(clipboardPlatform)
+      && fallbackFiles.some(file => String(file?.type || '').toLowerCase().startsWith('image/'))
+      && navigator.clipboard?.read) {
     try {
-      const items = await navigator.clipboard.read();
+      let readTimeout;
+      const items = await Promise.race([
+        navigator.clipboard.read(),
+        new Promise((_, reject) => { readTimeout = setTimeout(() => reject(new Error('剪贴板读取超时')), 800); }),
+      ]).finally(() => clearTimeout(readTimeout));
       for (const item of items) {
         const type = PREFERRED_CLIPBOARD_IMAGE_TYPES.find(candidate => item.types.includes(candidate));
         if (!type) continue;
@@ -5016,31 +7396,42 @@ async function importPastedComposerClipboardFiles(clipboardData, fallbackFiles) 
       // The event-provided File remains valid when a WebView denies Clipboard.read().
     }
   }
-  await importComposerClipboardFiles(files);
+  await importComposerClipboardFiles(files, { owner, route });
 }
 
-async function importComposerClipboardFiles(files) {
-  if (!native || (!state.current && !state.temporaryConversation)) { state.error = native ? '先进入临时聊天或导入本地工作区。' : 'Web 预览不能私有复制粘贴附件。'; render(); return; }
+async function importComposerClipboardFiles(files, { owner = state, route = captureComposerAttachmentRoute(owner) } = {}) {
+  if (!isCurrentComposerAttachmentRoute(owner, route)) return;
+  if (!native || (!state.current && !state.temporaryConversation)) { state.error = native ? '本机聊天数据尚未就绪，请重新打开应用后添加附件。' : 'Web 预览不能私有复制粘贴附件。'; render(); return; }
   const currentCount = state.temporaryConversation ? (state.temporaryConversation.draftAttachmentIds || []).length : state.composerAttachments.length;
   const accepted = files.slice(0, Math.max(0, 4 - currentCount));
   if (!accepted.length) { state.error = '每条本地消息最多保留 4 个附件。'; render(); return; }
   const failures = [];
   let imported = 0;
   for (const [index, file] of accepted.entries()) {
+    if (!isCurrentComposerAttachmentRoute(owner, route)) return;
     try {
       const bytesBase64 = await clipboardFileBase64(file);
+      if (!isCurrentComposerAttachmentRoute(owner, route)) return;
       const displayName = clipboardAttachmentName(file, index);
-      if (state.temporaryConversation) {
-        state.temporaryConversation = await invoke('import_desktop_temporary_clipboard_attachment', { args: { temporaryId: state.temporaryConversation.temporaryId, displayName, bytesBase64 } });
+      if (route.temporaryId) {
+        const temporary = await invoke('import_desktop_temporary_clipboard_attachment', { args: { temporaryId: route.temporaryId, displayName, bytesBase64 } }, owner);
+        if (!isCurrentComposerAttachmentRoute(owner, route)) return;
+        state.temporaryConversation = temporary;
         state.composerDraft = state.temporaryConversation.draft || state.composerDraft;
       } else {
-        const attachment = await invoke('import_desktop_conversation_clipboard_attachment', { args: { workspaceId: state.current.summary.id, displayName, bytesBase64 } });
+        const attachment = await invoke('import_desktop_conversation_clipboard_attachment', { args: { workspaceId: route.workspaceId, displayName, bytesBase64 } }, owner);
+        if (!isCurrentComposerAttachmentRoute(owner, route)) return;
         if (!state.composerAttachments.some(item => item.sha256 === attachment.sha256)) state.composerAttachments = [...state.composerAttachments, attachment];
         writeComposerAttachments();
       }
       imported += 1;
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; failures.push(`${clipboardAttachmentName(file, index)}：${String(error)}`); }
+    } catch (error) {
+      if (route.temporaryId && handleExpiredTemporary(error, route.temporaryId)) return;
+      if (!isCurrentComposerAttachmentRoute(owner, route) || error?.code === 'STALE_DATA_AREA') return;
+      failures.push(`${clipboardAttachmentName(file, index)}：${String(error)}`);
+    }
   }
+  if (!isCurrentComposerAttachmentRoute(owner, route)) return;
   state.status = imported ? `已将 ${imported} 个粘贴附件私有复制到当前草稿；尚未发送。${files.length > accepted.length ? ' 其余附件超过本条 4 个上限，未加入。' : ''}` : '';
   state.error = failures.length ? `以下粘贴附件未加入草稿：${failures.join('；')}` : '';
   render();
@@ -5054,13 +7445,23 @@ function writeChatDraft(value) {
 
 async function enterTemporaryChat() {
   if (!native) { state.error = 'Web 预览不保存临时聊天；请在 Tauri Desktop 开发包中使用。'; render(); return; }
+  const generation = ++composerDraftRouteGeneration;
   try {
-    state.temporaryConversation = await invoke('enter_or_restore_desktop_temporary_conversation', { temporaryId: state.temporaryConversation?.temporaryId || null });
-    state.composerDraft = state.temporaryConversation.draft || '';
-    state.composerAttachments = [];
-    state.selectedConversationId = null;
-    state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.error = ''; state.status = '已进入临时聊天：仅本地隔离恢复，最长保留 24 小时。'; render();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时聊天未能打开：${String(error)}`; render(); }
+    await transitionComposerDraftRoute({
+      flush: flushOrdinaryComposerDraft,
+      read: () => invoke('enter_or_restore_desktop_temporary_conversation', { temporaryId: null }),
+      isCurrent: () => generation === composerDraftRouteGeneration && !state.temporaryConversation,
+      commit: recovered => {
+        state.temporaryConversation = recovered;
+        state.composerDraft = recovered.draft || '';
+        state.composerAttachments = [];
+        state.selectedConversationId = null;
+        state.pane = 'chat'; state.error = ''; state.status = '已进入临时聊天：仅本地隔离恢复，最长保留 24 小时。'; render();
+      },
+    });
+  } catch (error) {
+    if (generation === composerDraftRouteGeneration) { state.error = `临时聊天未能打开：${String(error)}`; render(); }
+  }
 }
 
 async function restoreTemporaryChat() {
@@ -5071,26 +7472,56 @@ async function restoreTemporaryChat() {
   state.status = '发现可恢复的临时聊天；点击右上角“临时聊天”可在 24 小时内继续。';
 }
 
-let temporaryDraftQueue = Promise.resolve();
+const temporaryDraftQueue = createDraftWriteQueue({
+  routeKey: args => args.temporaryId,
+  write: async args => {
+    let updated;
+    try { updated = await invoke('update_desktop_temporary_conversation', { args }); }
+    catch (error) { handleExpiredTemporary(error, args.temporaryId); throw error; }
+    // A delayed response must never replace newer in-memory input or another route.
+    if (state.temporaryConversation?.temporaryId === args.temporaryId
+        && state.composerDraft === args.draft
+        && (state.temporaryConversation.modelOverrideId || null) === args.modelOverrideId) state.temporaryConversation = updated;
+  },
+});
 let temporaryDraftTimer = null;
 let scheduledTemporaryDraft = null;
+function handleExpiredTemporary(error, temporaryId) {
+  if (!String(error).includes('临时会话已过期或不存在')) return false;
+  temporaryDraftQueue.discardRoute(temporaryId);
+  if (state.temporaryConversation?.temporaryId !== temporaryId) return true;
+  if (temporaryDraftTimer) clearTimeout(temporaryDraftTimer);
+  temporaryDraftTimer = null;
+  scheduledTemporaryDraft = null;
+  stopComposerCamera();
+  state.temporaryConversation = null;
+  resetComposerPresentation();
+  state.temporaryModelOpen = false;
+  state.composerAddOpen = false;
+  state.selectedConversationId = null;
+  state.pane = 'chat';
+  state.error = '';
+  state.status = '临时聊天已到期，已返回普通聊天。';
+  render();
+  void loadOrdinaryComposerDraft().then(() => render()).catch(readError => {
+    if (state.temporaryConversation) return;
+    state.error = `普通会话草稿未读取：${String(readError)}`;
+    render();
+  });
+  return true;
+}
 function temporaryDraftArgs(value = state.composerDraft) {
   if (!state.temporaryConversation) return null;
   return { temporaryId: state.temporaryConversation.temporaryId, draft: value, modelOverrideId: state.temporaryConversation.modelOverrideId || null };
 }
 function persistTemporaryDraft(args) {
   if (!args) return Promise.resolve();
-  const save = temporaryDraftQueue.catch(() => {}).then(async () => {
-    const updated = await invoke('update_desktop_temporary_conversation', { args });
-    // A delayed response must never replace newer in-memory input.
-    if (state.temporaryConversation?.temporaryId === args.temporaryId && state.composerDraft === args.draft) state.temporaryConversation = updated;
-  });
-  temporaryDraftQueue = save;
-  return save;
+  return temporaryDraftQueue.save(args);
 }
 function scheduleTemporaryDraft(value) {
   const args = temporaryDraftArgs(value);
   if (!args) return;
+  composerDraftRouteGeneration += 1;
   state.composerDraft = value;
   scheduledTemporaryDraft = args;
   if (temporaryDraftTimer) clearTimeout(temporaryDraftTimer);
@@ -5098,7 +7529,11 @@ function scheduleTemporaryDraft(value) {
     temporaryDraftTimer = null;
     const scheduled = scheduledTemporaryDraft;
     scheduledTemporaryDraft = null;
-    void persistTemporaryDraft(scheduled);
+    void persistTemporaryDraft(scheduled).catch(error => {
+      if (handleExpiredTemporary(error, scheduled.temporaryId)) return;
+      state.error = `临时草稿未保存：${String(error)}`;
+      render();
+    });
   }, 180);
 }
 async function flushTemporaryDraft() {
@@ -5106,51 +7541,197 @@ async function flushTemporaryDraft() {
     clearTimeout(temporaryDraftTimer);
     temporaryDraftTimer = null;
   }
-  const scheduled = scheduledTemporaryDraft || temporaryDraftArgs();
+  // Viewing, leaving or closing an unchanged temporary chat must not renew its
+  // 24-hour lifetime. Pending edits and retained failed writes are the only work.
+  const scheduled = scheduledTemporaryDraft;
   scheduledTemporaryDraft = null;
   if (scheduled) await persistTemporaryDraft(scheduled);
-  await temporaryDraftQueue;
+  await temporaryDraftQueue.flush();
 }
 async function updateTemporaryDraft(value) {
+  const owner = state;
+  const temporaryId = owner.temporaryConversation?.temporaryId;
   scheduleTemporaryDraft(value);
-  try { await flushTemporaryDraft(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时草稿未保存：${String(error)}`; render(); throw error; }
+  try { await flushTemporaryDraft(); } catch (error) {
+    if (handleExpiredTemporary(error, temporaryId)) throw error;
+    if (state === owner && owner.temporaryConversation?.temporaryId === temporaryId && error?.code !== 'STALE_DATA_AREA') {
+      state.error = `临时草稿未保存：${String(error)}`;
+      render();
+    }
+    throw error;
+  }
 }
+let desktopEntryExitRoute = null;
+function rememberDesktopExit() {
+  if (!native || !state.entryResolved) return;
+  const owner=state,navigation=desktopEntryRouteGeneration;
+  const workspaceId=owner.current?.summary?.id,conversationId=owner.selectedConversationId,pane=owner.pane,dialog=owner.dialog;
+  if (!desktopAppEntry.background) desktopEntryExitRoute={owner,navigation,workspaceId,conversationId,pane,dialog};
+  desktopAppEntry.leave(state.dataArea, state.current?.summary?.id, state.selectedConversationId,
+    [...dataAreaStates.values()].some(owner => hasRunningGeneration(owner)));
+  void flushOrdinaryComposerDraft().catch(error => {
+    if(state!==owner || navigation!==desktopEntryRouteGeneration || owner.current?.summary?.id!==workspaceId
+        || owner.selectedConversationId!==conversationId || owner.pane!==pane || owner.dialog!==dialog || error?.code==='STALE_DATA_AREA') return;
+    owner.error = `草稿未保存：${String(error)}`; render();
+  });
+}
+function resumeDesktopEntry() {
+  if (!native || document.hidden) return;
+  const previousRoute=desktopEntryExitRoute;
+  desktopEntryExitRoute=null;
+  if (!native || !desktopAppEntry.enter([...dataAreaStates.values()].some(owner => hasRunningGeneration(owner)))) return;
+  if (!previousRoute || state!==previousRoute.owner || desktopEntryRouteGeneration!==previousRoute.navigation
+      || state.current?.summary?.id!==previousRoute.workspaceId || state.selectedConversationId!==previousRoute.conversationId
+      || state.pane!==previousRoute.pane || state.dialog!==previousRoute.dialog) return;
+  if (state.temporaryConversation) return;
+  desktopEntryRouteGeneration += 1;
+  state.entryResolved = true;
+  state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
+  state.selectedConversationId = null;
+  state.newConversationDraftWorkspaceId = state.current?.summary?.id || null;
+  state.settingsConversationReturn = null;
+  state.conversationFindOpen = false;
+  state.conversationFindQuery = '';
+  recomputeConversationFind({resetIndex:true});
+  state.profileOpen = false;
+  state.error = '';
+  state.status = '';
+  state.p6gSelection = null;
+  state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+  state.assistantMessageMenu = null;
+  state.contextMenu = null;
+  resetNewConversationComposer();
+  render();
+}
+window.addEventListener('blur', rememberDesktopExit);
+window.addEventListener('pagehide', rememberDesktopExit);
+window.addEventListener('focus', resumeDesktopEntry);
+document.addEventListener('visibilitychange', () => { if (document.hidden) rememberDesktopExit(); else resumeDesktopEntry(); });
+app.addEventListener('click', event => {
+  const action = event.target.closest?.('[data-action]')?.dataset.action;
+  if (!native || !['new-chat', 'select-chat', 'select-workspace', 'select-chat-source'].includes(action)) return;
+  desktopAppEntry.enter(true);
+  state.entryResolved = true;
+  desktopEntryRouteGeneration += 1;
+}, true);
+window.addEventListener('beforeunload', checkpointVideoOnExit);
+window.addEventListener('beforeunload', checkpointAudioOnExit);
+window.addEventListener('pagehide', checkpointVideoOnExit);
+window.addEventListener('pagehide', checkpointAudioOnExit);
+document.addEventListener('visibilitychange', () => { if (document.hidden) void checkpointVideoOnExit(); });
 window.addEventListener('pagehide', () => {
   // Best-effort final flush; normal submit already awaits the same queues.
   void flushOrdinaryComposerDraft();
   void flushTemporaryDraft();
 });
 
+async function installComposerDraftCloseGuard() {
+  if (!native) return;
+  const nativeWindow = window.__TAURI__?.window?.getCurrentWindow();
+  if (!nativeWindow) throw new Error('原生窗口草稿保护不可用');
+  await nativeWindow.onCloseRequested(createDraftCloseGuard({
+    flush: async () => {
+      // A key arriving while SQLite is committing starts another short queue. Do not
+      // destroy the WebView until the final user edit in that queue is durable.
+      let generation, settingsVersion;
+      do {
+        generation = composerDraftRouteGeneration;
+        settingsVersion = localSettingsWrites.version;
+        await flushOrdinaryComposerDraft();
+        await flushTemporaryDraft();
+        await localSettingsWrites.flush();
+        await checkpointVideoOnExit();
+        await checkpointAudioOnExit();
+      } while (generation !== composerDraftRouteGeneration || settingsVersion !== localSettingsWrites.version);
+    },
+    close: () => { rememberDesktopExit(); return invoke('close_desktop_window_after_flush', {}); },
+    failed: error => {
+      state.error = `本机修改未能安全保存，窗口保持打开：${String(error)}`;
+      render();
+    },
+  }));
+}
+
 async function updateTemporaryModelOverride(value) {
   if (!state.temporaryConversation) return;
   const modelOverrideId = String(value || '').trim() || null;
+  const temporaryId = state.temporaryConversation.temporaryId;
+  // Draft and model are one native recovery snapshot. A separate model IPC can
+  // be overwritten by an older debounced draft (or overwrite newer input).
+  state.temporaryConversation = { ...state.temporaryConversation, modelOverrideId };
+  scheduleTemporaryDraft(state.composerDraft);
+  state.temporaryModelOpen = false;
+  render();
+  const isCurrent = () => state.temporaryConversation?.temporaryId === temporaryId
+    && (state.temporaryConversation.modelOverrideId || null) === modelOverrideId;
   try {
-    state.temporaryConversation = await invoke('update_desktop_temporary_conversation', { args: { temporaryId: state.temporaryConversation.temporaryId, draft: state.composerDraft, modelOverrideId } });
-    state.temporaryModelOpen = false;
+    await flushTemporaryDraft();
+    if (!isCurrent()) return;
     state.error = '';
     state.status = modelOverrideId ? '已保存临时会话的本地模型选择；没有读取 Key、没有调用 Provider。' : '临时会话已切回自动；仍只保存在隔离恢复记录。';
     render();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时模型选择未保存：${String(error)}`; render(); }
+  } catch (error) {
+    if (!isCurrent()) return;
+    state.error = `临时模型选择未保存：${String(error)}`;
+    render();
+  }
 }
 
-function newConversationModelId() {
-  return state.pendingNewConversationModelId !== undefined
-    ? state.pendingNewConversationModelId : state.p6gGlobalDefault?.modelId ?? null;
+let conversationChoiceSaveQueue = Promise.resolve();
+// Finish each already authorized read/write/read in its captured area.
+// Visible projections still require the current conversation owner below.
+const invokeConversationChoiceOwner = (command, args, owner) =>
+  invokeForAuthorizedDataAreaOperation(tauriBridge, command, args, owner);
+const composerModelWriteOwners=new WeakMap();
+function composerModelWriteOwner(owner) {
+  if(!composerModelWriteOwners.has(owner))composerModelWriteOwners.set(owner,{});
+  return composerModelWriteOwners.get(owner);
+}
+function enqueueConversationChoiceSave(write,recoveryOwner=null) {
+  const save = conversationChoiceSaveQueue.catch(() => {}).then(write);
+  conversationChoiceSaveQueue = save;
+  return localSettingsWrites.track(save,recoveryOwner);
+}
+async function flushConversationChoiceSaves() {
+  let observed;
+  do { observed = conversationChoiceSaveQueue; await observed; }
+  while (observed !== conversationChoiceSaveQueue);
+}
+function isCurrentConversationChoiceRoute(route, owner = state, generation = desktopEntryRouteGeneration, areaGeneration = cloudOpenAreaGeneration) {
+  return state === owner && generation === desktopEntryRouteGeneration && areaGeneration === cloudOpenAreaGeneration
+    && !state.temporaryConversation && state.current?.summary.id === route.workspaceId
+    && state.selectedConversationId === route.conversationId;
+}
+function applyConversationChoiceProjection(projection) {
+  state.p6gSelection = retainNewerConversationSelection(state.p6gSelection, projection, state.selectedConversationId);
+  state.conversationPreferences = state.p6gSelection.conversationOverride;
+  state.p6gGlobalDefault = projection.globalDefault;
 }
 
+function newConversationModelId(owner=state) {
+  return owner.pendingNewConversationModelId !== undefined ? owner.pendingNewConversationModelId : owner.p6gGlobalDefault?.modelId ?? null;
+}
 async function updateP6GConversationOverride(modelId) {
-  if (!state.current || state.temporaryConversation) return;
+  if (state.temporaryConversation || (!state.current && state.selectedConversationId)) return;
   if (!state.selectedConversationId) {
-    if (native) {
+    const owner=state;const presentation=composerPresentationIdentity;const workspaceId=owner.current?.summary?.id;
+    const routeGeneration=desktopEntryRouteGeneration,areaGeneration=cloudOpenAreaGeneration;
+    // A whole composer replacement cancels this receipt. Typing and earlier
+    // queued model saves only change the draft and must not cancel it.
+    const stillCurrent=()=>presentation===composerPresentationIdentity && state===owner
+      && routeGeneration===desktopEntryRouteGeneration && areaGeneration===cloudOpenAreaGeneration
+      && !owner.temporaryConversation && !owner.selectedConversationId
+      && (!workspaceId || owner.current?.summary?.id===workspaceId);
+    if(native) {
       try {
-        await invoke('set_desktop_new_conversation_model', { modelId: modelId || null, expectedRevision: state.p6gGlobalDefault?.composerRevision || 0 });
-        state.p6gGlobalDefault = await invoke('read_desktop_p6g_global_default');
-      } catch (error) {
-        if (error?.code === 'STALE_DATA_AREA') throw error;
-        state.error = `模型选择未保存：${String(error)}`;
-        render();
-        return;
-      }
+        const saved=await enqueueConversationChoiceSave(async()=>{
+          const current=await invokeConversationChoiceOwner('read_desktop_p6g_global_default',{},owner);
+          await invokeConversationChoiceOwner('set_desktop_new_conversation_model',{modelId:modelId || null,expectedRevision:current.composerRevision || 0},owner);
+          return invokeConversationChoiceOwner('read_desktop_p6g_global_default',{},owner);
+        },composerModelWriteOwner(owner));
+        if(!stillCurrent())return;
+        owner.p6gGlobalDefault=saved;
+      }catch(error){if(!stillCurrent())return;owner.error=`型号选择未保存：${String(error)}`;render();return;}
     }
     state.pendingNewConversationModelId = modelId || null;
     state.p6gSelection = {
@@ -5160,6 +7741,7 @@ async function updateP6GConversationOverride(modelId) {
       pickerTier: null,
     };
     state.p6gModelPickerOpen = false;
+    scheduleOrdinaryComposerDraft('model');
     state.status = modelId
       ? '已为这次新对话选择具体模型；发送时会与首条消息原子保存。'
       : '这次新对话已切回自动选择。';
@@ -5168,22 +7750,39 @@ async function updateP6GConversationOverride(modelId) {
     return;
   }
   if (!native || !state.p6gSelection) return;
+  const owner = state;
+  const route = { workspaceId: owner.current.summary.id, conversationId: owner.selectedConversationId };
+  const generation = desktopEntryRouteGeneration, areaGeneration = cloudOpenAreaGeneration;
   try {
-    const args = { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId, expectedRevision: state.p6gSelection.conversationOverride.revision };
-    if (modelId) await invoke('set_desktop_p6g_conversation_override', { args: { ...args, modelId } });
-    else await invoke('clear_desktop_p6g_conversation_override', args);
+    const projection = await enqueueConversationChoiceSave(async () => {
+      const current = await invokeConversationChoiceOwner('read_desktop_p6g_selection', route, owner);
+      const args = { ...route, expectedRevision: current.conversationOverride.revision };
+      if (modelId) await invokeConversationChoiceOwner('set_desktop_p6g_conversation_override', { args: { ...args, modelId } }, owner);
+      else await invokeConversationChoiceOwner('clear_desktop_p6g_conversation_override', args, owner);
+      return invokeConversationChoiceOwner('read_desktop_p6g_selection', route, owner);
+    });
+    if (!isCurrentConversationChoiceRoute(route, owner, generation, areaGeneration)) return;
+    applyConversationChoiceProjection(projection);
     state.p6gModelPickerOpen = false;
     state.status = modelId ? '已保存当前会话的本地手动模型选择；未读取 Key、未调用 Provider。' : '已切回自动；当前会话恢复本地策略。';
     state.error = '';
-    await refresh();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `模型选择未保存：${String(error)}`; state.p6gModelPickerOpen = false; render(); }
+    render();
+  } catch (error) {
+    if (!isCurrentConversationChoiceRoute(route, owner, generation, areaGeneration)) return;
+    state.error = `模型选择保存或回读失败：${String(error)}`;
+    state.p6gModelPickerOpen = false;
+    render();
+  }
 }
 
-async function updateConversationPreferences(patch, { close = false } = {}) {
+async function updateConversationPreferences(patch, { close = false, toggleWebSearch = false } = {}) {
   if (state.temporaryConversation) return;
   const next = { ...state.conversationPreferences, ...patch };
+  const defaultWebSearch = Boolean(state.productSettings.webSearchEnabled);
+  if (toggleWebSearch) next.webSearchOverride = !(typeof next.webSearchOverride === 'boolean' ? next.webSearchOverride : defaultWebSearch);
   if (!state.selectedConversationId) {
     state.conversationPreferences = { ...next, revision: 0 };
+    scheduleOrdinaryComposerDraft(toggleWebSearch ? 'web' : 'tone');
     if (close) { state.composerAddOpen = false; state.composerAddPage = 'root'; }
     state.status = patch.toneOverride
       ? '已为这次新对话选择基础风格；发送时会与首条消息原子保存。'
@@ -5201,23 +7800,35 @@ async function updateConversationPreferences(patch, { close = false } = {}) {
     return;
   }
   if (!state.current) return;
+  const owner = state;
+  const route = { workspaceId: owner.current.summary.id, conversationId: owner.selectedConversationId };
+  const generation = desktopEntryRouteGeneration, areaGeneration = cloudOpenAreaGeneration;
+  const changes = { ...patch };
   try {
-    await invoke('set_desktop_conversation_preferences', { args: {
-      workspaceId: state.current.summary.id,
-      conversationId: state.selectedConversationId,
-      expectedRevision: Number(state.conversationPreferences.revision || 0),
-      toneOverride: next.toneOverride ?? null,
-      webSearchOverride: typeof next.webSearchOverride === 'boolean' ? next.webSearchOverride : null,
-    } });
+    const projection = await enqueueConversationChoiceSave(async () => {
+      const current = await invokeConversationChoiceOwner('read_desktop_p6g_selection', route, owner);
+      const merged = { ...current.conversationOverride, ...changes };
+      if (toggleWebSearch) merged.webSearchOverride = !(typeof merged.webSearchOverride === 'boolean' ? merged.webSearchOverride : defaultWebSearch);
+      await invokeConversationChoiceOwner('set_desktop_conversation_preferences', { args: {
+        ...route,
+        expectedRevision: current.conversationOverride.revision,
+        toneOverride: merged.toneOverride ?? null,
+        webSearchOverride: typeof merged.webSearchOverride === 'boolean' ? merged.webSearchOverride : null,
+      } }, owner);
+      return invokeConversationChoiceOwner('read_desktop_p6g_selection', route, owner);
+    });
+    if (!isCurrentConversationChoiceRoute(route, owner, generation, areaGeneration)) return;
+    applyConversationChoiceProjection(projection);
     if (close) { state.composerAddOpen = false; state.composerAddPage = 'root'; }
     state.status = patch.toneOverride
       ? '已保存当前会话的基础风格；只影响后续回答。'
       : '已保存当前会话的实时网页搜索覆盖；全局设置未改变。';
     state.error = '';
-    await refresh();
+    render();
     if (close) restoreOverlayFocus();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `会话偏好未保存：${String(error)}`;
+  } catch (error) {
+    if (!isCurrentConversationChoiceRoute(route, owner, generation, areaGeneration)) return;
+    state.error = `会话偏好保存或回读失败：${String(error)}`;
     if (close) { state.composerAddOpen = false; state.composerAddPage = 'root'; }
     render();
     if (close) restoreOverlayFocus();
@@ -5226,62 +7837,165 @@ async function updateConversationPreferences(patch, { close = false } = {}) {
 
 async function saveP6GGlobalDefault() {
   if (!native) return;
+  const owner = state;
   const tier = document.querySelector('#p6g-global-default')?.value || null;
   try {
-    await invoke('set_desktop_p6g_global_default', { args: { expectedRevision: state.p6gGlobalDefault.revision, tier } });
+    const saved = await enqueueConversationChoiceSave(async () => {
+      const current = await invokeConversationChoiceOwner('read_desktop_p6g_global_default', {}, owner);
+      await invokeConversationChoiceOwner('set_desktop_p6g_global_default', { args: { expectedRevision: current.revision, tier } }, owner);
+      return invokeConversationChoiceOwner('read_desktop_p6g_global_default', {}, owner);
+    });
+    if (state !== owner) return;
+    state.p6gGlobalDefault = saved;
+    if (state.p6gSelection) state.p6gSelection = { ...state.p6gSelection, globalDefault: saved };
     state.status = tier ? `已保存本地全局默认：${tier}。` : '已清除本地全局默认；自动策略将使用当前请求档位。';
     state.error = '';
-    await refresh();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `全局默认未保存：${String(error)}`; render(); }
+    render();
+  } catch (error) { if (state !== owner) return; state.error = `全局默认保存或回读失败：${String(error)}`; render(); }
 }
 
-function leaveTemporaryChat() {
+async function leaveTemporaryChat() {
   if (!state.temporaryConversation) return;
-  state.temporaryConversation = null;
-  resetComposerPresentation();
-  state.temporaryModelOpen = false;
-  state.selectedConversationId = null;
-  state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
-  state.status = '已返回普通聊天；临时内容仍在隔离恢复记录中，24 小时内可继续。';
-  state.error = '';
-  render();
-  void loadOrdinaryComposerDraft().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `普通会话草稿未读取：${String(error)}`; render(); });
+  const temporaryId = state.temporaryConversation.temporaryId;
+  const generation = ++composerDraftRouteGeneration;
+  try {
+    await transitionComposerDraftRoute({
+      flush: flushTemporaryDraft,
+      read: async () => null,
+      isCurrent: () => generation === composerDraftRouteGeneration && state.temporaryConversation?.temporaryId === temporaryId,
+      commit: async () => {
+        state.temporaryConversation = null;
+        resetComposerPresentation();
+        state.temporaryModelOpen = false;
+        state.selectedConversationId = null;
+        state.pane = 'chat';
+        state.status = '已返回普通聊天；临时内容仍在隔离恢复记录中，24 小时内可继续。';
+        state.error = '';
+        render();
+        await loadOrdinaryComposerDraft();
+        render();
+      },
+    });
+  } catch (error) {
+    if (handleExpiredTemporary(error, temporaryId)) return;
+    state.error = `草稿未能安全切换：${String(error)}`; render();
+  }
 }
 
 async function sendLocalMessage() {
+  const owner = state;
+  const sendPressedAtMs = Date.now();
   const text = state.composerDraft.trim();
-  if (!text && !state.composerAttachments.length) {
+  const attachmentCount = state.temporaryConversation
+    ? (state.temporaryConversation.draftAttachmentIds || []).length : state.composerAttachments.length;
+  if (!text && !attachmentCount) {
     state.error = '请输入文字或保留附件后再发送。';
     render();
     return;
   }
   if (state.temporaryConversation) {
+    if (owner.temporarySendPreparing) return;
+    const temporaryId = owner.temporaryConversation.temporaryId;
+    const materialSignature = () => JSON.stringify([owner.composerDraft, owner.temporaryConversation?.draftAttachmentIds || []]);
+    const pressedMaterial = materialSignature();
+    const currentRoute = () => state === owner && owner.temporaryConversation?.temporaryId === temporaryId;
+    owner.temporarySendPreparing = true;
     try {
-      await updateTemporaryDraft(state.composerDraft);
-      state.temporaryConversation = await invoke('append_desktop_temporary_message', { args: { temporaryId: state.temporaryConversation.temporaryId } });
-      state.composerDraft = ''; state.composerAttachments = []; state.error = ''; state.status = '临时消息已保存到隔离恢复记录；没有调用模型。'; render();
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时消息未保存：${String(error)}`; render(); }
+      await updateTemporaryDraft(owner.composerDraft);
+      if (!currentRoute()) return;
+      if (materialSignature() !== pressedMaterial) {
+        owner.error = '保存期间临时输入已改变，请再次点击发送。'; render(); return;
+      }
+      const updated = await invoke('append_desktop_temporary_message', { args: { temporaryId } }, owner);
+      if (!currentRoute()) return;
+      if (materialSignature() === pressedMaterial) {
+        owner.temporaryConversation = updated;
+        owner.composerDraft = ''; owner.composerAttachments = [];
+      } else {
+        // The completed local message belongs to the pressed snapshot. Keep input
+        // typed while its receipt was pending as the next temporary draft.
+        owner.temporaryConversation = { ...updated, ...owner.temporaryConversation, messages: updated.messages, draft: owner.composerDraft };
+        scheduleTemporaryDraft(owner.composerDraft);
+      }
+      owner.error = ''; owner.status = '临时消息已保存到隔离恢复记录；没有调用模型。'; render();
+    } catch (error) {
+      if (!currentRoute() || error?.code === 'STALE_DATA_AREA') return;
+      if (handleExpiredTemporary(error, temporaryId)) return;
+      owner.error = `临时消息未保存：${String(error)}`; render();
+    } finally {
+      owner.temporarySendPreparing = false;
+    }
     return;
   }
   if (!native || !state.current) {
-    state.error = native ? '先导入一个本地工作区。' : 'Web 预览不会写入 Desktop SQLite。';
+    state.error = native ? '本机聊天数据尚未就绪，请关闭后重新打开应用。' : 'Web 预览不会写入 Desktop SQLite。';
     render();
     return;
   }
-  try { await flushOrdinaryComposerDraft(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.error = `草稿未写入本机：${String(error)}`;
+  if (owner.ordinarySendPreparing || owner.pendingChatSubmission) return;
+  owner.ordinarySendPreparing = true;
+  const sendRoute = { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId,
+    draft: state.composerDraft, attachmentIds: state.composerAttachments.map(item => item.id).join('\n') };
+  try {
+    await flushConversationChoiceSaves();
+    if (state !== owner) return;
+    // A save can outlive navigation or another edit. This Send press must not
+    // authorize the destination conversation or newer, different material.
+    if (state.temporaryConversation || state.current?.summary.id !== sendRoute.workspaceId
+        || state.selectedConversationId !== sendRoute.conversationId) return;
+    await flushOrdinaryComposerDraft();
+    if (state !== owner) return;
+    if (!sendRoute.conversationId) {
+      // A suspended WebView can miss its expiry timer. The native read clears
+      // stale text before Send can authorize it, while retaining choices/files.
+      const persisted = await invoke('read_desktop_conversation_draft', {
+        workspaceId: sendRoute.workspaceId, conversationId: null,
+      });
+      if (state !== owner) return;
+      if ((persisted?.text || '') !== sendRoute.draft) {
+        if (!state.temporaryConversation && state.current?.summary.id === sendRoute.workspaceId
+            && state.selectedConversationId === sendRoute.conversationId
+            && state.composerDraft === sendRoute.draft) {
+          state.composerDraft = persisted?.text || '';
+          state.composerAttachments = Array.isArray(persisted?.attachments) ? persisted.attachments : [];
+          state.status = '草稿文字已到期；附件和选择仍保留，请检查后再发送。';
+          render();
+        }
+        return;
+      }
+    }
+  } catch (error) {
+    if (state !== owner || error?.code === 'STALE_DATA_AREA') return;
+    state.error = `草稿或会话设置未能确认保存：${String(error)}`;
+    render();
+    return;
+  } finally {
+    owner.ordinarySendPreparing = false;
+  }
+  if (state !== owner || state.temporaryConversation || state.current?.summary.id !== sendRoute.workspaceId
+      || state.selectedConversationId !== sendRoute.conversationId) return;
+  if (state.composerDraft !== sendRoute.draft
+      || state.composerAttachments.map(item => item.id).join('\n') !== sendRoute.attachmentIds) {
+    state.status = '输入内容已变化，请再次点击发送。';
     render();
     return;
   }
   const conversation = resolveConversation(state.current, state.selectedConversationId);
   const sentDraft = state.composerDraft;
   const sentAttachments = [...state.composerAttachments];
-  const pendingModelId = conversation ? null : newConversationModelId();
+  const pendingModelId = conversation ? null : newConversationModelId(owner);
   const pendingPreferences = conversation ? null : { ...state.conversationPreferences };
-  const autoSelected = !(conversation ? state.p6gSelection?.conversationOverride?.modelId : pendingModelId);
-  const selectedPresetId = (conversation ? state.p6gSelection?.conversationOverride?.modelId : pendingModelId) || autoCandidate(state.modelServiceSettings, {text, mimeTypes: conversationAutoMimeTypes(conversation, sentAttachments), webSearchEnabled: state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled})?.id;
-
+  const disclosedPreview = currentOrdinaryEgressPreview(owner);
+  if (!disclosedPreview) {
+    state.status = '本次接收方尚未确认，请核对显示的服务商与模型后再次点击发送。';
+    render();
+    return;
+  }
+  const sendSelection = { email: owner.accountSync?.email || null,
+    keys: [...(owner.accountSync?.syncedConversationKeys || [])] };
   let clientSubmissionId = null;
+  let submissionCompleted = false;
+  let submittedConversationId = null;
   try {
     const workspaceId = state.current.summary.id;
     clientSubmissionId = createChatSubmissionId();
@@ -5291,27 +8005,34 @@ async function sendLocalMessage() {
       conversationId: conversation?.id || null,
       clientSubmissionId,
     };
-    ordinaryChatAttemptRegistry.add(clientSubmissionId);
-    const directSearch = usesIndependentSearch(state.modelServiceSettings, sentAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
-    const searchService = directSearch ? await createSearchServiceGrant(text, sentAttachments.map(item => item.id)) : null;
-    const attachmentReading = await createAttachmentReadingGrant(text, sentAttachments.map(item=>item.id), state.modelServiceSettings, selectedPresetId, sentAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
-    const retrievalRecipient = relayCoreNeedsCompanion(selectedPresetId,state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled,sentAttachments.length>0) ? await createLunaRetrievalGrant(text,sentAttachments.map(item=>item.id)) : null;
-    const execution = invoke('submit_desktop_ordinary_chat', { args: {
+    const attachmentIds = sentAttachments.map(item => item.id);
+    const preview = disclosedPreview;
+    if (state !== owner || owner.current?.summary?.id !== workspaceId
+        || (owner.selectedConversationId || null) !== (conversation?.id || null)
+        || owner.composerDraft !== sentDraft
+        || owner.composerAttachments.map(item => item.id).join('\n') !== sendRoute.attachmentIds) {
+      throw new Error('发送预览期间草稿或会话已变化，请再次点击发送');
+    }
+    const execution = invokeForAuthorizedDataAreaOperation(tauriBridge, 'submit_desktop_ordinary_chat', { args: {
       workspaceId,
       conversationId: conversation?.id || null,
       projectId: conversation ? null : state.pane === 'work' ? state.selectedWorkProjectId : null,
       expectedRevision: conversation?.revision ?? null,
       text,
-      attachmentIds: sentAttachments.map(item => item.id),
+      attachmentIds,
       modelId: pendingModelId,
       toneOverride: pendingPreferences?.toneOverride ?? null,
       webSearchOverride: typeof pendingPreferences?.webSearchOverride === 'boolean' ? pendingPreferences.webSearchOverride : null,
-      // The visible Send press is the only authorization action; the Rust boundary refuses
-      // to construct a provider request without this short, content-free receipt.
-      egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: (directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(selectedPresetId, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled, sentAttachments.length > 0)) + (autoSelected && selectedPresetId ? `:auto=${selectedPresetId}` : ''), clientSubmissionId, searchService, retrievalRecipient, attachmentReading },
-    } }).finally(() => ordinaryChatAttemptRegistry.delete(clientSubmissionId));
-    state.composerAttachments = []; writeComposerAttachments();
-    state.composerDraft = '';
+      // The same Send press binds the selected recipient and private draft fingerprint.
+      egressAuthorization: { approvedAtMs: sendPressedAtMs, disclosureVersion: 'normal-chat-egress-v2',
+        clientSubmissionId, draftFingerprint: preview.draftFingerprint,
+        recipientChoiceId: preview.recipientChoiceId, recipientProviderId: preview.recipientProviderId,
+        recipientModelId: preview.recipientModelId, retrievalRecipient: preview.retrievalRecipient || null, attachmentReading: preview.attachmentReading || null },
+    } }, owner);
+    // Native submit consumes the draft in the message transaction. Optimistic
+    // clearing must only change the view: scheduling here would write the old
+    // text back after commit (or erase recovery data before a rejected submit).
+    resetComposerPresentation();
     state.error = '';
     state.status = '消息已本地提交，正在等待模型回复。';
     render();
@@ -5319,61 +8040,115 @@ async function sendLocalMessage() {
     const refreshLoop = refreshDesktopRuntimeWhilePending(workspaceId, conversation?.id || null, () => settled);
     let result;
     try { result = await execution; } finally { settled = true; await refreshLoop; }
+    submissionCompleted = true;
+    submittedConversationId = result.conversationId;
     // A short request can settle before its first runtime refresh reaches this
     // window. Claim that one submission here; never re-arm it after streaming.
-    claimSubmittedChatRoute({ workspaceId, conversationId: result.conversationId, clientSubmissionId });
-    if (!conversation) state.pendingNewConversationModelId = undefined;
-    if (state.pendingCreatedConversationRouteWorkspaceId === workspaceId) state.pendingCreatedConversationRouteWorkspaceId = null;
-    state.status = result.state === 'COMPLETED' ? '回复已完成并写入用量账本。'
+    claimSubmittedChatRoute({ workspaceId, conversationId: result.conversationId, clientSubmissionId }, owner);
+    const ownsCompletedRoute = owner.current?.summary?.id === workspaceId
+      && owner.selectedConversationId === result.conversationId;
+    if (!conversation && ownsCompletedRoute) owner.pendingNewConversationModelId = null;
+    if (!owner.pendingChatSubmission && owner.pendingCreatedConversationRouteWorkspaceId === workspaceId) owner.pendingCreatedConversationRouteWorkspaceId = null;
+    if (ownsCompletedRoute) owner.status = result.state === 'COMPLETED' ? '回复已完成并写入用量账本。'
       : result.state === 'COMPLETED_ACCOUNTING_PENDING' ? '回复已保存；用量账本待本地恢复。'
       : result.state === 'CANCELLED' ? '已停止生成，已产生的文本保留。'
       : result.state === 'UNKNOWN' ? '连接结果未知；未自动重发。'
       : '回复失败；可从失败卡片重试。';
+    await syncPersistedConversationContinuation(workspaceId, result.conversationId, owner, sendSelection);
+    if (state !== owner) return;
     await loadDesktopContextRecords();
+    if (state !== owner) return;
     await loadDesktopDiagnosticRecords();
-    await syncPersistedConversationContinuation(workspaceId, result.conversationId);
+    if (state !== owner) return;
+    // Command settlement also covers a missed native terminal event.
+    if (!await loadDesktopUsageLedger({ owner, isCurrent: () => owner.current?.summary?.id === workspaceId })) return;
     await refresh({ runtimeRefresh: true });
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    if (state.pendingCreatedConversationRouteWorkspaceId === state.current?.summary?.id) state.pendingCreatedConversationRouteWorkspaceId = null;
-    if (state.pendingChatSubmission?.clientSubmissionId === clientSubmissionId) state.pendingChatSubmission = null;
-    state.composerDraft = sentDraft;
-    state.composerAttachments = sentAttachments;
-    if (!conversation) state.pendingNewConversationModelId = pendingModelId;
-    writeComposerAttachments();
-    state.error = `消息未提交：${String(error)}`;
-    render();
+  } catch (error) {
+    const ownsPending = owner.pendingChatSubmission?.clientSubmissionId === clientSubmissionId;
+    const sameRoute = owner.current?.summary?.id === sendRoute.workspaceId
+      && owner.selectedConversationId === sendRoute.conversationId;
+    const sameCommittedRoute = owner.current?.summary?.id === sendRoute.workspaceId
+      && owner.selectedConversationId === submittedConversationId;
+    if (ownsPending) {
+      owner.pendingChatSubmission = null;
+      if (owner.pendingCreatedConversationRouteWorkspaceId === sendRoute.workspaceId) owner.pendingCreatedConversationRouteWorkspaceId = null;
+    }
+    if (!submissionCompleted && ownsPending && sameRoute) {
+      owner.composerDraft = sentDraft;
+      owner.composerAttachments = sentAttachments;
+      if (!conversation) owner.pendingNewConversationModelId = pendingModelId;
+      if (state === owner) writeComposerAttachments();
+    }
+    if (submissionCompleted ? sameCommittedRoute : sameRoute) {
+      owner.error = submissionCompleted
+        ? `回复已写入本机，但界面回读未完成：${String(error)}`
+        : `消息未提交：${String(error)}`;
+      if (state === owner) render();
+    }
   }
 }
 
 saveLocalMessage = sendLocalMessage;
 
 let composerCameraStream = null;
+let composerCameraOwner = null;
+let composerCameraRoute = null;
+let composerCameraGeneration = 0;
 function stopComposerCamera({ close = true } = {}) {
+  composerCameraGeneration += 1;
   for (const track of composerCameraStream?.getTracks?.() || []) track.stop();
   composerCameraStream = null;
+  const owner = composerCameraOwner || state;
+  composerCameraOwner = null;
+  composerCameraRoute = null;
   if (close) {
-    state.cameraCaptureOpen = false;
-    state.cameraCaptureReady = false;
-    state.cameraCaptureBusy = false;
-    state.cameraCaptureError = '';
+    owner.cameraCaptureOpen = false;
+    owner.cameraCaptureReady = false;
+    owner.cameraCaptureBusy = false;
+    owner.cameraCaptureError = '';
   }
 }
 function attachComposerCameraStream() {
   const video = document.querySelector('[data-composer-camera-video]');
   if (!video || !composerCameraStream || video.srcObject === composerCameraStream) return;
-  video.srcObject = composerCameraStream;
+  const owner = composerCameraOwner;
+  const route = composerCameraRoute;
+  const generation = composerCameraGeneration;
+  const stream = composerCameraStream;
+  owner.cameraCaptureReady = false;
+  const capture = document.querySelector('[data-action="capture-composer-camera"]');
+  if (capture) capture.disabled = true;
+  const markReady = () => {
+    if (generation !== composerCameraGeneration || composerCameraStream !== stream
+        || !isCurrentComposerAttachmentRoute(owner, route) || !owner.cameraCaptureOpen
+        || document.querySelector('[data-composer-camera-video]') !== video
+        || !video.videoWidth || !video.videoHeight) return;
+    owner.cameraCaptureReady = true;
+    video.closest?.('.camera-capture-stage')?.querySelector('[data-composer-camera-pending]')?.remove();
+    const button = document.querySelector('[data-action="capture-composer-camera"]');
+    if (button) button.disabled = false;
+  };
+  video.addEventListener?.('loadedmetadata', markReady);
+  video.addEventListener?.('resize', markReady);
+  video.srcObject = stream;
   void video.play().catch(() => {});
+  markReady();
 }
 async function openComposerCamera() {
+  const owner = state;
+  const route = captureComposerAttachmentRoute(owner);
   if (!native || (!state.current && !state.temporaryConversation)) {
-    state.error = native ? '先进入临时聊天或导入本地工作区。' : 'Web 预览不能把相机原图写入私有草稿。';
+    state.error = native ? '本机聊天数据尚未就绪，请重新打开应用后添加附件。' : 'Web 预览不能把相机原图写入私有草稿。';
     render();
     return;
   }
   const count = state.temporaryConversation ? (state.temporaryConversation.draftAttachmentIds || []).length : state.composerAttachments.length;
   if (count >= 4) { state.error = '每条本地消息最多保留 4 个附件。'; render(); return; }
-  if (!navigator.mediaDevices?.getUserMedia) { state.error = '当前 macOS WebView 不提供相机采集；草稿没有改变。'; render(); return; }
+  if (!navigator.mediaDevices?.getUserMedia) { state.error = '当前系统 WebView 不提供相机采集；草稿没有改变。'; render(); return; }
   stopComposerCamera();
+  composerCameraOwner = owner;
+  composerCameraRoute = route;
+  const generation = composerCameraGeneration;
   state.composerAddOpen = false;
   state.cameraCaptureOpen = true;
   state.cameraCaptureReady = false;
@@ -5381,19 +8156,33 @@ async function openComposerCamera() {
   state.cameraCaptureError = '';
   render();
   try {
-    composerCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-    state.cameraCaptureReady = true;
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    if (generation !== composerCameraGeneration || !isCurrentComposerAttachmentRoute(owner, route) || !owner.cameraCaptureOpen) {
+      for (const track of stream.getTracks?.() || []) track.stop();
+      return;
+    }
+    composerCameraStream = stream;
+    state.cameraCaptureReady = false;
     render();
     queueMicrotask(attachComposerCameraStream);
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
+    if (generation !== composerCameraGeneration || !isCurrentComposerAttachmentRoute(owner, route)) return;
     stopComposerCamera({ close: false });
     state.cameraCaptureError = error?.name === 'NotAllowedError'
-      ? '相机权限未授予；可在“系统设置 → 隐私与安全性 → 相机”允许后重试。草稿没有改变。'
+      ? '相机权限未授予；请在系统隐私设置中允许南枫 AI 使用相机后重试。草稿没有改变。'
+      : error?.name === 'NotFoundError'
+      ? '未检测到可用相机；草稿没有改变。'
+      : ['NotReadableError', 'AbortError'].includes(error?.name)
+      ? '相机可能被其他应用占用；请关闭占用后重试。草稿没有改变。'
       : '相机当前不可用；请检查是否被其他应用占用后重试。草稿没有改变。';
     render();
   }
 }
 async function captureComposerCamera() {
+  const owner = state;
+  const route = composerCameraRoute;
+  const generation = composerCameraGeneration;
+  if (!route || !isCurrentComposerAttachmentRoute(owner, route)) return;
   const video = document.querySelector('[data-composer-camera-video]');
   if (!video || !composerCameraStream || !state.cameraCaptureReady || state.cameraCaptureBusy) return;
   const width = Number(video.videoWidth) || 0;
@@ -5409,11 +8198,16 @@ async function captureComposerCamera() {
     canvas.height = height;
     canvas.getContext('2d', { alpha: false })?.drawImage(video, 0, 0, width, height);
     const dataUrl = canvas.toDataURL('image/png');
-    if (state.temporaryConversation) {
-      state.temporaryConversation = await invoke('import_desktop_temporary_camera_capture', { args: { temporaryId: state.temporaryConversation.temporaryId, dataUrl } });
+    if (route.temporaryId) {
+      const temporary = await invoke('import_desktop_temporary_camera_capture', { args: { temporaryId: route.temporaryId, dataUrl } }, owner);
+      if (generation !== composerCameraGeneration) return;
+      if (!isCurrentComposerAttachmentRoute(owner, route)) { stopComposerCamera(); return; }
+      state.temporaryConversation = temporary;
       state.composerDraft = state.temporaryConversation.draft || state.composerDraft;
     } else {
-      const attachment = await invoke('import_desktop_camera_capture', { args: { workspaceId: state.current.summary.id, dataUrl } });
+      const attachment = await invoke('import_desktop_camera_capture', { args: { workspaceId: route.workspaceId, dataUrl } }, owner);
+      if (generation !== composerCameraGeneration) return;
+      if (!isCurrentComposerAttachmentRoute(owner, route)) { stopComposerCamera(); return; }
       if (!state.composerAttachments.some(item => item.sha256 === attachment.sha256)) {
         state.composerAttachments = [...state.composerAttachments, attachment];
         writeComposerAttachments();
@@ -5422,7 +8216,10 @@ async function captureComposerCamera() {
     stopComposerCamera();
     state.status = '相机原图已私有复制到当前草稿；尚未发送。';
     state.error = '';
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
+    if (generation !== composerCameraGeneration) return;
+    if (route.temporaryId && handleExpiredTemporary(error, route.temporaryId)) return;
+    if (!isCurrentComposerAttachmentRoute(owner, route) || error?.code === 'STALE_DATA_AREA') { stopComposerCamera(); return; }
     state.cameraCaptureBusy = false;
     state.cameraCaptureError = `相机原图未加入草稿：${String(error)}`;
   }
@@ -5430,185 +8227,126 @@ async function captureComposerCamera() {
 }
 
 async function pickComposerAttachment(kind) {
-  if (!native || (!state.current && !state.temporaryConversation)) { state.error = native ? '先进入临时聊天或导入本地工作区。' : 'Web 预览不能私有复制附件。'; render(); return; }
+  const owner = state;
+  const route = captureComposerAttachmentRoute(owner);
+  if (!native || (!state.current && !state.temporaryConversation)) { state.error = native ? '本机聊天数据尚未就绪，请重新打开应用后添加附件。' : 'Web 预览不能私有复制附件。'; render(); return; }
   const currentAttachmentCount = state.temporaryConversation ? (state.temporaryConversation.draftAttachmentIds || []).length : state.composerAttachments.length;
   if (currentAttachmentCount >= 4) { state.error = '每条本地消息最多保留 4 个附件。'; render(); return; }
   const image = kind === 'image';
   // The native dialog must not silently gray out a valid WAV/M4A on a host-specific UTI map.
   // Import remains fail-closed in Rust: this picker grants no read capability beyond one explicit selection.
-  const selectedPath = await dialogInvoke('open', image
-    ? { multiple: false, directory: false, filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp'] }] }
-    : { multiple: false, directory: false },
-  );
-  if (!selectedPath || Array.isArray(selectedPath)) return;
   try {
-    if (state.temporaryConversation) {
-      state.temporaryConversation = await invoke('import_desktop_temporary_attachment', { args: { temporaryId: state.temporaryConversation.temporaryId, selectedPath } });
+    const selectedPath = await dialogInvoke('open', image
+      ? { multiple: false, directory: false, filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp'] }] }
+      : { multiple: false, directory: false },
+    );
+    if (!isCurrentComposerAttachmentRoute(owner, route)) return;
+    if (!selectedPath || Array.isArray(selectedPath)) return;
+    if (route.temporaryId) {
+      const temporary = await invoke('import_desktop_temporary_attachment', { args: { temporaryId: route.temporaryId, selectedPath } }, owner);
+      if (!isCurrentComposerAttachmentRoute(owner, route)) return;
+      state.temporaryConversation = temporary;
       state.composerDraft = state.temporaryConversation.draft || state.composerDraft;
       state.status = '临时附件已私有复制并绑定 TEMPORARY_SESSION；不会进入普通会话。';
       state.composerAddOpen = false; state.error = ''; render(); return;
     }
-    const attachment = await invoke('import_desktop_conversation_attachment', { args: { workspaceId: state.current.summary.id, selectedPath } });
+    const attachment = await invoke('import_desktop_conversation_attachment', { args: { workspaceId: route.workspaceId, selectedPath } }, owner);
+    if (!isCurrentComposerAttachmentRoute(owner, route)) return;
     if (state.composerAttachments.some(item => item.sha256 === attachment.sha256)) { state.status = '相同附件已在当前草稿中；未重复添加。'; }
     else { state.composerAttachments = [...state.composerAttachments, attachment]; writeComposerAttachments(); state.status = '附件已私有复制并完成内容校验；未外发。'; }
     state.composerAddOpen = false; state.error = ''; render();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `附件未加入草稿：${String(error)}`; render(); }
+  } catch (error) {
+    if (route.temporaryId && handleExpiredTemporary(error, route.temporaryId)) return;
+    if (!isCurrentComposerAttachmentRoute(owner, route) || error?.code === 'STALE_DATA_AREA') return;
+    state.error = `附件未加入草稿：${String(error)}`; render();
+  }
 }
 
-function startInlineConversationRename({ id, revision, workspaceId = null, title, surface = 'sidebar' }) {
-  if (!id || state.batchEditing || state.settingsConversationReturn?.readOnly) return;
-  const original = String(title || '未命名会话');
-  state.contextMenu = null;
-  state.inlineConversationRename = { id, revision: Number(revision), workspaceId, original, draft: original, surface };
-  render();
-  requestAnimationFrame(() => {
-    const input = app.querySelector('[data-inline-conversation-rename]');
-    if (!input || state.inlineConversationRename?.id !== id) return;
-    input.focus({ preventScroll: true });
-    input.select();
-  });
-}
-
-function cancelInlineConversationRename() {
-  if (!state.inlineConversationRename) return;
-  state.inlineConversationRename = null;
-  render();
-}
-
-async function commitInlineConversationRename(input) {
-  const edit = state.inlineConversationRename;
-  if (!edit || !input?.isConnected || !input.matches('[data-inline-conversation-rename]')) return;
-  const title = input.value.trim();
-  if (!title) {
-    state.error = '会话标题不能为空。';
-    input.setCustomValidity('会话标题不能为空。');
-    input.reportValidity();
-    input.focus({ preventScroll: true });
-    input.select();
-    return;
-  }
-  state.inlineConversationRename = null;
-  if (title === edit.original.trim()) { render(); return; }
-  if (!native) { state.error = 'Web 预览不能保存会话标题。'; render(); return; }
-  render();
-  await mutateConversationLifecycle({ dataset: { id: edit.id, revision: String(edit.revision), ...(edit.workspaceId ? { workspaceId: edit.workspaceId } : {}) } }, 'update', { title }, '会话已重命名。');
-}
-
-function startInlineRenameFromTitle(target) {
-  const sidebarTitle = target.closest('.chat-history-title');
-  if (sidebarTitle) {
-    const row = sidebarTitle.closest('[data-conversation-row]');
-    if (!row || row.dataset.archived === 'true') return false;
-    if (state.inlineConversationRename?.id === row.dataset.id && state.inlineConversationRename.surface === 'sidebar') return false;
-    startInlineConversationRename({ id: row.dataset.id, revision: row.dataset.revision, workspaceId: row.dataset.workspaceId || null, title: sidebarTitle.textContent, surface: 'sidebar' });
-    return true;
-  }
-  if (!target.closest('.chat-title h1')) return false;
-  const conversation = currentConversation();
-  if (!conversation) return false;
-  if (state.inlineConversationRename?.id === conversation.id && state.inlineConversationRename.surface === 'header') return false;
-  startInlineConversationRename({ id: conversation.id, revision: conversation.revision, title: conversation.title, surface: 'header' });
-  return true;
-}
-
-app.addEventListener('click', event => {
-  if (event.detail < 2 || !startInlineRenameFromTitle(event.target)) return;
-  event.preventDefault();
-  event.stopPropagation();
-}, true);
-app.addEventListener('dblclick', event => {
-  if (!startInlineRenameFromTitle(event.target)) return;
-  event.preventDefault();
-  event.stopPropagation();
-}, true);
-app.addEventListener('input', event => {
-  if (event.target.matches('[data-inline-conversation-rename]') && state.inlineConversationRename) {
-    state.inlineConversationRename.draft = event.target.value;
-    event.target.setCustomValidity('');
-  }
-});
-app.addEventListener('keydown', event => {
-  if (!event.target.matches('[data-inline-conversation-rename]') || event.isComposing) return;
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    event.stopPropagation();
-    void commitInlineConversationRename(event.target);
-  } else if (event.key === 'Escape') {
-    event.preventDefault();
-    event.stopPropagation();
-    cancelInlineConversationRename();
-  }
-}, true);
-app.addEventListener('focusout', event => {
-  if (event.target.matches('[data-inline-conversation-rename]') && state.inlineConversationRename) {
-    void commitInlineConversationRename(event.target);
-  }
-});
-
-async function mutateConversationLifecycle(target, action, fields, success) {
+async function mutateConversationLifecycle(target, action, fields, success, options = {}) {
+  const owner = state;
+  let localSaved = false;
+  const canPresent = () => state === owner && (!options.presentationCurrent || options.presentationCurrent());
   const sidebarWorkspace = captureCloudSidebarWorkspace();
   const cloudWorkspaceId = target.dataset.workspaceId || state.dialog?.workspaceId || null;
   let cloudSyncVerificationPending = false;
-  await ensureConversationActionWorkspace(target);
-  if (!native || !state.current) return;
+  try { if (!await ensureConversationActionWorkspace(target)) return { localSaved }; }
+  catch (error) { if (!canPresent() || error?.code === 'STALE_DATA_AREA') return { localSaved }; throw error; }
+  if (!canPresent()) return { localSaved };
+  if (!native || !state.current) return { localSaved };
   const workspaceId = state.current.summary.id;
   const conversationId = target.dataset.id;
   const syncedConversationKeys = state.accountSync?.syncedConversationKeys || [];
   const shouldSync = Boolean(cloudWorkspaceId) || syncedConversationKeys.includes(`${workspaceId}:${conversationId}`);
-  let localSaved = false;
   const refreshSavedCloudRow = async () => {
-    const existing = state.cloudConversations?.find(row => row.workspaceId === workspaceId && row.id === conversationId);
-    if (!existing) return;
-    const [updated] = await cloudRowsFromLocalEntries([{ workspaceId, conversationId, cloudPinned: existing.cloudPinned }]);
+    if (!canPresent()) return { localSaved };
+    const existing = owner.cloudConversations?.find(row => row.workspaceId === workspaceId && row.id === conversationId);
+    if (!existing) return { localSaved };
+    const [updated] = await cloudRowsFromLocalEntries([{ workspaceId, conversationId, cloudPinned: existing.cloudPinned }], owner);
+    if (!canPresent()) return { localSaved };
     if (!updated) throw new Error('已保存会话，但列表回读失败。');
-    state.cloudConversations = state.cloudConversations.map(row => row === existing ? updated : row);
+    owner.cloudConversations = owner.cloudConversations.map(row => row === existing ? updated : row);
     persistCloudConversationCache();
   };
   try {
-    await invoke('mutate_desktop_domain', { args: {
+    await invokeForAuthorizedDataAreaOperation(tauriBridge, 'mutate_desktop_domain', { args: {
       intentId: intent('conversation-lifecycle'),
-      workspaceId: state.current.summary.id,
+      workspaceId,
       entity: 'conversation',
       action,
-      objectId: target.dataset.id,
+      objectId: conversationId,
       expectedRevision: Number(target.dataset.revision),
       fields,
-    } });
+    } }, owner);
     localSaved = true;
-    if (action === 'archive') {
-      removeFavoriteConversation(target.dataset.id);
-      if (state.selectedConversationId === target.dataset.id) state.selectedConversationId = null;
+    if (canPresent() && action === 'archive') {
+      removeFavoriteConversation(conversationId);
+      if (state.selectedConversationId === conversationId) state.selectedConversationId = null;
     }
-    state.error = '';
+    if (canPresent()) state.error = '';
     if (shouldSync) {
-      const receipt = await syncSelectedContinuation({ invoke, workspaceId, conversationId,
+      // A user-authorized local edit still needs its selected-cloud continuation
+      // after navigation; the RPC stays bound to the original data area.
+      const invokeOwner = (command, args) => invokeForAuthorizedDataAreaOperation(tauriBridge, command, args, owner);
+      const receipt = await syncSelectedContinuation({ invoke: invokeOwner, workspaceId, conversationId,
         syncedConversationKeys: cloudWorkspaceId ? [...syncedConversationKeys, `${workspaceId}:${conversationId}`] : syncedConversationKeys });
+      if (!canPresent()) return { localSaved };
       if (receipt.status === 'UNKNOWN') {
         cloudSyncVerificationPending = true;
-        state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId: state.current.summary.id, conversationId: target.dataset.id } };
-        scheduleUnknownSyncReconciliation(state.current.summary.id, target.dataset.id);
+        state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
+        scheduleUnknownSyncReconciliation(workspaceId, conversationId);
       } else if (!['SYNCED', 'UP_TO_DATE'].includes(receipt.status)) {
         throw new Error(`云端回写未完成：${receipt.status}`);
       }
     }
+    if (!canPresent()) return { localSaved };
     await refreshSavedCloudRow();
+    if (!canPresent()) return { localSaved };
     state.status = shouldSync
       ? (cloudSyncVerificationPending ? `${success}；云端提交正在后台核对。` : `${success} 已同步到云端。`)
       : success;
     state.dialog = null;
     await restoreCloudSidebarWorkspace(sidebarWorkspace);
-    await refresh();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    if (!canPresent()) return { localSaved };
+    // A title readback replaces the conversation projection, but its transcript
+    // is still the same reading surface. Patch through the runtime DOM owner so
+    // selection, code scrolling and connected media survive the metadata edit.
+    await refresh({ runtimeRefresh: action === 'update' && Object.keys(fields).length === 1 && Object.hasOwn(fields, 'title') });
+  } catch (error) {
+    if (!canPresent() || error?.code === 'STALE_DATA_AREA') return { localSaved };
     if (localSaved) {
       await refreshSavedCloudRow().catch(() => {});
+      if (!canPresent()) return { localSaved };
       state.dialog = null;
     }
     await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
+    if (!canPresent()) return { localSaved };
     state.error = localSaved
       ? `会话修改已保存在本机，但同步或列表回读未完成：${String(error)}`
       : `会话操作被拒绝：${String(error)}`;
     render();
+    return { localSaved, error: owner.error };
   }
+  return { localSaved };
 }
 
 function isCloudListConversationTarget(target) {
@@ -5617,11 +8355,13 @@ function isCloudListConversationTarget(target) {
 
 async function setCloudListConversationPinned(target, pinned) {
   if (!isCloudListConversationTarget(target)) return;
+  const owner = state;
   const pinnedConversationIds = new Set(await invoke('set_desktop_cloud_list_pinned', {
     conversationId: target.dataset.id,
     pinned,
-  }));
-  state.cloudConversations = state.cloudConversations.map(item => (
+  }, owner));
+  if (state !== owner) return;
+  owner.cloudConversations = owner.cloudConversations.map(item => (
     { ...item, pinned: pinnedConversationIds.has(item.id), cloudPinned: pinnedConversationIds.has(item.id) }
   ));
   persistCloudConversationCache();
@@ -5631,14 +8371,33 @@ async function setCloudListConversationPinned(target, pinned) {
   render();
 }
 
-async function ensureConversationActionWorkspace(target) {
+async function ensureConversationActionWorkspace(target, {presentationCurrent=()=>true}={}) {
   const workspaceId = target?.dataset?.workspaceId || target?.workspaceId || state.dialog?.workspaceId || state.contextMenu?.workspaceId || null;
-  if (!native || !workspaceId || state.current?.summary?.id === workspaceId) return;
-  state.current = await invoke('read_desktop_workspace', { workspaceId });
-  state.selectedConversationId = null;
-  state.history = await invoke('read_desktop_workbench_history', { workspaceId });
+  if (!native || !workspaceId || state.current?.summary?.id === workspaceId) return true;
+  const owner = state;
+  const sourceWorkspace = owner.current;
+  const sourceConversationId = owner.selectedConversationId;
+  const sourcePane = owner.pane;
+  const isCurrent = () => presentationCurrent() && state === owner && owner.current === sourceWorkspace
+    && owner.selectedConversationId === sourceConversationId && owner.pane === sourcePane;
+  let current;
+  let history;
+  try {
+    [current, history] = await Promise.all([
+      invoke('read_desktop_workspace', { workspaceId }, owner),
+      invoke('read_desktop_workbench_history', { workspaceId }, owner),
+    ]);
+  } catch (error) {
+    if (!isCurrent() || error?.code === 'STALE_DATA_AREA') return false;
+    throw error;
+  }
+  if (!isCurrent()) return false;
+  owner.current = current;
+  owner.selectedConversationId = null;
+  owner.history = history;
   reloadFavoriteConversationIds();
   await loadConversationReadState({ observeSelected: false });
+  return presentationCurrent() && state === owner && owner.current === current;
 }
 
 // Cloud-list actions may briefly load a restored workspace to mutate that row.
@@ -5650,22 +8409,36 @@ function captureCloudSidebarWorkspace() {
 
 async function restoreCloudSidebarWorkspace(snapshot) {
   if (!snapshot || !native || state.current?.summary?.id === snapshot.workspaceId) return;
-  const current = await invoke('read_desktop_workspace', { workspaceId: snapshot.workspaceId });
-  state.current = current;
-  state.selectedConversationId = resolveConversation(current, snapshot.selectedConversationId) ? snapshot.selectedConversationId : null;
-  state.history = await invoke('read_desktop_workbench_history', { workspaceId: snapshot.workspaceId });
-  state.favoriteConversationIds = new Set(await invoke('read_desktop_favorite_conversation_ids', { workspaceId: snapshot.workspaceId }));
+  const owner = state;
+  const sourceWorkspaceId = owner.current?.summary?.id;
+  const sourceConversationId = owner.selectedConversationId;
+  const sourcePane = owner.pane;
+  const [current, history, favoriteIds] = await Promise.all([
+    invoke('read_desktop_workspace', { workspaceId: snapshot.workspaceId }, owner),
+    invoke('read_desktop_workbench_history', { workspaceId: snapshot.workspaceId }, owner),
+    invoke('read_desktop_favorite_conversation_ids', { workspaceId: snapshot.workspaceId }, owner),
+  ]);
+  if (state !== owner || owner.current?.summary?.id !== sourceWorkspaceId
+      || owner.selectedConversationId !== sourceConversationId || owner.pane !== sourcePane) return;
+  owner.current = current;
+  owner.selectedConversationId = resolveConversation(current, snapshot.selectedConversationId) ? snapshot.selectedConversationId : null;
+  owner.history = history;
+  owner.favoriteConversationIds = new Set(favoriteIds);
   await loadConversationReadState({ observeSelected: false });
 }
 
 function batchConversationKey(item) {
-  return `${item?.workspaceId || 'local'}:${item?.id || ''}`;
+  return `${item?.workspaceId || state.current?.summary?.id || 'local'}:${item?.id || ''}`;
 }
 
 function currentBatchCandidates() {
+  const current = workspace();
+  const sidebarData = state.dataArea === 'WORK'
+    ? { ...current, exchange: { ...current?.exchange, conversations: resolveWorkConversationState(current, state.selectedWorkProjectId, state.selectedConversationId).conversations } }
+    : current;
   const source = state.sidebarConversationList === 'cloud'
     ? state.cloudConversations
-    : activeConversations(workspace(), state.manualUnreadAtMs);
+    : activeConversations(sidebarData, state.manualUnreadAtMs);
   return source.filter(item => item && !item.archived && !item.deleted);
 }
 
@@ -5674,53 +8447,197 @@ function finishConversationBatchEditing() {
   state.batchSelectedConversationKeys = new Set();
 }
 
+const cloudUnlinkPending = new WeakMap();
+function invalidateCloudReadForCancellation(owner) {
+  advanceCloudListRead(owner);
+  if (owner.accountSyncProgress?.operation === 'read') owner.accountSyncProgress = null;
+}
+
+function stopCloudConversationUnlink() {
+  const pending = cloudUnlinkPending.get(state);
+  if (!pending || state.dialog?.kind !== 'conversation-batch-delete' || !state.dialog.submitting) return;
+  pending.stopRequested = true;
+  state.dialog.stopRequested = true;
+  render();
+}
+async function cancelCloudConversationSyncItems(items, dialog = null) {
+  const owner = state;
+  if (!native || cloudUnlinkPending.has(owner) || !Array.isArray(items) || !items.length) return;
+  const targets = items.map(item => ({ id: item.id, workspaceId: item.workspaceId, revision: Number(item.revision) }));
+  if (targets.some(item => !item.id || !item.workspaceId)) {
+    if (dialog && owner.dialog === dialog) { owner.dialog = { ...dialog, submitting: false, failure: '云端与本地会话请分别操作。' }; render(); }
+    return;
+  }
+  const email = owner.accountSync?.email;
+  const workspaceId = owner.current?.summary?.id;
+  const selectedId = owner.selectedConversationId;
+  const pane = owner.pane;
+  const sourceDialog = owner.dialog;
+  const navigation = () => `${typeof desktopEntryRouteGeneration === 'number' ? desktopEntryRouteGeneration : 0}:${typeof conversationSelectionGeneration === 'number' ? conversationSelectionGeneration : 0}`;
+  const sourceNavigation = navigation();
+  const pending = dialog ? { ...dialog, items: targets, submitting: true, failure: '' } : null;
+  const token = { stopRequested: false };
+  const sameAccount = () => owner.accountSync?.email === email;
+  const ownsPresentation = () => state === owner && sameAccount() && owner.current?.summary?.id === workspaceId
+    && owner.selectedConversationId === selectedId && owner.pane === pane && navigation() === sourceNavigation
+    && (pending ? owner.dialog === pending : owner.dialog === sourceDialog && owner.contextMenu === null);
+  if (pending) owner.dialog = pending;
+  else owner.contextMenu = null;
+  cloudUnlinkPending.set(owner, token);
+  invalidateCloudReadForCancellation(owner);
+  render();
+  const remaining = [...targets];
+  let completed = 0;
+  try {
+    for (const item of targets) {
+      if (!ownsPresentation()) return;
+      if (token.stopRequested) break;
+      const receipt = await invokeForAuthorizedDataAreaOperation(tauriBridge, 'cancel_desktop_conversation_sync', {
+        workspaceId: item.workspaceId, conversationId: item.id,
+      }, owner);
+      if (receipt?.status !== 'CANCELLED') throw new Error('取消同步尚未确认；未确认项仍保留。');
+      completed += 1;
+      remaining.shift();
+      // A confirmed original-account fact remains valid after navigation. Never
+      // write it through global state or the later account's cache partition.
+      if (sameAccount()) {
+        invalidateCloudReadForCancellation(owner);
+        owner.cloudConversations = owner.cloudConversations.filter(row => !(row.workspaceId === item.workspaceId && row.id === item.id));
+        const syncedKeys = (owner.accountSync?.syncedConversationKeys || []).filter(key => key !== `${item.workspaceId}:${item.id}`);
+        owner.accountSync = { ...owner.accountSync, syncedConversationKeys: syncedKeys, selectedConversationCount: syncedKeys.length };
+        persistCloudConversationCache(owner.cloudConversations, owner);
+        if (ownsPresentation()) owner.batchSelectedConversationKeys?.delete(`${item.workspaceId}:${item.id}`);
+      }
+    }
+    if (!ownsPresentation()) return;
+    if (remaining.length) {
+      owner.dialog = { ...dialog, items: remaining, submitting: false, failure: `已取消 ${completed} 个；已停止后续，剩余 ${remaining.length} 个尚未取消。` };
+      render();
+      return;
+    }
+    let readbackWarning = '';
+    try { await loadDesktopAccountSync(owner); }
+    catch { readbackWarning = '账号状态暂未刷新，请稍后回读。'; }
+    if (!ownsPresentation()) return;
+    if (pending) owner.dialog = null;
+    if (dialog?.kind === 'conversation-batch-delete') finishConversationBatchEditing();
+    owner.error = '';
+    owner.status = `${completed > 1 ? `已取消 ${completed} 个会话的同步` : '已取消同步'}；云端副本已删除，本地对话保留。${readbackWarning}`;
+    render();
+  } catch (error) {
+    if (!ownsPresentation()) return;
+    const failure = `${completed ? `已取消 ${completed} 个；` : ''}${String(error)}`;
+    if (pending) owner.dialog = { ...dialog, items: remaining, submitting: false, failure };
+    else owner.error = `取消同步未完成：${failure}`;
+    render();
+  } finally {
+    if (cloudUnlinkPending.get(owner) === token) cloudUnlinkPending.delete(owner);
+  }
+}
+
 async function confirmConversationBatchDelete() {
+  const owner = state;
   const dialog = state.dialog;
   if (!native || dialog?.kind !== 'conversation-batch-delete' || dialog.submitting || !Array.isArray(dialog.items) || !dialog.items.length) return;
+  if (dialog.items.some(item => item.workspaceId)) return cancelCloudConversationSyncItems(dialog.items, dialog);
+  const sourceWorkspaceId = owner.current?.summary?.id;
+  const items = dialog.items.map(item => ({ ...item, revision: Number(item.revision) }));
+  const remaining = [...items];
   const sidebarWorkspace = captureCloudSidebarWorkspace();
-  state.dialog = { ...dialog, submitting: true, failure: '' };
+  const pendingDialog = { ...dialog, items, submitting: true, failure: '' };
+  owner.dialog = pendingDialog;
+  let expectedWorkspaceId = sourceWorkspaceId;
+  const isCurrentBatch = () => state === owner && owner.dialog === pendingDialog
+    && owner.current?.summary?.id === expectedWorkspaceId;
   render();
   let completed = 0;
-  const cloudOnly = dialog.items.every(item => item.workspaceId);
+  let cloudSyncVerificationPending = false;
   try {
-    for (const item of dialog.items) {
-      await ensureConversationActionWorkspace(item);
-      if (!state.current) throw new Error('本机工作区不可用');
-      if (item.workspaceId) {
-        await invoke('cancel_desktop_conversation_sync', { workspaceId: state.current.summary.id, conversationId: item.id });
-        state.cloudConversations = state.cloudConversations.filter(row => batchConversationKey(row) !== batchConversationKey(item));
-        cloudListReadGeneration += 1;
-        persistCloudConversationCache();
-        completed += 1;
-        continue;
+    for (const item of items) {
+      if (!isCurrentBatch()) return;
+      const workspaceId = item.workspaceId || sourceWorkspaceId;
+      let workspaceReady;
+      try {
+        workspaceReady = await ensureConversationActionWorkspace(item);
+      } catch (error) {
+        // The helper may adopt the source before a secondary read fails.
+        if (state === owner && owner.dialog === pendingDialog && owner.current?.summary?.id === workspaceId) expectedWorkspaceId = workspaceId;
+        throw error;
       }
-      await invoke('mutate_desktop_domain', { args: {
-        intentId: intent('conversation-lifecycle'), workspaceId: state.current.summary.id,
+      if (!workspaceReady) {
+        if (isCurrentBatch()) owner.dialog = { ...pendingDialog, items: remaining, submitting: false };
+        return;
+      }
+      expectedWorkspaceId = workspaceId;
+      if (!isCurrentBatch()) return;
+      await invokeForAuthorizedDataAreaOperation(tauriBridge, 'mutate_desktop_domain', { args: {
+        intentId: intent('conversation-lifecycle'), workspaceId,
         entity: 'conversation', action: 'softDelete', objectId: item.id,
         expectedRevision: Number(item.revision), fields: {},
-      } });
-      removeFavoriteConversation(item.id);
+      } }, owner);
       completed += 1;
+      remaining.shift();
+      if (isCurrentBatch()) {
+        removeFavoriteConversation(item.id);
+        owner.batchSelectedConversationKeys?.delete(`${workspaceId}:${item.id}`);
+        if (owner.current?.summary?.id === workspaceId && owner.selectedConversationId === item.id) owner.selectedConversationId = null;
+      }
+      if (item.workspaceId) {
+        const receipt = await invokeForAuthorizedDataAreaOperation(tauriBridge, 'sync_selected_desktop_conversation', {
+          workspaceId,
+          conversationId: item.id,
+        }, owner);
+        if (receipt.status === 'UNKNOWN') {
+          cloudSyncVerificationPending = true;
+          if (isCurrentBatch()) {
+            owner.accountSync = { ...owner.accountSync, pendingUnknown: { workspaceId, conversationId: item.id } };
+            scheduleUnknownSyncReconciliation(workspaceId, item.id);
+          }
+        } else if (!['SYNCED', 'UP_TO_DATE'].includes(receipt.status)) {
+          throw new Error(`云端回写未完成：${receipt.status}`);
+        }
+      }
     }
-    if (state.selectedConversationId && dialog.items.some(item => !item.workspaceId && item.id === state.selectedConversationId)) state.selectedConversationId = null;
+    if (!isCurrentBatch()) return;
+    if (state.selectedConversationId && dialog.items.some(item => item.id === state.selectedConversationId && (!item.workspaceId || item.workspaceId === state.current?.summary?.id))) state.selectedConversationId = null;
     const cloudKeys = new Set(dialog.items.filter(item => item.workspaceId).map(batchConversationKey));
     if (cloudKeys.size) {
       state.cloudConversations = state.cloudConversations.filter(item => !cloudKeys.has(batchConversationKey(item)));
-      cloudListReadGeneration += 1;
+      advanceCloudListRead();
       persistCloudConversationCache();
     }
     state.dialog = null;
     finishConversationBatchEditing();
     state.error = '';
-    state.status = cloudOnly
-      ? `已取消 ${completed} 个会话的同步，本地对话保留。`
+    state.status = cloudSyncVerificationPending
+      ? `已将 ${completed} 个会话移入回收站；云端提交正在后台核对。`
       : `已将 ${completed} 个会话移入回收站，可恢复。`;
-    if (cloudOnly) await loadDesktopAccountSync();
     await restoreCloudSidebarWorkspace(sidebarWorkspace);
+    if (state !== owner || owner.current?.summary?.id !== (sidebarWorkspace?.workspaceId || expectedWorkspaceId) || owner.dialog !== null) return;
     await refresh();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+  } catch (error) {
+    if (!isCurrentBatch()) return;
     await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
-    state.dialog = { ...dialog, submitting: false, failure: `${completed ? `已处理 ${completed} 个；` : ''}${String(error)}` };
+    if (state !== owner || owner.dialog !== pendingDialog || owner.current?.summary?.id !== (sidebarWorkspace?.workspaceId || expectedWorkspaceId)) return;
+    let failure = `${completed ? `已处理 ${completed} 个；` : ''}${String(error)}`;
+    if (completed) {
+      const snapshot = owner.current;
+      try {
+        const [projection, history] = await Promise.all([
+          invoke('read_desktop_workspace', { workspaceId: expectedWorkspaceId }, owner),
+          invoke('read_desktop_workbench_history', { workspaceId: expectedWorkspaceId }, owner),
+        ]);
+        if (!isCurrentBatch()) return;
+        if (owner.current === snapshot) {
+          owner.current = projection;
+          owner.history = history;
+        }
+      } catch {
+        if (!isCurrentBatch()) return;
+        failure += '；列表尚未刷新，请重开软件后核对。';
+      }
+    }
+    state.dialog = { ...dialog, items: remaining, submitting: false, failure };
     render();
   }
 }
@@ -5737,40 +8654,33 @@ app.addEventListener('click', event => {
   event.stopImmediatePropagation();
   const conversationId = target.dataset.id || '';
   const conversation = state.cloudConversations.find(item => item.workspaceId === workspaceId && item.id === conversationId);
-  void openCloudConversationRoute({ workspaceId, conversationId, title: conversation?.title || '云端会话' });
+  void openCloudConversationRoute({ workspaceId, conversationId, title: conversation?.title || '云端会话', areaOwner: state, areaGeneration: cloudOpenAreaGeneration });
 }, true);
 
 /** FB-P6-037: dialog state follows the typed receipt, never a CSS-only hide. */
 async function confirmConversationDelete(target) {
-  const dialog = state.dialog;
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const sourcePane = owner.pane;
+  const sourceSettingsPage = owner.settingsSection;
+  const dialog = owner.dialog;
   if (dialog?.workspaceId) {
-    if (!native || dialog.submitting) return;
-    const sidebarWorkspace = captureCloudSidebarWorkspace();
-    state.dialog = { ...dialog, submitting: true, failure: '' }; render();
-    try {
-      await ensureConversationActionWorkspace(dialog);
-      await invoke('cancel_desktop_conversation_sync', { workspaceId: dialog.workspaceId, conversationId: dialog.id });
-      state.cloudConversations = state.cloudConversations.filter(row => row.workspaceId !== dialog.workspaceId || row.id !== dialog.id);
-      cloudListReadGeneration += 1; persistCloudConversationCache();
-      state.dialog = null; state.status = '已取消同步，本地对话保留。';
-      await loadDesktopAccountSync();
-      await restoreCloudSidebarWorkspace(sidebarWorkspace); await refresh();
-    } catch (error) {
-      await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
-      state.dialog = { ...dialog, submitting: false, failure: String(error) }; render();
-    }
-    return;
+    if (dialog.submitting) return;
+    return cancelCloudConversationSyncItems([{ id: dialog.id, workspaceId: dialog.workspaceId, revision: dialog.revision }], dialog);
   }
   const pending = beginConversationRecycle(dialog, target.dataset.id);
   if (!native || !state.current || !pending) return;
-  state.dialog = pending;
+  owner.dialog = pending;
+  const isCurrentSource = () => state === owner && owner.current?.summary?.id === workspaceId;
+  const isCurrentDialog = () => isCurrentSource() && owner.dialog === pending;
   render();
   try {
-    await invoke('mutate_desktop_domain', { args: {
-      intentId: intent('conversation-lifecycle'), workspaceId: state.current.summary.id,
+    await invokeForAuthorizedDataAreaOperation(tauriBridge, 'mutate_desktop_domain', { args: {
+      intentId: intent('conversation-lifecycle'), workspaceId,
       entity: 'conversation', action: 'softDelete', objectId: dialog.id,
       expectedRevision: dialog.revision, fields: {},
-    } });
+    } }, owner);
+    if (!isCurrentDialog()) return;
     removeFavoriteConversation(dialog.id);
     if (state.selectedConversationId === dialog.id) state.selectedConversationId = null;
     const completed = completeConversationRecycle();
@@ -5778,45 +8688,60 @@ async function confirmConversationDelete(target) {
     state.error = '';
     state.status = completed.status;
     await refresh();
+    if (!isCurrentSource() || owner.pane !== sourcePane || owner.settingsSection !== sourceSettingsPage) return;
     document.querySelector(`[data-action="${completed.focusAction}"]`)?.focus({ preventScroll: true });
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    if (state.dialog?.kind === 'conversation-delete' && state.dialog.id === dialog.id) {
-      state.dialog = failConversationRecycle(dialog, error);
-    }
+  } catch (error) {
+    if (!isCurrentDialog()) return;
+    state.dialog = failConversationRecycle(dialog, error);
     render();
   }
 }
 
 async function confirmConversationPermanentDelete(target) {
-  const dialogState = state.dialog;
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const dialogState = owner.dialog;
   if (!native || !state.current || dialogState?.kind !== 'conversation-permanent-delete' || dialogState.submitting) return;
-  state.dialog = { ...dialogState, submitting: true, failure: '' };
+  const pendingDialog = { ...dialogState, submitting: true, failure: '' };
+  owner.dialog = pendingDialog;
+  const isCurrentSource = () => state === owner && owner.current?.summary?.id === workspaceId;
+  const isCurrentDialog = () => isCurrentSource() && owner.dialog === pendingDialog;
   render();
   try {
-    const receipt = await invoke('permanently_delete_desktop_conversation', { args: {
-      workspaceId: state.current.summary.id,
+    const receipt = await invokeForAuthorizedDataAreaOperation(tauriBridge, 'permanently_delete_desktop_conversation', { args: {
+      workspaceId,
       conversationId: target.dataset.id,
       expectedRevision: Number(target.dataset.revision),
-    } });
+    } }, owner);
+    if (!isCurrentDialog()) return;
     removeFavoriteConversation(target.dataset.id);
     if (state.selectedConversationId === target.dataset.id) state.selectedConversationId = null;
     state.dialog = null;
     state.error = '';
     state.status = receipt.cleanupPending ? '已永久删除会话；附件隔离清理将在下次本机维护时重试。' : '已永久删除会话。';
     await refresh();
+    if (!isCurrentSource()) return;
     await loadDesktopPrivacyInventory();
-    render();
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    if (state.dialog?.kind === 'conversation-permanent-delete') state.dialog = { ...dialogState, submitting: false, failure: String(error) };
+    if (isCurrentSource()) render();
+  } catch (error) {
+    if (!isCurrentDialog()) return;
+    state.dialog = { ...dialogState, submitting: false, failure: String(error) };
     render();
   }
 }
 
 async function confirmConversationBulkCleanup(scope) {
-  const dialogState = state.dialog;
+  const owner = state;
+  const workspaceId = owner.current?.summary?.id;
+  const dialogState = owner.dialog;
   if (!native || !state.current || dialogState?.kind !== 'conversation-bulk-cleanup' || dialogState.submitting) return;
-  const targets = (state.current.exchange.conversations || []).filter(item => scope === 'recycle' ? item.deleted : item.archived && !item.deleted);
-  state.dialog = { ...dialogState, count: targets.length, submitting: true, failure: '' };
+  const targets = (owner.current.exchange.conversations || [])
+    .filter(item => scope === 'recycle' ? item.deleted : item.archived && !item.deleted)
+    .map(item => ({ id: item.id, revision: Number(item.revision) }));
+  const pendingDialog = { ...dialogState, count: targets.length, submitting: true, failure: '' };
+  owner.dialog = pendingDialog;
+  const isCurrentSource = () => state === owner && owner.current?.summary?.id === workspaceId;
+  const isCurrentDialog = () => isCurrentSource() && owner.dialog === pendingDialog;
   render();
   let completed = 0;
   let cleanupPending = 0;
@@ -5824,26 +8749,29 @@ async function confirmConversationBulkCleanup(scope) {
   for (const conversation of targets) {
     try {
       if (scope === 'recycle') {
-        const receipt = await invoke('permanently_delete_desktop_conversation', { args: {
-          workspaceId: state.current.summary.id,
+        const receipt = await invokeForAuthorizedDataAreaOperation(tauriBridge, 'permanently_delete_desktop_conversation', { args: {
+          workspaceId,
           conversationId: conversation.id,
           expectedRevision: Number(conversation.revision),
-        } });
+        } }, owner);
         if (receipt.cleanupPending) cleanupPending += 1;
       } else {
-        await invoke('mutate_desktop_domain', { args: {
-          intentId: intent('conversation-bulk-recycle'), workspaceId: state.current.summary.id,
+        await invokeForAuthorizedDataAreaOperation(tauriBridge, 'mutate_desktop_domain', { args: {
+          intentId: intent('conversation-bulk-recycle'), workspaceId,
           entity: 'conversation', action: 'softDelete', objectId: conversation.id,
           expectedRevision: Number(conversation.revision), fields: {},
-        } });
+        } }, owner);
       }
       completed += 1;
-      removeFavoriteConversation(conversation.id);
-      if (state.selectedConversationId === conversation.id) state.selectedConversationId = null;
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+      if (isCurrentSource()) {
+        removeFavoriteConversation(conversation.id);
+        if (owner.selectedConversationId === conversation.id) owner.selectedConversationId = null;
+      }
+    } catch (error) {
       rejected.push(String(error));
     }
   }
+  if (!isCurrentDialog()) return;
   state.dialog = null;
   if (completed > 0) {
     const base = scope === 'recycle' ? `已永久删除 ${completed} 个回收站会话。` : `已将 ${completed} 个会话移入回收站。`;
@@ -5853,20 +8781,10 @@ async function confirmConversationBulkCleanup(scope) {
     state.error = `${scope === 'recycle' ? '回收站未清空' : '已归档会话未清空'}：${rejected[0] || '本机操作未完成。'}`;
   }
   await refresh();
+  if (!isCurrentSource()) return;
   await loadDesktopPrivacyInventory();
-  render();
+  if (isCurrentSource()) render();
 }
-
-app.addEventListener('contextmenu', event => {
-  const message = event.target.closest?.('.chat-message[data-message-id]');
-  if (!message || event.target.closest?.('[data-attachment-id], .chat-message-metadata') || window.getSelection()?.toString().trim()) return;
-  event.preventDefault();
-  openTransientOverlay('assistant-message-menu', message, {
-    messageId: message.dataset.messageId,
-    role: message.classList.contains('user') ? 'user' : 'assistant',
-    anchorRect: { left: event.clientX, right: event.clientX + 1, top: event.clientY, bottom: event.clientY + 1 },
-  });
-});
 
 app.addEventListener('contextmenu', event => {
   const row = event.target.closest('[data-conversation-row]');
@@ -5882,25 +8800,46 @@ app.addEventListener('click', async event => {
   if (state.contextMenu && !target?.closest('.chat-context-menu')) closeConversationContextMenu();
   if (action === 'choose-storage-location') {
     if (!native) return;
-    const selectedPath = await dialogInvoke('open', { directory: true, multiple: false });
-    if (!selectedPath) return;
+    const owner = state;
     try {
-      await invoke('choose_desktop_storage_location', { selectedPath });
-      state.dialog = { kind: 'model-settings-feedback', message: '保存路径已设置，下次启动生效。空目录会复制现有数据；已有南枫 AI 数据的目录会直接读取。旧目录保留。' };
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.dialog = { kind: 'model-settings-feedback', failed: true, message: String(error) }; }
+      const selectedPath = await dialogInvoke('open', { directory: true, multiple: false });
+      if (!selectedPath) return;
+      await invokeForAuthorizedDataAreaOperation(tauriBridge, 'choose_desktop_storage_location', { selectedPath }, owner);
+      if (state !== owner || state.pane !== 'settings' || state.settingsSection !== 'privacy') return;
+      let inventoryRefreshed = true;
+      try { await loadDesktopPrivacyInventory(); }
+      catch { inventoryRefreshed = false; }
+      if (state !== owner || state.pane !== 'settings' || state.settingsSection !== 'privacy') return;
+      state.dialog = { kind: 'model-settings-feedback', message: `保存路径已设置，下次启动生效。空目录会复制现有数据；已有南枫 AI 数据的目录会直接读取。旧目录保留。${inventoryRefreshed ? '' : '路径清单暂未刷新，请重新进入本机数据页查看。'}` };
+    } catch (error) {
+      if (state === owner && state.pane === 'settings' && state.settingsSection === 'privacy') {
+        state.dialog = { kind: 'model-settings-feedback', failed: true, message: String(error) };
+      } else {
+        owner.error = `数据保存路径未设置：${String(error)}`;
+      }
+    }
     render(); return;
   }
   if (action === 'open-conversation-row-menu') { openConversationContextMenu(target.closest('[data-conversation-row]'), target); return; }
   if (action === 'open-conversation-header-menu') { openConversationHeaderMenu(target); return; }
-  if (action === 'open-image-preview') { event.preventDefault(); await openImagePreview(target.dataset.attachmentId); return; }
+  if (action === 'open-image-preview') { event.preventDefault(); await openImagePreview(target.dataset.attachmentId, state.temporaryConversation?.temporaryId || state.current?.summary?.id); return; }
+  if (action === 'close-image-preview') { event.preventDefault(); cancelImagePreviewLoad(); state.imagePreview = null; render(); return; }
+  if (action === 'image-preview-previous' || action === 'image-preview-next') { event.preventDefault(); navigateImagePreview(action === 'image-preview-next' ? 'next' : 'previous'); return; }
+  if (action === 'close-pdf-preview') { event.preventDefault(); cancelPdfPreviewLoad(); render(); return; }
+  if (action === 'close-video-preview') { event.preventDefault(); await closeVideoPreview(); return; }
+  if (action === 'close-audio-preview') { event.preventDefault(); await closeAudioPreview(); return; }
+  if (action === 'close-text-preview') { event.preventDefault(); state.textPreview = null; render(); return; }
+  if (action === 'close-archive-preview') { event.preventDefault(); cancelArchivePreviewLoad(); render(); return; }
+  if (action === 'close-preview-boundary') { event.preventDefault(); state.previewBoundary = null; render(); return; }
+  if (action === 'pdf-page-previous' || action === 'pdf-page-next') { event.preventDefault(); navigatePdfPage(action === 'pdf-page-next' ? 1 : -1); return; }
   if (action === 'open-pdf-preview') { event.preventDefault(); await openPdfPreview(target.dataset.attachmentId); return; }
   if (action === 'open-video-preview') { event.preventDefault(); await openVideoPreview(target.dataset.attachmentId); return; }
   if (action === 'open-audio-preview') { event.preventDefault(); await openAudioPreview(target.dataset.attachmentId); return; }
   if (action === 'open-text-preview') { event.preventDefault(); await openTextPreview(target.dataset.attachmentId); return; }
   if (action === 'open-archive-preview') { event.preventDefault(); await openArchivePreview(target.dataset.attachmentId); return; }
-  if (action === 'open-archive-directory') { event.preventDefault(); if (state.archivePreview) { state.archivePreview = { ...state.archivePreview, directory: target.dataset.archivePath || '', entry: null }; render(); } return; }
+  if (action === 'open-archive-directory') { event.preventDefault(); showArchiveDirectory(target.dataset.archivePath || ''); return; }
   if (action === 'open-archive-entry-preview') { event.preventDefault(); await openArchiveEntryPreview(target.dataset.archiveEntryPath); return; }
-  if (action === 'archive-preview-back') { event.preventDefault(); if (state.archivePreview) { state.archivePreview = { ...state.archivePreview, entry: null }; render(); } return; }
+  if (action === 'archive-preview-back') { event.preventDefault(); showArchiveDirectory(); return; }
   if (action === 'archive-pdf-page-previous' || action === 'archive-pdf-page-next') { event.preventDefault(); const entry = state.archivePreview?.entry; if (entry?.entryPath) await openArchiveEntryPreview(entry.entryPath, Number(entry.pageNumber) + (action === 'archive-pdf-page-next' ? 1 : -1)); return; }
   if (action === 'toggle-video-playback') { event.preventDefault(); await togglePreviewPlayback('video'); return; }
   if (action === 'toggle-video-volume' || action === 'toggle-audio-volume') {
@@ -5928,14 +8867,18 @@ app.addEventListener('click', async event => {
   }
   if (action === 'copy-text-preview') {
     event.preventDefault();
-    const preview = state.textPreview;
-    if (!preview?.text) return;
+    const owner = state;
+    const preview = owner.textPreview;
+    if (!preview?.workspaceId || !preview.attachmentId || preview.loading || preview.error || typeof preview.text !== 'string') return;
+    const isCurrent = () => state === owner && owner.textPreview === preview;
+    const feedbackTarget = target.closest?.('.text-preview-menu')?.querySelector('summary') || target;
     try {
       await navigator.clipboard.writeText(preview.text);
-      showCopyIconFeedback(target);
-      state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-      if (error?.name !== 'AbortError') showPreviewActionError(target, '复制未完成。');
+      if (!isCurrent()) return;
+      showCopyIconFeedback(feedbackTarget);
+      owner.error = '';
+    } catch (error) {
+      if (isCurrent() && error?.name !== 'AbortError') showPreviewActionError(feedbackTarget, '复制未完成。');
     }
     return;
   }
@@ -5966,30 +8909,33 @@ app.addEventListener('click', async event => {
     try {
       if (action === 'chat-attachment-save') await saveAttachmentCopy(item);
       else await sharePreviewAttachment(item);
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (error?.name !== 'AbortError') showPreviewActionError(target, action === 'chat-attachment-save' ? '附件副本未保存。' : '分享未打开。'); }
+    } catch (error) { if (error?.name !== 'AbortError') showPreviewActionError(target, action === 'chat-attachment-save' ? '附件副本未保存。' : '分享未打开。'); }
     return;
   }
   if (action === 'save-preview-attachment') {
     event.preventDefault();
-    const preview = activePreviewForKind(target.dataset.previewKind);
-    try { await saveAttachmentCopy(preview || {}); }
-    catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; showPreviewActionError(target, '附件副本未保存。'); }
+    const owner = state, kind = target.dataset.previewKind;
+    const preview = activePreviewForKind(kind);
+    const isCurrent = () => state === owner && activePreviewForKind(kind) === preview;
+    const feedbackTarget = target.closest?.('.text-preview-menu')?.querySelector('summary') || target;
+    try { await saveAttachmentCopy(preview || {}, { isCurrent }); }
+    catch (error) { if (isCurrent()) showPreviewActionError(feedbackTarget, '附件副本未保存。'); }
     return;
   }
   if (action === 'share-preview-attachment') {
     event.preventDefault();
-    const preview = activePreviewForKind(target.dataset.previewKind);
-    try { await sharePreviewAttachment(preview); state.error = ''; }
-    catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (error?.name !== 'AbortError') showPreviewActionError(target, '分享未打开。'); }
+    const owner = state, kind = target.dataset.previewKind;
+    const preview = activePreviewForKind(kind);
+    const isCurrent = () => state === owner && activePreviewForKind(kind) === preview;
+    const feedbackTarget = target.closest?.('.text-preview-menu')?.querySelector('summary') || target;
+    try { await sharePreviewAttachment(preview); if (isCurrent()) owner.error = ''; }
+    catch (error) { if (isCurrent()) showPreviewActionError(feedbackTarget, '分享未完成。'); }
     return;
   }
-  if (action === 'close-image-preview') { event.preventDefault(); cancelImagePreviewLoad(); state.imagePreview = null; render(); return; }
-  if (action === 'image-preview-previous' || action === 'image-preview-next') { event.preventDefault(); navigateImagePreview(action === 'image-preview-next' ? 'next' : 'previous'); return; }
-  if (action === 'close-pdf-preview') { event.preventDefault(); state.pdfPreview = null; render(); return; }
   if (action === 'close-video-preview') { event.preventDefault(); await closeVideoPreview(); return; }
   if (action === 'close-audio-preview') { event.preventDefault(); await closeAudioPreview(); return; }
   if (action === 'close-text-preview') { event.preventDefault(); state.textPreview = null; render(); return; }
-  if (action === 'close-archive-preview') { event.preventDefault(); state.archivePreview = null; render(); return; }
+  if (action === 'close-archive-preview') { event.preventDefault(); cancelArchivePreviewLoad(); render(); return; }
   if (action === 'close-preview-boundary') { event.preventDefault(); state.previewBoundary = null; render(); return; }
   if (action === 'pdf-page-previous' || action === 'pdf-page-next') { event.preventDefault(); if (!state.pdfPreview?.attachmentId) return; await openPdfPreview(state.pdfPreview.attachmentId, state.pdfPreview.pageNumber + (action === 'pdf-page-next' ? 1 : -1), state.pdfPreview.workspaceId); return; }
   if (action === 'toggle-composer-add') {
@@ -6021,10 +8967,7 @@ app.addEventListener('click', async event => {
   }
   if (action === 'toggle-conversation-web-search') {
     event.preventDefault();
-    const current = typeof state.conversationPreferences.webSearchOverride === 'boolean'
-      ? state.conversationPreferences.webSearchOverride
-      : Boolean(state.productSettings.webSearchEnabled);
-    void updateConversationPreferences({ webSearchOverride: !current });
+    void updateConversationPreferences({}, { toggleWebSearch: true });
     return;
   }
   if (action === 'stop-desktop-compare') {
@@ -6035,18 +8978,39 @@ app.addEventListener('click', async event => {
       const accepted = await invoke('cancel_desktop_compare', { args: { executionId } });
       state.status = accepted ? '正在停止 Compare 两个分支；已生成内容会分别保留。' : '当前 Compare 没有可停止的分支。';
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `Compare 停止失败：${String(error)}`; }
+    } catch (error) { state.error = `Compare 停止失败：${String(error)}`; }
     render();
     return;
   }
   if (action === 'stop-ordinary-chat') {
     event.preventDefault();
-    if (!state.selectedConversationId) return;
+    const owner = state;
+    const conversationId = owner.selectedConversationId;
+    const workspaceId = owner.current?.summary?.id;
+    const expectedAttemptId = target.dataset.attemptId;
+    const runningTarget = () => resolveConversation(owner.current, conversationId)?.messages.some(message =>
+      message.attemptId === expectedAttemptId && message.runtimeState === 'RUNNING' && message.delivery === 'PARTIAL');
+    if (!native || !conversationId || !workspaceId || !expectedAttemptId || !runningTarget()) return;
+    const request = {}, routeGeneration = desktopEntryRouteGeneration, areaGeneration = cloudOpenAreaGeneration;
+    const pane = owner.pane, settingsVisit = owner.settingsReadGeneration, status = owner.status, error = owner.error;
+    ordinaryStopRequests.set(owner, request);
+    const ownsRoute = () => state === owner
+      && owner.current?.summary?.id === workspaceId
+      && owner.selectedConversationId === conversationId
+      && desktopEntryRouteGeneration === routeGeneration && cloudOpenAreaGeneration === areaGeneration
+      && owner.pane === pane && owner.settingsReadGeneration === settingsVisit
+      && ordinaryStopRequests.get(owner) === request && runningTarget()
+      && owner.status === status && owner.error === error;
     try {
-      const accepted = await invoke('cancel_desktop_ordinary_chat', { args: { conversationId: state.selectedConversationId } });
-      state.status = accepted ? '正在停止；已生成的文本会保留。' : '当前没有可停止的生成。';
-      state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `停止失败：${String(error)}`; }
+      const accepted = await invokeForAuthorizedDataAreaOperation(tauriBridge,
+        'cancel_desktop_ordinary_chat', { args: { workspaceId, conversationId, expectedAttemptId } }, owner);
+      if (!ownsRoute()) return;
+      owner.status = accepted ? '正在停止；已生成的文本会保留。' : '当前没有可停止的生成。';
+      owner.error = '';
+    } catch (error) {
+      if (!ownsRoute()) return;
+      owner.error = `停止失败：${String(error)}`;
+    }
     render();
     return;
   }
@@ -6054,29 +9018,196 @@ app.addEventListener('click', async event => {
     event.preventDefault();
     const attemptId = target.dataset.attemptId;
     if (!attemptId) return;
+    const owner = state;
+    const sendPressedAtMs = Date.now();
+    const retryConversationId = owner.selectedConversationId;
+    const retrySelection = { email: owner.accountSync?.email || null,
+      keys: [...(owner.accountSync?.syncedConversationKeys || [])] };
     const retryWorkspaceId = state.current?.summary?.id;
-    const retryOwnerId = createChatSubmissionId();
-    state.status = '正在按原模型恢复回答。';
-    state.error = '';
-    render();
+    const retryConversation = resolveConversation(owner.current, retryConversationId);
+    const retrySourceId = retryConversation?.currentLeafId;
+    const retrySource = retryConversation?.messages.find(item => item.id === retrySourceId);
+    if (!native || !retryWorkspaceId || owner.ordinarySendPreparing || owner.pendingChatSubmission
+        || retrySource?.attemptId !== attemptId || !['FAILED', 'UNKNOWN'].includes(retrySource.delivery)) return;
+    owner.ordinarySendPreparing = true;
+    let preparationOwned = true;
+    let clientSubmissionId = null;
     try {
-      const original = orderedConversationMessages(resolveConversation(state.current, state.selectedConversationId)).find(message => message.attemptId === attemptId);
-      const messages = orderedConversationMessages(resolveConversation(state.current, state.selectedConversationId));
-      const originalMaterial = retrySearchMaterial(messages, attemptId);
-      const originalAttachments = originalMaterial?.attachments || [];
-      const directSearch = usesIndependentSearch(state.modelServiceSettings, originalAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
-      const searchService = directSearch ? await createSearchServiceGrant(originalMaterial.text, originalAttachments.map(item => item.id)) : null;
-      const originalPreset = RELAYCORE_MODELS.find(model => model.providerId === original?.modelSnapshot?.providerId && (model.modelId === original?.modelSnapshot?.modelId || (model.presetId === "RELAYCORE_OPUS_5_5" && original?.modelSnapshot?.modelId === "claude-opus-5-5")))?.presetId;
-      const attachmentReading = await createAttachmentReadingGrant(originalMaterial.text, originalAttachments.map(item=>item.id), state.modelServiceSettings, original?.modelSnapshot?.modelId, originalAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
-      const retrievalRecipient = relayCoreNeedsCompanion(originalPreset,state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled,originalAttachments.length>0) ? await createLunaRetrievalGrant(originalMaterial.text,originalAttachments.map(item=>item.id)) : null;
-      ordinaryChatAttemptRegistry.add(retryOwnerId);
-      const result = await invoke('retry_desktop_ordinary_chat', { args: { attemptId, egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(originalPreset, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled, originalAttachments.length > 0), searchService, retrievalRecipient, attachmentReading } } }).finally(() => ordinaryChatAttemptRegistry.delete(retryOwnerId));
-      state.status = result.state === 'COMPLETED' ? '重试已完成并写入用量账本。' : ['COMPLETED_ACCOUNTING_PENDING', 'RESPONSE_COMMITTED'].includes(result.state) ? '回答已保存，计量记录待恢复。' : result.state === 'UNKNOWN' ? '重试结果仍未知，未再次自动重发。' : '重试未完成。';
+      const preview = await invokeForAuthorizedDataAreaOperation(tauriBridge,
+        'preview_desktop_ordinary_chat_retry_egress', { args: { attemptId } }, owner);
+      const current = resolveConversation(owner.current, retryConversationId);
+      if (state !== owner || owner.current?.summary?.id !== retryWorkspaceId
+          || owner.selectedConversationId !== retryConversationId
+          || current?.revision !== retryConversation.revision
+          || current?.currentLeafId !== retrySourceId) {
+        throw new Error('重试预览期间来源消息或会话已变化，请再次点击');
+      }
+      clientSubmissionId = createChatSubmissionId();
+      owner.pendingChatSubmission = { workspaceId: retryWorkspaceId, conversationId: retryConversationId, clientSubmissionId };
+      const resultPromise = invokeForAuthorizedDataAreaOperation(tauriBridge, 'retry_desktop_ordinary_chat', { args: {
+        attemptId, egressAuthorization: { approvedAtMs: sendPressedAtMs,
+          disclosureVersion: 'normal-chat-egress-v2', clientSubmissionId,
+          draftFingerprint: preview.draftFingerprint, recipientChoiceId: preview.recipientChoiceId,
+          recipientProviderId: preview.recipientProviderId, recipientModelId: preview.recipientModelId, retrievalRecipient: preview.retrievalRecipient || null, attachmentReading: preview.attachmentReading || null },
+      } }, owner);
+      owner.ordinarySendPreparing = false;
+      preparationOwned = false;
+      state.status = '已按原 Provider、原模型和原幂等键开始重试。';
+      state.error = '';
+      render();
+      const result = await resultPromise;
+      if (owner.pendingChatSubmission?.clientSubmissionId === clientSubmissionId) owner.pendingChatSubmission = null;
+      if (state !== owner || owner.current?.summary?.id !== retryWorkspaceId
+          || owner.selectedConversationId !== result.conversationId) {
+        await syncPersistedConversationContinuation(retryWorkspaceId, result.conversationId, owner, retrySelection);
+        return;
+      }
+      state.status = result.state === 'COMPLETED' ? '重试已完成并写入用量账本。' : result.state === 'UNKNOWN' ? '重试结果仍未知，未再次自动重发。' : '重试未完成。';
+      await syncPersistedConversationContinuation(retryWorkspaceId, result.conversationId, owner, retrySelection);
+      if (state !== owner) return;
       await loadDesktopContextRecords();
+      if (state !== owner) return;
       await loadDesktopDiagnosticRecords();
-      await syncPersistedConversationContinuation(retryWorkspaceId, result.conversationId);
-      await refresh();
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `重试被拒绝：${String(error)}`; render(); }
+      if (state !== owner) return;
+      if (!await loadDesktopUsageLedger({ owner, isCurrent: () => owner.current?.summary?.id === retryWorkspaceId })) return;
+      await refresh({ runtimeRefresh: true });
+    } catch (error) {
+      if (owner.pendingChatSubmission?.clientSubmissionId === clientSubmissionId) owner.pendingChatSubmission = null;
+      if (state !== owner || owner.current?.summary?.id !== retryWorkspaceId
+          || owner.selectedConversationId !== retryConversationId) return;
+      state.error = `重试被拒绝：${String(error)}`;
+      render();
+    } finally {
+      if (preparationOwned) owner.ordinarySendPreparing = false;
+    }
+    return;
+  }
+  if (action === 'change-model-completed-answer') {
+    event.preventDefault();
+    const owner = state;
+    owner.assistantMessageMenu = null;
+    const conversation = resolveConversation(owner.current, owner.selectedConversationId);
+    const messageId = target.dataset.messageId;
+    const source = conversation?.messages.find(item => item.id === messageId);
+    if (!native || !source || source.role !== 'assistant'
+        || !['COMPLETE', 'FAILED', 'CANCELLED', 'UNKNOWN'].includes(source.delivery)
+        || !source.attemptId || source.compareExecutionId || conversation.currentLeafId !== messageId
+        || conversation.archived || conversation.deleted || owner.ordinarySendPreparing) return;
+    owner.dialog = { kind: 'change-answer-model', workspaceId: owner.current.summary.id,
+      conversationId: conversation.id, messageId };
+    render();
+    return;
+  }
+  if (action === 'generate-answer-for-saved-user' || action === 'regenerate-completed-answer'
+      || action === 'confirm-change-answer-model') {
+    event.preventDefault();
+    const changeModel = action === 'confirm-change-answer-model';
+    const regenerate = action !== 'generate-answer-for-saved-user';
+    const targetPresetId = changeModel ? target.dataset.targetPresetId : null;
+    const owner = state;
+    const sendPressedAtMs = Date.now();
+    const modelDialog = changeModel ? owner.dialog : null;
+    owner.assistantMessageMenu = null;
+    if (owner.ordinarySendPreparing || owner.pendingChatSubmission) {
+      owner.status = '上一提交正在准备或等待本机确认，请稍后再次选择生成。';
+      render();
+      return;
+    }
+    if (!native || owner.temporaryConversation || !owner.current) return;
+    const workspaceId = owner.current.summary.id;
+    const conversationId = owner.selectedConversationId;
+    const sourceMessageId = target.dataset.messageId;
+    if (changeModel && (!targetPresetId || modelDialog?.kind !== 'change-answer-model'
+        || modelDialog.workspaceId !== workspaceId || modelDialog.conversationId !== conversationId
+        || modelDialog.messageId !== sourceMessageId)) return;
+    if (changeModel) owner.dialog = null;
+    owner.ordinarySendPreparing = true;
+    let preparationOwned = true;
+    let clientSubmissionId = null;
+    try {
+      await flushConversationChoiceSaves();
+      if (state !== owner || owner.current?.summary?.id !== workspaceId || owner.selectedConversationId !== conversationId) return;
+      const conversation = resolveConversation(owner.current, conversationId);
+      const sourceMessage = conversation?.messages.find(item => item.id === sourceMessageId);
+      if (!conversation || conversation.currentLeafId !== sourceMessageId
+          || conversation.archived || conversation.deleted
+          || (regenerate
+            ? sourceMessage?.role !== 'assistant'
+              || !(changeModel
+                ? ['COMPLETE', 'FAILED', 'CANCELLED', 'UNKNOWN'].includes(sourceMessage.delivery)
+                : sourceMessage.delivery === 'COMPLETE')
+              || !sourceMessage.attemptId || Boolean(sourceMessage.compareExecutionId)
+            : sourceMessage?.role !== 'user'
+              || conversation.messages.some(item => item.parentId === sourceMessageId))) {
+        owner.error = '当前消息已变化，请刷新会话后重试。';
+        render();
+        return;
+      }
+      const selection = { email: owner.accountSync?.email || null,
+        keys: [...(owner.accountSync?.syncedConversationKeys || [])] };
+      clientSubmissionId = createChatSubmissionId();
+      owner.pendingChatSubmission = { workspaceId, conversationId, clientSubmissionId };
+      const preview = await invokeForAuthorizedDataAreaOperation(tauriBridge,
+        'preview_desktop_existing_ordinary_chat_egress', { args: {
+          workspaceId, conversationId, sourceMessageId,
+          expectedRevision: conversation.revision,
+          operation: changeModel ? 'changeModel' : regenerate ? 'regenerate' : 'savedUser',
+          targetPresetId,
+        } }, owner);
+      const currentConversation = resolveConversation(owner.current, conversationId);
+      if (state !== owner || owner.current?.summary?.id !== workspaceId
+          || owner.selectedConversationId !== conversationId
+          || currentConversation?.revision !== conversation.revision
+          || currentConversation?.currentLeafId !== sourceMessageId) {
+        throw new Error('预览期间来源消息或会话已变化，请重新选择');
+      }
+      const execution = invokeForAuthorizedDataAreaOperation(tauriBridge,
+        regenerate ? 'regenerate_desktop_ordinary_chat' : 'generate_desktop_ordinary_chat_for_saved_user', { args: {
+        workspaceId, conversationId,
+        [regenerate ? 'assistantMessageId' : 'userMessageId']: sourceMessageId,
+        ...(changeModel ? { targetPresetId } : {}),
+        expectedRevision: conversation.revision,
+        egressAuthorization: { approvedAtMs: sendPressedAtMs, disclosureVersion: 'normal-chat-egress-v2',
+          clientSubmissionId, draftFingerprint: preview.draftFingerprint,
+          recipientChoiceId: preview.recipientChoiceId, recipientProviderId: preview.recipientProviderId,
+          recipientModelId: preview.recipientModelId, retrievalRecipient: preview.retrievalRecipient || null, attachmentReading: preview.attachmentReading || null },
+      } }, owner);
+      // Dispatch ends preparation; identity-bound admission still guards a
+      // duplicate click. Later settlement must not unlock a newer preparation.
+      owner.ordinarySendPreparing = false;
+      preparationOwned = false;
+      owner.status = changeModel ? '已选择目标模型，正在生成新的回答分支。'
+        : regenerate ? '正在生成新回答，原回答保留在分支历史。' : '已选择当前用户消息，正在等待模型生成回答。';
+      owner.error = '';
+      render();
+      let settled = false;
+      const refreshLoop = refreshDesktopRuntimeWhilePending(workspaceId, conversationId, () => settled);
+      let result;
+      try { result = await execution; } finally { settled = true; await refreshLoop; }
+      claimSubmittedChatRoute({ workspaceId, conversationId: result.conversationId, clientSubmissionId }, owner);
+      if (owner.current?.summary?.id === workspaceId && owner.selectedConversationId === result.conversationId) {
+        owner.status = result.state === 'COMPLETED' ? '新回答已保存为本地分支。'
+          : result.state === 'COMPLETED_ACCOUNTING_PENDING' ? '新回答已保存；用量账本待本地恢复。'
+          : result.state === 'CANCELLED' ? '已停止生成；已有内容保留。'
+          : result.state === 'UNKNOWN' ? '本次生成结果未知，未自动重发。'
+          : '本次生成未完成；已有内容保留。';
+      }
+      await syncPersistedConversationContinuation(workspaceId, result.conversationId, owner, selection);
+      if (state !== owner || owner.current?.summary?.id !== workspaceId || owner.selectedConversationId !== result.conversationId) return;
+      await loadDesktopContextRecords();
+      if (state !== owner) return;
+      await loadDesktopDiagnosticRecords();
+      if (state !== owner) return;
+      if (!await loadDesktopUsageLedger({ owner, isCurrent: () => owner.current?.summary?.id === workspaceId })) return;
+      await refresh({ runtimeRefresh: true });
+    } catch (error) {
+      if (owner.pendingChatSubmission?.clientSubmissionId === clientSubmissionId) owner.pendingChatSubmission = null;
+      if (state !== owner || owner.current?.summary?.id !== workspaceId || owner.selectedConversationId !== conversationId) return;
+      owner.error = `本次生成未能确认结果；请检查会话记录：${String(error)}`;
+      render();
+    } finally {
+      if (preparationOwned) owner.ordinarySendPreparing = false;
+    }
     return;
   }
   if (action === 'copy-message') {
@@ -6088,7 +9219,7 @@ app.addEventListener('click', async event => {
       await navigator.clipboard.writeText(payload);
       showMessageCopyFeedback(target);
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    } catch (error) {
       state.error = `复制失败：${String(error)}`;
       render();
     }
@@ -6103,21 +9234,7 @@ app.addEventListener('click', async event => {
       await navigator.clipboard.writeText(payload);
       showCopyIconFeedback(target);
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-      state.error = `复制失败：${String(error)}`;
-      render();
-    }
-    return;
-  }
-  if (action === 'copy-account-recovery-code') {
-    event.preventDefault();
-    const payload = String(target.dataset.copyValue || '');
-    if (!payload) { state.error = '恢复码不可用，请重新创建。'; render(); return; }
-    try {
-      await navigator.clipboard.writeText(payload);
-      showCopyIconFeedback(target);
-      state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    } catch (error) {
       state.error = `复制失败：${String(error)}`;
       render();
     }
@@ -6126,6 +9243,170 @@ app.addEventListener('click', async event => {
   if (action === 'open-assistant-message-menu') {
     event.preventDefault();
     toggleAssistantMessageMenu(target);
+    return;
+  }
+  if (action === 'show-conversation-branches') {
+    event.preventDefault();
+    const owner = state;
+    owner.assistantMessageMenu = null;
+    const conversation = resolveConversation(owner.current, owner.selectedConversationId);
+    if (!conversation || !owner.current) return;
+    owner.dialog = { kind: 'conversation-branches', workspaceId: owner.current.summary.id, conversationId: conversation.id, submitting: false, failure: '' };
+    render();
+    return;
+  }
+  if (action === 'edit-conversation-user-message') {
+    event.preventDefault();
+    const owner = state;
+    const conversation = resolveConversation(owner.current, owner.selectedConversationId);
+    const messageId = target.dataset.messageId;
+    const message = orderedConversationMessages(conversation).find(item => item.id === messageId);
+    owner.assistantMessageMenu = null;
+    if (!native || !owner.current || !message || message.role !== 'user' || conversation.archived || conversation.deleted
+        || !Array.isArray(message.blocks) || !message.blocks.length
+        || !message.blocks.every(block => block.kind === 'TEXT')) return;
+    owner.dialog = { kind: 'edit-conversation-user-message', workspaceId: owner.current.summary.id,
+      conversationId: conversation.id, messageId, text: messagePlainText(message), submitting: false, failure: '' };
+    render();
+    return;
+  }
+  if (action === 'save-conversation-user-message-edit') {
+    event.preventDefault();
+    const owner = state;
+    const edit = owner.dialog;
+    if (edit?.kind !== 'edit-conversation-user-message' || edit.submitting || !native) return;
+    const text = document.querySelector('#conversation-user-message-edit')?.value?.trim() || '';
+    if (!text) { edit.failure = '请输入消息文字。'; render(); return; }
+    const workspaceId = edit.workspaceId;
+    const conversationId = edit.conversationId;
+    const currentEditRoute = () => state === owner && owner.dialog === edit
+      && owner.selectedConversationId === conversationId && owner.current?.summary?.id === workspaceId;
+    const conversation = owner.current?.summary?.id === workspaceId ? resolveConversation(owner.current, conversationId) : null;
+    if (!conversation || conversation.archived || conversation.deleted || owner.selectedConversationId !== conversationId) return;
+    edit.text = text;
+    edit.submitting = true;
+    edit.failure = '';
+    render();
+    let saved = false;
+    try {
+      await invokeForAuthorizedDataAreaOperation(tauriBridge, 'mutate_desktop_domain', { args: {
+        intentId: intent('edit-user-message'), workspaceId, entity: 'conversation', action: 'editUserMessage',
+        objectId: conversationId, expectedRevision: conversation.revision, fields: { messageId: edit.messageId, text },
+      } }, owner);
+      saved = true;
+      if (!currentEditRoute()) return;
+      const current = await invoke('read_desktop_workspace', { workspaceId }, owner);
+      if (!currentEditRoute()) return;
+      owner.current = current;
+      let historyReadFailed = false;
+      try {
+        const history = await invoke('read_desktop_workbench_history', { workspaceId }, owner);
+        if (!currentEditRoute()) return;
+        owner.history = history;
+      } catch { historyReadFailed = true; }
+      if (!currentEditRoute()) return;
+      owner.dialog = null;
+      owner.status = historyReadFailed ? '编辑版本已保存；历史操作状态暂未回读。' : '编辑版本已保存为本地新分支；旧消息和回答仍在分支历史中。';
+      owner.error = '';
+      recomputeConversationFind();
+      render();
+    } catch (error) {
+      if (!currentEditRoute()) return;
+      edit.submitting = false;
+      edit.failure = saved ? `编辑已保存，但回读未完成：${String(error)}` : `编辑未保存：${String(error)}`;
+      render();
+    }
+    return;
+  }
+  if (action === 'select-conversation-branch') {
+    event.preventDefault();
+    const owner = state;
+    const branchDialog = owner.dialog;
+    if (branchDialog?.kind !== 'conversation-branches' || branchDialog.submitting || !native) return;
+    const workspaceId = branchDialog.workspaceId;
+    const conversationId = branchDialog.conversationId;
+    const currentBranchRoute = () => state === owner && owner.dialog === branchDialog
+      && owner.selectedConversationId === conversationId && owner.current?.summary?.id === workspaceId;
+    const conversation = owner.current?.summary?.id === workspaceId ? resolveConversation(owner.current, conversationId) : null;
+    const leafId = target.dataset.leafId;
+    if (!conversation || conversation.archived || conversation.deleted || owner.selectedConversationId !== conversationId || !conversationBranchLeaves(conversation).some(leaf => leaf.id === leafId)) return;
+    branchDialog.submitting = true;
+    branchDialog.failure = '';
+    render();
+    let saved = false;
+    try {
+      await invokeForAuthorizedDataAreaOperation(tauriBridge, 'mutate_desktop_domain', { args: {
+        intentId: intent('switch-branch'), workspaceId, entity: 'conversation', action: 'switchLeaf',
+        objectId: conversationId, expectedRevision: conversation.revision, fields: { messageId: leafId },
+      } }, owner);
+      saved = true;
+      if (!currentBranchRoute()) return;
+      const current = await invoke('read_desktop_workspace', { workspaceId }, owner);
+      if (!currentBranchRoute()) return;
+      owner.current = current;
+      let historyReadFailed = false;
+      try {
+        const history = await invoke('read_desktop_workbench_history', { workspaceId }, owner);
+        if (!currentBranchRoute()) return;
+        owner.history = history;
+      } catch { historyReadFailed = true; }
+      if (!currentBranchRoute()) return;
+      owner.dialog = null;
+      owner.status = historyReadFailed ? '分支已切换；历史操作状态暂未回读。' : '已切换到选中的本地消息分支；其他分支仍可切回。';
+      owner.error = '';
+      recomputeConversationFind();
+      render();
+    } catch (error) {
+      if (!currentBranchRoute()) return;
+      branchDialog.submitting = false;
+      branchDialog.failure = saved ? `分支已保存，但回读未完成：${String(error)}` : `分支切换未完成：${String(error)}`;
+      render();
+    }
+    return;
+  }
+  if (action === 'reference-message-to-other-area') {
+    event.preventDefault();
+    if (areaReferencePending) return;
+    const sourceOwner = state;
+    const conversation = resolveConversation(sourceOwner.current, sourceOwner.selectedConversationId);
+    const message = conversation?.messages?.find(item => item.id === target.dataset.messageId);
+    sourceOwner.assistantMessageMenu = null;
+    if (!native || !sourceOwner.runtimeInfo?.dataAreasReady || !sourceOwner.current || !conversation || !message) {
+      sourceOwner.error = '当前消息或另一数据区不可用，未写入引用。';
+      render();
+      return;
+    }
+    const targetArea = sourceOwner.dataArea === 'CHAT' ? 'WORK' : 'CHAT';
+    areaReferencePending = true;
+    sourceOwner.status = '正在把所选文字写入另一数据区草稿…';
+    render();
+    try {
+      const receipt = await invoke('reference_desktop_message_to_other_area', {
+        workspaceId: sourceOwner.current.summary.id,
+        conversationId: conversation.id,
+        messageId: message.id,
+        expectedConversationRevision: Number(conversation.revision),
+        targetWorkspaceId: dataAreaStates.get(targetArea)?.current?.summary?.id || null,
+      }, sourceOwner);
+      await switchDataArea(targetArea, targetArea === 'WORK' ? 'work' : 'chat');
+      if (state.dataArea !== targetArea) throw new Error('目标数据区尚未就绪；引用已留在目标草稿');
+      if (state.current?.summary?.id !== receipt.workspaceId) {
+        state.current = await invoke('read_desktop_workspace', { workspaceId: receipt.workspaceId });
+      }
+      state.selectedConversationId = null;
+      state.selectedWorkProjectId = null;
+      await loadOrdinaryComposerDraft();
+      state.status = '所选文字已写入另一数据区的未发送草稿；来源保持不变。';
+      state.error = '';
+      render();
+    } catch (error) {
+      if (error?.code === 'STALE_DATA_AREA') return;
+      if (state === sourceOwner) sourceOwner.error = `文字引用未完成：${String(error)}`;
+      else state.error = `目标草稿回读未完成：${String(error)}`;
+      render();
+    } finally {
+      areaReferencePending = false;
+    }
     return;
   }
   if (action === 'open-source-links') {
@@ -6139,40 +9420,50 @@ app.addEventListener('click', async event => {
   }
   if (action === 'open-source-link') {
     event.preventDefault();
+    const owner = state;
+    const request = {};
+    const pane = owner.pane, page = owner.settingsSection, visit = owner.settingsReadGeneration;
+    const conversation = owner.selectedConversationId, dialog = owner.dialog;
+    owner.sourceLinkRequest = request;
+    const ownsFeedback = () => state === owner && owner.sourceLinkRequest === request
+      && owner.pane === pane && owner.settingsSection === page && owner.settingsReadGeneration === visit
+      && owner.selectedConversationId === conversation && owner.dialog === dialog;
+    const ownedFailure = owner.sourceLinkFailure?.message === owner.error ? owner.sourceLinkFailure : null;
     try {
-      await invoke('open_desktop_source_link', { args: { href: String(target.dataset.href || '') } });
-      state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-      state.error = `无法打开来源网站：${String(error)}`;
+      await invoke('open_desktop_source_link', { args: { href: String(target.dataset.href || '') } }, owner);
+      if (!ownsFeedback()) return;
+      if (ownedFailure && owner.sourceLinkFailure === ownedFailure && owner.error === ownedFailure.message) {
+        owner.error = '';
+        owner.sourceLinkFailure = null;
+        render();
+      }
+    } catch (error) {
+      if (!ownsFeedback() || error?.code === 'STALE_DATA_AREA') return;
+      owner.error = `无法打开链接，请检查默认浏览器设置后重试：${String(error)}`;
+      owner.sourceLinkFailure = { message: owner.error };
       render();
     }
     return;
   }
-  if (action === 'reference-message-to-other-area') {
-    event.preventDefault();
-    const sourceOwner = state;
-    const targetArea = state.dataArea === 'CHAT' ? 'WORK' : 'CHAT';
-    state.assistantMessageMenu = null;
-    try {
-      const receipt = await invoke('reference_desktop_message_to_other_area', {
-        workspaceId: state.current.summary.id, conversationId: state.selectedConversationId,
-        messageId: target.dataset.messageId,
-        targetWorkspaceId: dataAreaStates.get(targetArea)?.current?.summary?.id || null,
-      });
-      await switchDataArea(targetArea, targetArea === 'WORK' ? 'work' : 'chat');
-      state.current = await invoke('read_desktop_workspace', { workspaceId: receipt.workspaceId });
-      state.selectedConversationId = null;
-      state.selectedWorkProjectId = null;
-      await loadOrdinaryComposerDraft();
-      render();
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; sourceOwner.error = String(error); if (state === sourceOwner) render(); }
-    return;
-  }
   if (action === 'show-assistant-answer-information' || action === 'show-answer-context') {
-    const record = state.contextSelectionRecords.find(item => item.assistantMessageId === target.dataset.messageId) || null;
-    state.assistantMessageMenu = null;
-    state.dialog = { kind: 'assistant-answer-information', record };
-    state.error = '';
+    const owner = state;
+    const workspaceId = owner.current?.summary?.id;
+    const conversationId = owner.selectedConversationId;
+    const assistantMessageId = target.dataset.messageId;
+    owner.assistantMessageMenu = null;
+    render();
+    try {
+      const record = native && workspaceId && conversationId && assistantMessageId
+        ? await invoke('read_desktop_ordinary_chat_context_record', { workspaceId, conversationId, assistantMessageId }, owner)
+        : owner.contextSelectionRecords.find(item => item.assistantMessageId === assistantMessageId) || null;
+      if (state !== owner || state.current?.summary?.id !== workspaceId
+        || state.selectedConversationId !== conversationId) return;
+      owner.dialog = { kind: 'assistant-answer-information', record };
+      owner.error = '';
+    } catch (error) {
+      if (state !== owner || error?.code === 'STALE_DATA_AREA') return;
+      owner.error = `回答信息读取失败：${String(error)}`;
+    }
     render();
     return;
   }
@@ -6198,46 +9489,68 @@ app.addEventListener('click', async event => {
         state.status = '已复制可分享内容；请在目标应用中通过系统粘贴发送。';
       }
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    } catch (error) {
       if (error?.name !== 'AbortError') state.error = '系统分享不可用，且未复制分享内容。';
     }
     render();
     return;
   }
   if (action === 'branch-from-message') {
-    state.assistantMessageMenu = null;
-    state.dialog = null;
-    const conversation = resolveConversation(state.current, state.selectedConversationId);
-    if (!native || !state.current || !conversation) { state.error = '当前没有可分支的本地会话。'; render(); return; }
+    const owner = state;
+    owner.assistantMessageMenu = null;
+    owner.dialog = null;
+    const conversation = resolveConversation(owner.current, owner.selectedConversationId);
+    if (!native || !owner.current || !conversation) { owner.error = '当前没有可分支的本地会话。'; render(); return; }
+    const workspaceId = owner.current.summary.id;
+    const sourceConversationId = conversation.id;
+    let savedBranchId = null;
     try {
-      const receipt = await invoke('mutate_desktop_domain', { args: {
-        intentId: intent('message-branch'), workspaceId: state.current.summary.id, entity: 'conversation',
-        action: 'branchFromMessage', objectId: conversation.id, expectedRevision: conversation.revision,
+      const receipt = await invokeForAuthorizedDataAreaOperation(tauriBridge, 'mutate_desktop_domain', { args: {
+        intentId: intent('message-branch'), workspaceId, entity: 'conversation',
+        action: 'branchFromMessage', objectId: sourceConversationId, expectedRevision: conversation.revision,
         fields: { messageId: target.dataset.messageId },
-      } });
-      state.selectedConversationId = receipt.objectId;
-      state.status = '已从该持久化消息创建本地分支；保留前缀与来源，不连接 Provider。';
-      state.error = '';
+      } }, owner);
+      savedBranchId = receipt.objectId;
+      if (state !== owner || owner.current?.summary?.id !== workspaceId) return;
+      if (owner.selectedConversationId === sourceConversationId) {
+        owner.selectedConversationId = savedBranchId;
+        owner.status = '已从该持久化消息创建本地分支；保留前缀与来源，不连接 Provider。';
+        owner.error = '';
+      }
       await refresh();
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `创建分支被拒绝：${String(error)}`; render(); }
+    } catch (error) {
+      if (state !== owner || owner.current?.summary?.id !== workspaceId) return;
+      if (savedBranchId && owner.selectedConversationId === savedBranchId) {
+        owner.error = `分支已保存在本机，但列表回读未完成：${String(error)}`;
+      } else if (owner.selectedConversationId === sourceConversationId) {
+        owner.error = `创建分支被拒绝：${String(error)}`;
+      } else return;
+      render();
+    }
     return;
   }
-  if (action === 'toggle-temporary-chat') { if (state.temporaryConversation) leaveTemporaryChat(); else await enterTemporaryChat(); return; }
+  if (action === 'toggle-temporary-chat') { if (state.temporaryConversation) await leaveTemporaryChat(); else await enterTemporaryChat(); return; }
   if (action === 'pick-composer-image' || action === 'pick-composer-file') { await pickComposerAttachment(action === 'pick-composer-image' ? 'image' : 'file'); return; }
   if (action === 'remove-composer-attachment') {
     if (state.temporaryConversation) {
-      try { state.temporaryConversation = await invoke('remove_desktop_temporary_attachment', { args: { temporaryId: state.temporaryConversation.temporaryId, attachmentId: target.dataset.id } }); state.error = ''; render(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时附件未移除：${String(error)}`; render(); }
-    } else { state.composerAttachments = state.composerAttachments.filter(item => item.id !== target.dataset.id); writeComposerAttachments(); render(); }
+      const temporaryId = state.temporaryConversation.temporaryId;
+      try { state.temporaryConversation = await invoke('remove_desktop_temporary_attachment', { args: { temporaryId, attachmentId: target.dataset.id } }); state.error = ''; render(); } catch (error) { if (!handleExpiredTemporary(error, temporaryId)) { state.error = `临时附件未移除：${String(error)}`; render(); } }
+    } else { state.composerAttachments = state.composerAttachments.filter(item => item.id !== target.dataset.id); writeComposerAttachments(target.dataset.id); render(); }
     return;
   }
   if (action === 'set-appearance-mode') { updateAppearance('mode', target.dataset.value); return; }
   if (action === 'set-font-size') { updateAppearance('fontSize', target.dataset.value); return; }
   if (action === 'set-theme-color') { updateAppearance('themeColor', target.dataset.value); return; }
   if (action === 'toggle-conversation-favorite' || action === 'context-menu-favorite') {
+    const owner = state;
     const sidebarWorkspace = captureCloudSidebarWorkspace();
-    await ensureConversationActionWorkspace(target);
+    if (!await ensureConversationActionWorkspace(target)) return;
+    if (state !== owner) return;
+    const workspaceId = owner.current?.summary?.id;
     await toggleFavoriteConversation(target.dataset.id, { renderAfter: false });
+    if (state !== owner || owner.current?.summary?.id !== workspaceId) return;
     await restoreCloudSidebarWorkspace(sidebarWorkspace);
+    if (state !== owner) return;
     render();
     return;
   }
@@ -6250,7 +9563,7 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-find') {
-    await ensureConversationActionWorkspace(target);
+    if (!await ensureConversationActionWorkspace(target)) return;
     cancelConversationFindRender();
     state.selectedConversationId = target.dataset.id;
     state.contextMenu = null;
@@ -6284,7 +9597,7 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-share') {
-    await ensureConversationActionWorkspace(target);
+    if (!await ensureConversationActionWorkspace(target)) return;
     state.contextMenu = null;
     const conversation = workspace()?.exchange?.conversations?.find(item => item.id === target.dataset.id);
     if (!conversation) return;
@@ -6292,27 +9605,7 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-cancel-sync') {
-    const sidebarWorkspace = captureCloudSidebarWorkspace();
-    await ensureConversationActionWorkspace(target);
-    if (!native || !state.current) return;
-    const cloudWorkspaceId = state.current.summary.id;
-    try {
-      await invoke('cancel_desktop_conversation_sync', {
-        workspaceId: cloudWorkspaceId,
-        conversationId: target.dataset.id,
-      });
-      await loadDesktopAccountSync();
-      state.cloudConversations = state.cloudConversations.filter(item => !(item.workspaceId === cloudWorkspaceId && item.id === target.dataset.id));
-      cloudListReadGeneration += 1;
-      persistCloudConversationCache();
-      state.contextMenu = null;
-      state.status = '已取消同步；云端副本已删除，本地对话保留。';
-      state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-      state.error = `取消同步未完成：${String(error)}`;
-    }
-    await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
-    render();
+    await cancelCloudConversationSyncItems([{id:target.dataset.id,workspaceId:target.dataset.workspaceId||state.current?.summary?.id}]);
     return;
   }
   if (action === 'context-menu-pin') {
@@ -6320,18 +9613,19 @@ app.addEventListener('click', async event => {
       await setCloudListConversationPinned(target, target.dataset.pinned !== 'true');
       return;
     }
-    await mutateConversationLifecycle(target, 'setPinned', { pinned: target.dataset.pinned !== 'true' }, target.dataset.pinned === 'true' ? '会话已取消置顶。' : '会话已置顶。');
     state.contextMenu = null;
+    render();
+    await mutateConversationLifecycle(target, 'setPinned', { pinned: target.dataset.pinned !== 'true' }, target.dataset.pinned === 'true' ? '会话已取消置顶。' : '会话已置顶。');
     return;
   }
   if (action === 'context-menu-unread') {
     const sidebarWorkspace = captureCloudSidebarWorkspace();
-    await ensureConversationActionWorkspace(target);
+    if (!await ensureConversationActionWorkspace(target)) return;
     try {
       await markConversationUnread(target.dataset.id);
       state.status = '会话已标记未读；真正打开该会话后清除。';
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    } catch (error) {
       state.error = `会话未读状态未更新：${String(error)}`;
     }
     await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
@@ -6340,22 +9634,20 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-archive') {
-    await mutateConversationLifecycle(target, target.dataset.archived === 'true' ? 'restore' : 'archive', {}, target.dataset.archived === 'true' ? '会话已恢复。' : '会话已归档。');
     state.contextMenu = null;
+    render();
+    await mutateConversationLifecycle(target, target.dataset.archived === 'true' ? 'restore' : 'archive', {}, target.dataset.archived === 'true' ? '会话已恢复。' : '会话已归档。');
     return;
   }
-  if (action === 'context-menu-rename') {
-    const menu = state.contextMenu;
-    startInlineConversationRename({ id: target.dataset.id, revision: target.dataset.revision, workspaceId: target.dataset.workspaceId || null, title: menu?.title || currentConversation()?.title, surface: menu?.source === 'header' ? 'header' : 'sidebar' });
-    return;
-  }
-  if (action === 'open-conversation-rename') {
-    const title = target.closest('[data-conversation-row]')?.querySelector('.chat-history-title')?.textContent;
-    startInlineConversationRename({ id: target.dataset.id, revision: target.dataset.revision, workspaceId: target.dataset.workspaceId || null, title, surface: 'sidebar' });
+  if (action === 'context-menu-rename' || action === 'open-conversation-rename') {
+    const conversation = target.dataset.workspaceId
+      ? state.cloudConversations?.find(item=>item.id===target.dataset.id && item.workspaceId===target.dataset.workspaceId)
+      : workspace()?.exchange?.conversations?.find(item=>item.id===target.dataset.id);
+    await inlineTitleEditor.begin({id:target.dataset.id,revision:Number(target.dataset.revision),title:conversation?.title||'',workspaceId:target.dataset.workspaceId||null,surface:'sidebar'});
     return;
   }
   if (action === 'context-menu-project') {
-    await ensureConversationActionWorkspace(target);
+    if (!await ensureConversationActionWorkspace(target)) return;
     const conversation = workspace()?.exchange?.conversations?.find(item => item.id === target.dataset.id);
     state.contextMenu = null;
     state.dialog = { kind: 'conversation-project', id: target.dataset.id, revision: Number(target.dataset.revision), projectId: conversation?.projectId || null, workspaceId: target.dataset.workspaceId || null };
@@ -6366,6 +9658,10 @@ app.addEventListener('click', async event => {
     state.contextMenu = null;
     state.dialog = { kind: 'conversation-delete', id: target.dataset.id, revision: Number(target.dataset.revision), workspaceId: target.dataset.workspaceId || null };
     render();
+    return;
+  }
+  if (action === 'save-conversation-rename') {
+    await mutateConversationLifecycle(target, 'update', { title: document.querySelector('#conversation-rename')?.value || '' }, '会话已重命名。');
     return;
   }
   if (action === 'save-conversation-project') {
@@ -6416,6 +9712,7 @@ app.addEventListener('click', async event => {
     render();
     return;
   }
+  if (action === 'stop-conversation-cloud-unlink') { stopCloudConversationUnlink(); return; }
   if (action === 'confirm-conversation-batch-delete') {
     await confirmConversationBatchDelete();
     return;
@@ -6457,6 +9754,7 @@ app.addEventListener('click', async event => {
     state.error = '';
     state.selectedConversationId = null;
     state.selectedWorkProjectId = null;
+    resetNewConversationComposer();
   } else if (action === 'show-workspace') {
     state.pane = 'work';
     state.profileOpen = false;
@@ -6478,11 +9776,15 @@ app.addEventListener('click', async event => {
   } else if (action === 'show-knowledge') {
     state.pane = 'knowledge';
     state.profileOpen = false;
+    void loadMarkdownKnowledgeTask().catch(() => {});
+  void loadJsonKnowledgeTask().catch(() => {});
+  void pdfKnowledge.load().catch(() => {});
+  void webKnowledge.load().catch(() => {});
   } else if (action === 'show-memory') {
     state.pane = 'memory';
     state.profileOpen = false;
   } else if (action === 'show-conversation') {
-    state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
+    state.pane = 'chat';
     state.profileOpen = false;
   }
   if (['return-workspace-origin', 'show-work', 'show-workspace', 'select-work-project', 'new-work-chat', 'select-work-conversation', 'show-projects', 'show-knowledge', 'show-memory', 'show-conversation'].includes(action)) {
@@ -6529,10 +9831,10 @@ app.addEventListener('click', async event => {
   if (action === 'open-search-attachment') { event.preventDefault(); if (searchAttachmentLongPressTriggered === target.dataset.entryId) { searchAttachmentLongPressTriggered = null; return; } await openSearchAttachment(fullSearchHit(target.dataset.entryId)); return; }
   if (action === 'open-search-attachment-menu') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId); if (hit) { rememberFullSearchScroll(hit.entryId); state.dialog = { kind: 'search-attachment-actions', hit, anchor: attachmentMenuAnchor(target.closest('.desktop-search-attachment-card') || target) }; render(); } return; }
   if (action === 'preview-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; state.dialog = null; await openSearchAttachment(hit); return; }
-  if (action === 'save-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; try { if (await saveAttachmentCopy(hit)) state.dialog = null; } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `附件副本未保存：${String(error)}`; } render(); return; }
+  if (action === 'save-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; try { if (await saveAttachmentCopy(hit)) state.dialog = null; } catch (error) { state.error = `附件副本未保存：${String(error)}`; } render(); return; }
   if (action === 'locate-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; state.dialog = null; await locateSearchHit(hit); return; }
   if (action === 'ask-delete-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (hit) { state.dialog = { kind: 'search-attachment-delete', hit }; render(); } return; }
-  if (action === 'confirm-delete-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('mutate_desktop_domain', { args: { intentId: intent('search-remove-attachment'), workspaceId: hit.workspaceId, entity: 'conversation', action: 'removeAttachment', objectId: hit.conversationId, expectedRevision: Number(hit.conversationRevision), fields: { messageId: hit.messageId, attachmentId: hit.attachmentId } } }); state.dialog = null; state.status = '附件引用已删除；共享私有副本仍会保留，最后一个引用移除后进入安全清理期。'; if (state.current?.summary?.id === hit.workspaceId) state.current = await invoke('read_desktop_workspace', { workspaceId: hit.workspaceId }); await runFullSearch({ restoreScroll: true }); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; render(); } return; }
+  if (action === 'confirm-delete-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('mutate_desktop_domain', { args: { intentId: intent('search-remove-attachment'), workspaceId: hit.workspaceId, entity: 'conversation', action: 'removeAttachment', objectId: hit.conversationId, expectedRevision: Number(hit.conversationRevision), fields: { messageId: hit.messageId, attachmentId: hit.attachmentId } } }); state.dialog = null; state.status = '附件引用已删除；共享私有副本仍会保留，最后一个引用移除后进入安全清理期。'; if (state.current?.summary?.id === hit.workspaceId) state.current = await invoke('read_desktop_workspace', { workspaceId: hit.workspaceId }); await runFullSearch({ restoreScroll: true }); } catch (error) { state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; render(); } return; }
   if (action === 'toggle-temporary-model') {
     event.preventDefault();
     if (!state.temporaryConversation) return;
@@ -6548,7 +9850,7 @@ app.addEventListener('click', async event => {
     void updateP6GConversationOverride(null);
   } else if (action === 'select-p6g-tier') {
     event.preventDefault();
-    state.p6gSelection = { ...(state.p6gSelection || {}), pickerTier: ['DAILY', 'DEEP', 'RELAYCORE'].includes(target.dataset.tier) ? target.dataset.tier : null };
+    state.p6gSelection = { ...(state.p6gSelection || {}), pickerTier: ['DEEP', 'DAILY', 'RELAYCORE'].includes(target.dataset.tier) ? target.dataset.tier : 'DAILY' };
     render();
   } else if (action === 'p6g-picker-back') {
     event.preventDefault();
@@ -6580,7 +9882,11 @@ app.addEventListener('input', event => {
     state.chatSearch = event.target.value;
     state.searchHistoryHighlighted = bestSearchHistoryMatch(state.chatSearch, state.searchHistory);
     if (!state.searchHistoryManuallyOpened) state.searchHistoryOpen = Boolean(state.searchHistoryHighlighted);
-    scheduleFullSearch();
+    if (searchImeTarget === event.target || event.isComposing) {
+      supersedeFullSearch();
+      if (fullSearchDebounce !== null) window.clearTimeout(fullSearchDebounce);
+      fullSearchDebounce = null;
+    } else scheduleFullSearch();
   }
   if (event.target.id === 'model-service-api-key') {
     const storedMask = '••••••••••••••••••••••••••••••••';
@@ -6593,20 +9899,26 @@ app.addEventListener('input', event => {
     state.modelSettingsError = '';
     const feedback = app.querySelector('[data-model-provider-feedback]');
     if (feedback?.dataset.providerId === state.modelProviderId) {
-      feedback.hidden = false; feedback.textContent = state.modelSettingsNotice;
-      feedback.classList.remove('error'); feedback.setAttribute('role', 'status');
+      feedback.hidden = false;
+      feedback.textContent = state.modelSettingsNotice;
+      feedback.classList.remove('error');
+      feedback.setAttribute('role', 'status');
     }
+    // Update the controls without replacing the focused password input.
+    const busy = state.modelSettingsSaving || state.modelSettingsTesting;
+    const save = app.querySelector('[data-action="save-model-service-settings"]');
+    if (save) save.disabled = busy || !value.trim();
+    const probe = app.querySelector('[data-action="test-model-service-connection"]');
+    if (probe) probe.disabled = true;
+    const reveal = app.querySelector('[data-action="reveal-model-service-credential"]');
+    if (reveal) reveal.disabled = busy || (!selectedModelService()?.credentialStored && !value);
   }
   const previewRange = event.target.closest?.('[data-video-preview-range], [data-audio-preview-range]');
   if (previewRange) {
     const kind = previewRange.hasAttribute('data-video-preview-range') ? 'video' : 'audio';
     const media = document.querySelector(`[data-${kind}-preview]`);
-    if (media) {
-      const positionMillis = Math.max(0, Number(previewRange.value) || 0);
-      if (kind === 'video' && state.videoPreview) state.videoPreview.pendingSeekMillis = positionMillis;
-      if (media.readyState >= 1) media.currentTime = positionMillis / 1000;
-      syncPreviewPlaybackUi(kind, media);
-    }
+    if (kind === 'video') seekVideoPreviewPosition(Math.max(0, Number(previewRange.value) || 0));
+    else if (media) { media.currentTime = Math.max(0, Number(previewRange.value) || 0) / 1000; syncPreviewPlaybackUi(kind, media); }
   }
   const volumeRange = event.target.closest?.('[data-video-preview-volume], [data-audio-preview-volume]');
   if (volumeRange) {
@@ -6621,6 +9933,11 @@ app.addEventListener('input', event => {
 });
 
 app.addEventListener('change', event => {
+  const editorKind = state.dialog?.kind;
+  if ((['knowledge', 'memory'].includes(editorKind) && event.target?.id === `${editorKind}-project`) || (editorKind === 'markdown-knowledge-review' && event.target?.id === 'markdown-knowledge-project') || (editorKind === 'json-knowledge-review' && event.target?.id === 'json-knowledge-project') || (editorKind === 'pdf-knowledge-review' && event.target?.id === 'pdf-knowledge-project') || (editorKind === 'web-knowledge-review' && event.target?.id === 'web-knowledge-project')) {
+    state.dialog.draft ??= {};
+    state.dialog.draft[event.target.id] = event.target.value;
+  }
   if (event.target.id === 'p6g-conversation-model') void updateP6GConversationOverride(event.target.value || null);
 });
 
@@ -6637,7 +9954,13 @@ app.addEventListener('pointerdown', event => {
 });
 
 app.addEventListener('keydown', event => {
-  if ((event.target.id === 'chat-search' || event.target.id === 'full-search-input') && event.key === 'Enter') { event.preventDefault(); void submitLocalSearch(); }
+  if ((event.target.id === 'chat-search' || event.target.id === 'full-search-input') && event.key === 'Escape'
+      && (searchImeTarget === event.target || event.isComposing || event.keyCode === 229)) return;
+  if ((event.target.id === 'chat-search' || event.target.id === 'full-search-input') && event.key === 'Enter') {
+    if (searchImeTarget === event.target || event.isComposing || event.keyCode === 229 || Date.now() - searchImeEndedAtMs < 100) return;
+    event.preventDefault();
+    void submitLocalSearch();
+  }
   if (event.key === 'Escape' && state.searchHistoryOpen) { state.searchHistoryOpen = false; state.suppressSearchHistoryFocus = true; render(); focusSearchAfterHistoryDismissal(); }
   else if (event.key === 'Escape' && state.searchPanel) { supersedeFullSearch(); state.searchLoading = false; state.searchPanel = false; render(); }
 });
@@ -6661,21 +9984,28 @@ window.addEventListener('resize', () => {
 });
 
 if (native) {
-  invoke('read_latest_chatgpt_import_task').then(task => { state.chatgptTask = task; }).catch(() => { /* Settings remains usable; errors surface on explicit resume. */ });
-  invoke('read_latest_claude_import_task').then(task => { state.claudeTask = task; }).catch(() => { /* Settings remains usable; errors surface on explicit resume. */ });
-  invoke('read_latest_p6k_zip_import_task').then(task => { state.p6kTask = task; }).catch(() => { /* P6-K is native-only. */ });
   invoke('read_p6h_diagnostics_status').then(enabled => { p6hDiagnosticsEnabled = Boolean(enabled); }).catch(() => {});
 }
 
 app.addEventListener('click', event => {
-  const action = event.target.closest?.('[data-action]')?.dataset.action;
-  if (!['export-local-backup', 'import-local-backup', 'select-local-backup-replace', 'clear-local-backup-replace', 'restore-local-backup', 'cancel-local-restore'].includes(action)) return;
+  const target = event.target.closest?.('[data-action]');
+  const action = target?.dataset.action;
+  if (!['select-local-backup-area', 'export-local-backup', 'import-local-backup', 'select-local-backup-replace', 'clear-local-backup-replace', 'restore-local-backup', 'cancel-local-restore'].includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  if (action === 'export-local-backup') void exportLocalBackup();
+  if (action === 'select-local-backup-area') {
+    const area = target.dataset.area;
+    if (!native || !state.runtimeInfo?.dataAreasReady || !['CHAT', 'WORK'].includes(area)
+        || [...dataAreaStates.values()].some(owner => owner.localBackup?.working)) return;
+    state.localBackupArea = area;
+    void loadSelectedBackupStatus().catch(error => {
+      if (error?.code !== 'STALE_DATA_AREA') selectedBackupAreaState().localBackup.error = `本机备份状态读取失败：${localBackupErrorMessage(error)}`;
+    }).finally(render);
+    render();
+  } else if (action === 'export-local-backup') void exportLocalBackup();
   else if (action === 'import-local-backup') void importLocalBackup();
-  else if (action === 'select-local-backup-replace') { state.localBackup = { ...state.localBackup, replaceLocal: true, error: '' }; render(); }
-  else if (action === 'clear-local-backup-replace') { state.localBackup = { ...state.localBackup, replaceLocal: false }; render(); }
+  else if (action === 'select-local-backup-replace') { const owner = selectedBackupAreaState(); owner.localBackup = { ...owner.localBackup, replaceLocal: true, error: '' }; render(); }
+  else if (action === 'clear-local-backup-replace') { const owner = selectedBackupAreaState(); owner.localBackup = { ...owner.localBackup, replaceLocal: false }; render(); }
   else if (action === 'restore-local-backup') void restoreLocalBackup();
   else if (action === 'cancel-local-restore') void cancelLocalRestore();
 }, true);
@@ -6683,14 +10013,17 @@ app.addEventListener('click', event => {
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   const action = target?.dataset.action;
-  if (!['show-google-login-requirements', 'sign-in-google-account', 'sign-out-google-account', 'load-account-cloud-documents', 'show-recent-conversation-list', 'show-cloud-conversation-list', 'open-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
+  if (!['show-google-login-requirements', 'sign-in-google-account', 'cancel-google-account-sign-in', 'sign-out-google-account', 'load-account-cloud-documents', 'show-recent-conversation-list', 'show-cloud-conversation-list', 'open-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
+  const owner = state;
+  const readToken = action === 'load-account-cloud-documents' ? Symbol('cloud-list-read') : null;
   event.preventDefault();
   event.stopImmediatePropagation();
   if (action === 'load-account-cloud-documents') {
-    if (cloudListReadPending) return;
-    cloudListReadPending = true;
+    if (cloudListReadPending.has(owner)) return;
+    cloudListReadPending.set(owner, readToken);
   }
   void (async () => {
+    let signInToken = null;
     try {
       if (!native) {
         if (action === 'context-menu-sync') {
@@ -6714,6 +10047,10 @@ app.addEventListener('click', event => {
       } else if (action === 'open-cloud-conversation') {
         state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.workspaceId || '' });
         state.selectedConversationId = target.dataset.conversationId || null;
+        if (state.dataArea === 'WORK') {
+          const opened = (state.current?.exchange?.conversations || []).find(item => item.id === state.selectedConversationId);
+          state.selectedWorkProjectId = opened?.projectId || null;
+        }
         state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
         state.status = '';
       } else if (action === 'context-menu-sync') {
@@ -6726,6 +10063,7 @@ app.addEventListener('click', event => {
         state.status = '正在核对云端版本并提交…';
         beginAccountSyncProgress('sync');
         await waitForAccountSyncProgressPaint();
+        if (state !== owner) return;
         const receipt = await invoke('sync_selected_desktop_conversation', { workspaceId, conversationId });
         if (receipt.status === 'UNKNOWN') {
           state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
@@ -6738,7 +10076,7 @@ app.addEventListener('click', event => {
           state.status = '云端版本已变化，本机未覆盖任何云端内容。';
           await completeAccountSyncProgress('云端版本已变化，本机未覆盖。', 'error');
         } else if (['SYNCED', 'UP_TO_DATE'].includes(receipt.status)) {
-          state.status = receipt.status === 'UP_TO_DATE' ? '所选对话已是最新版本。' : '所选对话已加密上传并通过云端回读。';
+          state.status = receipt.status === 'UP_TO_DATE' ? '所选对话已是最新版本。' : '所选对话已同步到南枫云并通过回读校验。';
           await completeAccountSyncProgress('', 'success');
         } else {
           throw new Error(`云端回写未完成：${receipt.status}`);
@@ -6754,32 +10092,48 @@ app.addEventListener('click', event => {
           state.status = '仍在等待系统浏览器的 Google 授权；未重复打开登录窗口。';
           return;
         }
+        signInToken = ++accountSignInToken;
         accountSignInPending = true;
         state.status = '等待系统浏览器完成 Google 授权…';
         render();
-        state.accountSync = await invoke('sign_in_desktop_google_account');
-        state.accountRecovery = null;
+        const signedIn = await invoke('sign_in_desktop_google_account');
+        if (signInToken !== accountSignInToken) return;
+        invalidateAccountCloudLists();
+        state.accountSync = signedIn;
         await restoreCachedCloudConversationList();
         state.status = '已建立南枫云应用账号会话；可直接读取云端会话。';
+      } else if (action === 'cancel-google-account-sign-in') {
+        if (!accountSignInPending) return;
+        await invoke('cancel_desktop_google_account_sign_in');
+        ++accountSignInToken;
+        accountSignInPending = false;
+        await loadDesktopAccountSync();
+        state.status = state.accountSync?.email
+          ? '已停止授权等待；账号状态已回读，当前仍为已登录。'
+          : '已取消本次 Google 授权等待；本机数据未改变。';
       } else if (action === 'sign-out-google-account') {
         state.accountSync = await invoke('sign_out_desktop_google_account');
-        state.accountRecovery = null;
-        state.cloudConversations = [];
-        cloudListReadGeneration += 1;
+        ++accountSignInToken;
+        accountSignInPending = false;
+        invalidateAccountCloudLists();
         clearCloudConversationCache();
         state.status = '已退出账号；本机对话与工作区保留不变。';
       } else if (action === 'load-account-cloud-documents') {
-        const readGeneration = ++cloudListReadGeneration;
+        const readGeneration = advanceCloudListRead(owner);
         beginAccountSyncProgress('read');
         state.status = '正在读取云端列表…';
         render();
         await waitForAccountSyncProgressPaint();
+        if (state !== owner) return;
         const receipt = await invoke('restore_all_desktop_cloud_conversations');
+        if (state !== owner) return;
+        if (readGeneration !== currentCloudListRead(owner)) return;
         const restored = Array.isArray(receipt?.restored) ? receipt.restored : [];
         const refreshedRows = await cloudRowsFromLocalEntries(restored);
+        if (state !== owner) return;
         // A newer read, explicit cloud removal, or sign-out won the race. Its
         // list state is authoritative; this old response must not put rows back.
-        if (readGeneration !== cloudListReadGeneration) return;
+        if (readGeneration !== currentCloudListRead(owner)) return;
         state.accountSync = { ...state.accountSync, remoteDocuments: [] };
         state.sidebarConversationList = 'cloud';
         state.cloudConversations = mergeCloudConversationList(state.cloudConversations, refreshedRows, receipt?.cloudConversationKeys);
@@ -6801,7 +10155,10 @@ app.addEventListener('click', event => {
         }
         persistCloudConversationCache();
         state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
-        const feedback = cloudReadFeedback(receipt);
+        const projectedKeys = new Set(refreshedRows.map(item => `${item.workspaceId}:${item.id}`));
+        const projectionFailedCount = dedupeCloudConversationEntries(restored)
+          .filter(item => !projectedKeys.has(`${item.workspaceId}:${item.conversationId}`)).length;
+        const feedback = cloudReadFeedback({ ...receipt, projectionFailedCount });
         state.status = feedback.message;
         notifyAccountSync(feedback.kind === 'success' ? 'success' : 'attention');
         await completeAccountSyncProgress(feedback.message, feedback.kind);
@@ -6821,31 +10178,76 @@ app.addEventListener('click', event => {
         await loadDesktopAccountSync();
       }
       state.error = '';
-    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    } catch (error) {
+      if (state !== owner || error?.code === 'STALE_DATA_AREA') return;
+      if (action === 'sign-in-google-account' && signInToken !== accountSignInToken) return;
       state.error = `账号与同步操作未完成：${accountSyncErrorMessage(error)}`;
-      if (action === 'sign-in-google-account') state.status = 'Google 授权未完成；本机数据与云端均未改变，可检查配置后重试。';
+      if (action === 'sign-in-google-account') state.status = 'Google 登录未完成；请查看错误说明，保留本机数据并核对账号状态后重试。';
       if (action === 'context-menu-sync') await completeAccountSyncProgress('请检查网络或登录后重试。', 'error');
-      if (action === 'load-account-cloud-documents') await completeAccountSyncProgress(accountSyncErrorMessage(error), 'error');
+      if (action === 'load-account-cloud-documents') await completeAccountSyncProgress('请检查网络或登录后重试。', 'error');
       if (['context-menu-sync', 'reconcile-account-sync'].includes(action)) notifyAccountSync('attention');
     } finally {
       // completeAccountSyncProgress owns the result lifetime. Clearing it here
       // immediately after the receipt/error turns the acknowledgement into a
       // one-frame flash, so sync/read must leave the completed card in place
       // until its own timeout expires.
-      if (action === 'sign-in-google-account') accountSignInPending = false;
-      if (action === 'load-account-cloud-documents') cloudListReadPending = false;
-      if (action === 'copy-account-recovery-code' && target?.__copyIconFeedback) window.setTimeout(render, COPY_SUCCESS_DURATION_MS);
-      else render();
+      if (action === 'sign-in-google-account' && signInToken === accountSignInToken) accountSignInPending = false;
+      if (action === 'load-account-cloud-documents' && cloudListReadPending.get(owner) === readToken) cloudListReadPending.delete(owner);
+      if (state !== owner && ['context-menu-sync', 'load-account-cloud-documents'].includes(action)) owner.accountSyncProgress = null;
+      if (state === owner) render();
+      else if (action === 'sign-in-google-account' && signInToken === accountSignInToken) {
+        // Login is shared across areas. Its old-area IPC receipt is deliberately
+        // discarded after navigation; read the actual session into the visible area.
+        const visibleOwner = state;
+        render();
+        void loadDesktopAccountSync().then(() => { if (state === visibleOwner) render(); }).catch(() => {});
+      }
     }
   })();
 }, true);
 
 async function bootDesktopShell() {
   let startupStage = 'WORKSPACE_READBACK';
+  const initialDraftGeneration = composerDraftRouteGeneration;
   try {
+    if (native) {
+      startupStage = 'FULL_DELETE_OUTCOME_READBACK';
+      const outcome = await invoke('read_desktop_full_delete_outcome');
+      if (outcome?.status === 'COMPLETED') {
+        window.localStorage.clear();
+        await invoke('acknowledge_desktop_full_delete_outcome');
+        const notice = outcome.cleanupPending
+          ? '双区本机业务数据已删除；旧隔离区清理待下次启动继续。'
+          : '双区本机业务数据已删除并经重启回读。';
+        try { window.sessionStorage.setItem('nfai-full-delete-notice', notice); } catch { /* optional UI notice */ }
+        window.location.reload();
+        return;
+      }
+      if (outcome) {
+        state.error = outcome.status === 'ROLLED_BACK'
+          ? '全部删除未提交；旧双区数据已恢复。请核对数据后重新预览。'
+          : '全部删除未开始；原双区数据保留。请核对数据后重新预览。';
+        await invoke('acknowledge_desktop_full_delete_outcome');
+      }
+      try {
+        const notice = window.sessionStorage.getItem('nfai-full-delete-notice');
+        if (notice) {
+          state.status = notice;
+          window.sessionStorage.removeItem('nfai-full-delete-notice');
+        }
+      } catch { /* optional UI notice */ }
+    }
+    startupStage = 'DRAFT_CLOSE_GUARD';
+    await installComposerDraftCloseGuard();
+    startupStage = 'WORKSPACE_READBACK';
     await refresh();
+    if (native && !state.current && !state.runtimeInfo?.automaticWorkSuppressed) {
+      startupStage = 'LOCAL_WORKSPACE_INITIALIZATION';
+      state.current = await invoke('ensure_desktop_local_workspace');
+      state.workspaces = [state.current.summary];
+    }
     startupStage = 'ORDINARY_DRAFT_READBACK';
-    await loadOrdinaryComposerDraft();
+    if (initialDraftGeneration === composerDraftRouteGeneration) await loadOrdinaryComposerDraft({ preferUnbound: true });
     if (native) {
       startupStage = 'C16_VISUAL_ACCEPTANCE_GATE';
       c16ThemePreview = await invoke('read_desktop_c16_visual_acceptance_state') || '';
@@ -6853,18 +10255,9 @@ async function bootDesktopShell() {
     }
     if (native) {
       startupStage = 'LOCAL_BACKUP_READBACK';
-      const backupStatus = await invoke('read_desktop_local_backup_status');
-      state.localBackup = {
-        ...state.localBackup,
-        preflight: backupStatus.preflight || null,
-        replaceLocal: Boolean(backupStatus.preflight && !(backupStatus.preflight.conflicts || []).length),
-        notice: backupStatus.notice || '',
-        restartRequired: Boolean(backupStatus.restartRequired),
-        interrupted: Boolean(backupStatus.interrupted),
-      };
-      if (backupStatus.restartRequired) state.dialog = { kind: 'local-backup-restart-required' };
+      await loadDesktopLocalBackupStatus();
       startupStage = 'APP_SETTINGS_READBACK';
-      await loadDesktopAppSettings();
+      await loadDesktopAppSettings({ preserveUnsavedDraft: true });
       startupStage = 'REMINDER_READBACK';
       await loadDesktopReminders();
       startupStage = 'BACKGROUND_RUNTIME_READBACK';
@@ -6878,7 +10271,7 @@ async function bootDesktopShell() {
         await flushReminderNotifications();
       }
       startupStage = 'MODEL_SETTINGS_READBACK';
-      await loadModelServiceSettings();
+      await loadModelServiceSettings({ preserveUnsavedDraft: true });
       startupStage = 'HISTORY_KNOWLEDGE_READBACK';
       await loadDesktopHistoryKnowledge();
       if (state.productSettings.historyLibraryEnabled && !state.runtimeInfo?.automaticWorkSuppressed) {
@@ -6904,50 +10297,24 @@ async function bootDesktopShell() {
       applyC16Preview('Tauri 原生');
       render();
     }
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
+    startupUiStage = 'ready';
+    const queuedRoute = queuedStartupAreaRoute;
+    queuedStartupAreaRoute = null;
+    if (queuedRoute) void switchDataArea(queuedRoute.area, queuedRoute.pane).catch(error => {
+      if (error?.code === 'STALE_DATA_AREA') return;
+      state.error = `切换数据区失败：${String(error)}`;
+      render();
+    });
+  } catch (error) {
+    startupUiStage = 'failed';
+    queuedStartupAreaRoute = null;
     console.error('Desktop startup readback failed', startupStage, error);
     state.error = `本地工作区启动读取未完成（${startupStage}）；请重新打开应用后再试。`;
-    state.status = `启动读取失败（${startupStage}）；未修改本地数据。`;
+    state.status = `启动未完成（${startupStage}）；已提交的本机数据保留。`;
     render();
   }
 }
 
-function rememberDesktopExit() {
-  if (!native) return;
-  desktopAppEntry.leave(state.dataArea, state.current?.summary?.id, state.selectedConversationId, hasRunningGeneration(state, ordinaryChatAttemptRegistry.size));
-  void flushOrdinaryComposerDraft();
-}
-function resumeDesktopEntry() {
-  if (!native) return;
-  if (!desktopAppEntry.enter(hasRunningGeneration(state, ordinaryChatAttemptRegistry.size))) {
-    if (state.current?.summary?.id) queueOrdinaryChatRuntimeRefresh({ workspaceId: state.current.summary.id });
-    return;
-  }
-  desktopWorkspaceRefreshGeneration += 1;
-  state.entryResolved = true;
-  state.selectedConversationId = null;
-  state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
-  state.p6gSelection = null;
-  state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
-  state.assistantMessageMenu = null;
-  state.contextMenu = null;
-  resetNewConversationComposer();
-  render();
-}
-const checkpointVideoOnExit = () => { persistVideoPreviewPosition(true); document.querySelector('[data-video-preview]')?.pause(); };
-window.addEventListener('blur', checkpointVideoOnExit);
-window.addEventListener('pagehide', checkpointVideoOnExit);
-document.addEventListener('visibilitychange', () => { if (document.hidden) checkpointVideoOnExit(); });
-window.addEventListener('blur', rememberDesktopExit);
-window.addEventListener('pagehide', rememberDesktopExit);
-window.addEventListener('focus', resumeDesktopEntry);
-document.addEventListener('visibilitychange', () => { if (document.hidden) rememberDesktopExit(); else resumeDesktopEntry(); });
-app.addEventListener('click', event => {
-  const action = event.target.closest?.('[data-action]')?.dataset.action;
-  if (!native || !['new-chat', 'select-chat'].includes(action)) return;
-  state.entryResolved = true;
-  if (state.current) desktopWorkspaceRefreshGeneration += 1;
-}, true);
 void bootDesktopShell();
 
 // Dismiss only the memory overflow surface; its actions retain their existing owners.
@@ -6988,5 +10355,3 @@ const composerResizeObserver = new ResizeObserver(entries => {
   if (entries.length) resizeComposer(document.getElementById("chat-composer"));
 });
 composerResizeObserver.observe(app);
-
-installModelSettingsKeyboardNavigation();

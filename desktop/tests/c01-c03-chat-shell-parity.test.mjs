@@ -1,5 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+
+function classIndex(html, token) {
+  for (const match of html.matchAll(/class="([^"]*)"/g)) {
+    if (match[1].split(/\s+/).includes(token)) return match.index;
+  }
+  return -1;
+}
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { renderChatFirstShell } from '../src/chat-shell.mjs';
@@ -46,10 +53,10 @@ const render = overrides => renderChatFirstShell({
 
 test('C01 empty conversation is a quiet canvas with the shared bottom Composer and no Hero copy', () => {
   const html = render();
-  assert.ok(!html.includes('class="chat-mode-switch"'));
 
   for (const token of [
     'class="chat-empty-canvas"',
+    'class="chat-mode-switch"',
     'aria-label="临时聊天"',
     'data-composer-dock="fixed"',
     'class="chat-composer-controls"',
@@ -81,7 +88,7 @@ test('C02 content conversation keeps one header, message scroll owner, transcrip
     'class="chat-composer-controls"',
   ]) assert.ok(html.includes(token), token);
 
-  assert.ok(!html.includes('class="chat-mode-switch"'));
+  assert.ok(html.includes('class="chat-mode-switch"'));
   assert.ok(html.indexOf('data-scroll-owner="message-list"') < html.indexOf('data-composer-dock="fixed"'));
 });
 
@@ -93,11 +100,11 @@ test('C03 sidebar preserves Android information order and uses floating settings
     'class="chat-search-wrap"',
     'data-action="show-reminders"',
     'data-action="show-transcription"',
-    'class="chat-history-group"',
+    'class="chat-history"',
     'class="chat-sidebar-footer"',
-  ].map(token => html.indexOf(token));
+  ].map(token => token.startsWith('class="') ? classIndex(html, token.slice(7, -1)) : html.indexOf(token));
 
-  assert.ok(order.every(index => index >= 0), JSON.stringify(order));
+  assert.ok(order.every(index => index >= 0), order);
   assert.deepEqual(order, [...order].sort((left, right) => left - right));
   for (const token of [
     'class="chat-search-glyph"',
@@ -112,13 +119,14 @@ test('C03 sidebar preserves Android information order and uses floating settings
 
 test('C03 keeps search, reminders, and transcription outside the conversation scroll owner', async () => {
   const html = render({ data: activeData, selectedConversationId: 'conversation-c02' });
-  const fixedStart = html.indexOf('class="chat-sidebar-fixed-tools"');
-  const scrollStart = html.indexOf('class="chat-sidebar-scroll"');
-  assert.ok(fixedStart >= 0 && scrollStart > fixedStart);
-  const fixedTools = html.slice(fixedStart, scrollStart);
+  const fixedStart = classIndex(html, 'chat-sidebar-fixed-tools');
+  const fixedEnd = html.indexOf('</section>', fixedStart);
+  const scrollStart = classIndex(html, 'chat-sidebar-scroll');
+  assert.ok(fixedStart >= 0 && fixedEnd > fixedStart && scrollStart > fixedEnd);
+  const fixedTools = html.slice(fixedStart, fixedEnd);
   for (const token of ['id="chat-search"', 'data-action="show-reminders"', 'data-action="show-transcription"']) assert.ok(fixedTools.includes(token), token);
-  assert.ok(!fixedTools.includes('class="chat-history-group"'));
-  assert.ok(html.indexOf('class="chat-history-group"') > scrollStart);
+  assert.equal(classIndex(fixedTools, 'chat-history'), -1);
+  assert.ok(classIndex(html, 'chat-history') > scrollStart);
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   assert.match(css, /\.chat-sidebar-fixed-tools \{[^}]*flex: 0 0 auto;/s);
   assert.match(css, /\.chat-sidebar-scroll \{[^}]*flex: 1 1 auto;[^}]*overflow-y: auto;/s);
@@ -159,4 +167,42 @@ test('C02 Browser preview uses the Android local visual fixture and fail-closed 
     "delivery: 'FAILED'",
     "safeErrorCode: 'PROVIDER_NOT_ENABLED'",
   ]) assert.ok(app.includes(token), token);
+});
+
+function dataWithBackgroundRun() {
+  const data = structuredClone(activeData);
+  const running = data.exchange.conversations[0];
+  running.id = 'conversation-running';
+  running.messages[1].delivery = 'PARTIAL';
+  running.messages[1].runtimeState = 'RUNNING';
+  const idle = structuredClone(activeData.exchange.conversations[0]);
+  idle.id = 'conversation-idle';
+  data.exchange.conversations.push(idle);
+  return data;
+}
+for (const selected of ['conversation-idle', null]) {
+  test(`a background conversation stream keeps the actual Send button enabled on ${selected || 'a new conversation'}`, () => {
+    const html = render({ data: dataWithBackgroundRun(), selectedConversationId: selected, composerDraft: '另一会话的新问题' });
+    const send = html.match(/<button[^>]*data-action="save-local-message"[^>]*>/)?.[0];
+    assert.ok(send, 'the visible composer offers Send');
+    assert.doesNotMatch(send, /\sdisabled(?:\s|>|=)/);
+    assert.ok(!html.includes('data-action="stop-ordinary-chat"'), 'another conversation cannot own this Stop button');
+    assert.ok(html.includes('另一会话的新问题'));
+  });
+}
+test('the active conversation stream shows Stop and keeps its unsent text in the composer', () => {
+  const html = render({ data: dataWithBackgroundRun(), selectedConversationId: 'conversation-running', composerDraft: '生成期间的下一条草稿' });
+  assert.ok(html.includes('data-action="stop-ordinary-chat"'));
+  assert.ok(!html.includes('data-action="save-local-message"'));
+  assert.ok(html.includes('生成期间的下一条草稿'));
+});
+
+
+test('local call accounting failure gives the storage cause and explicit retry guidance', () => {
+  const data = structuredClone(activeData);
+  const message = data.exchange.conversations[0].messages.find(item => item.role === 'assistant');
+  Object.assign(message, { delivery: 'FAILED', attemptId: 'synthetic-accounting-refusal', safeErrorCode: 'LOCAL_CALL_ACCOUNTING', blocks: [{ kind: 'TEXT', text: '' }] });
+  const html = render({ data, selectedConversationId: data.exchange.conversations[0].id });
+  assert.ok(html.includes('本机调用记录保存失败，已停止后续请求。请检查存储空间后手动重试。'));
+  assert.ok(!html.includes('本次连接结果未确认；系统不会自动重复发送。'));
 });

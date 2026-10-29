@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { renderChatFirstShell } from '../src/chat-shell.mjs';
+import { installMessageMenuLayerOwner } from '../src/modal-layer-owner.mjs';
 
 const root = new URL('../', import.meta.url);
 const app = await readFile(new URL('src/app.mjs', root), 'utf8');
 const chatShell = await readFile(new URL('src/chat-shell.mjs', root), 'utf8');
-const rust = await readFile(new URL('src-tauri/src/lib.rs', root), 'utf8');
+const rust = (await readFile(new URL('src-tauri/src/lib.rs', root), 'utf8')).replaceAll('\r\n', '\n');
 
 function rustCommand(name) {
   const asyncMarker = rust.indexOf(`#[tauri::command]\nasync fn ${name}`);
@@ -92,17 +93,22 @@ test('destructive confirmation, sidebar drag, image zoom and retained shells sta
   assert.match(app, /if \(!retainObserved\) \{\s*imageThumbnailObserver\?\.disconnect\(\);/);
 });
 
-test('composer typing serializes native persistence and preserves the current draft before submit', () => {
-  const ordinaryOwner = app.slice(app.indexOf('let ordinaryComposerDraftQueue'), app.indexOf('async function enterTemporaryChat'));
+test('composer typing batches local persistence and preserves the current draft before submit', () => {
+  const ordinaryOwner = app.slice(app.indexOf('const ordinaryComposerDraftQueue'), app.indexOf('async function enterTemporaryChat'));
   assert.match(ordinaryOwner, /let ordinaryComposerDraftTimer = null/);
-  assert.match(ordinaryOwner, /void persistOrdinaryComposerDraft\(args\)\.then/);
-  assert.match(ordinaryOwner, /async function flushOrdinaryComposerDraft\(\)[\s\S]{0,400}persistOrdinaryComposerDraft\(scheduled\)/);
+  assert.match(ordinaryOwner, /void persistOrdinaryComposerDraft\(scheduled\)\.then\(draft => \{[\s\S]{0,180}armNewConversationDraftExpiry\(draft\?\.expiresAtMs\);/);
+  assert.match(ordinaryOwner, /\}, 180\);/);
+  const flushOwner = ordinaryOwner.slice(ordinaryOwner.indexOf('async function flushOrdinaryComposerDraft()'), ordinaryOwner.indexOf('async function loadOrdinaryComposerDraft('));
+  assert.match(flushOwner, /await pending\.finished/);
+  assert.match(flushOwner, /await persistOrdinaryComposerDraft\(scheduled\)/);
   const writeOwner = ordinaryOwner.slice(ordinaryOwner.indexOf('function writeChatDraft'), ordinaryOwner.indexOf('async function enterTemporaryChat'));
   assert.doesNotMatch(writeOwner, /localStorage\.(setItem|removeItem)/);
   assert.doesNotMatch(writeOwner, /persistOrdinaryComposerDraft\(/);
-  const temporaryOwner = app.slice(app.indexOf('let temporaryDraftQueue'), app.indexOf('async function updateTemporaryModelOverride'));
+  const temporaryOwner = app.slice(app.indexOf('const temporaryDraftQueue'), app.indexOf('async function updateTemporaryModelOverride'));
   assert.match(temporaryOwner, /let temporaryDraftTimer = null/);
-  assert.match(temporaryOwner, /let temporaryDraftQueue = Promise\.resolve\(\)/);
+  assert.match(temporaryOwner, /const temporaryDraftQueue = createDraftWriteQueue\(\{/);
+  assert.match(ordinaryOwner, /await ordinaryComposerDraftQueue\.flush\(\)/);
+  assert.match(temporaryOwner, /await temporaryDraftQueue\.flush\(\)/);
   assert.match(temporaryOwner, /async function flushTemporaryDraft\(\)/);
   const composerPersistenceInput = app.slice(app.lastIndexOf("app.addEventListener('input'"), app.indexOf("app.addEventListener('change'", app.lastIndexOf("app.addEventListener('input'")));
   assert.match(composerPersistenceInput, /scheduleTemporaryDraft\(state\.composerDraft\)/);
@@ -113,7 +119,8 @@ test('closed row menus do not make ordinary scrolling scan every card', async ()
   const layer = await readFile(new URL('../src/modal-layer-owner.mjs', import.meta.url), 'utf8');
   assert.match(layer, /const openMenus = new Set\(\)/);
   assert.match(layer, /for \(const menu of openMenus\)/);
-  const scrollOwner = layer.slice(layer.indexOf("document.addEventListener('scroll'"));
+  const start = layer.indexOf("document.addEventListener('scroll'");
+  const scrollOwner = layer.slice(start, layer.indexOf('  }, true);', start));
   assert.doesNotMatch(scrollOwner, /root\.querySelectorAll\(selector\)/);
   assert.match(layer, /if \(resizeFrame !== null\) return/);
 });
@@ -126,13 +133,55 @@ test('assistant answer menu survives residual transcript scroll and closes on a 
   assert.match(wheelOwner, /state\.assistantMessageMenu/);
   assert.match(wheelOwner, /\.chat-scroll\[data-conversation-id\]/);
   assert.match(wheelOwner, /closeTopOverlay\(\{ restoreFocus: false \}\)/);
-  const renderOwner = app.slice(app.indexOf('function renderUnified()'), app.indexOf('function cameraCaptureDialog'));
+  const renderStart = app.indexOf('function renderUnified()');
+  const renderEnd = app.indexOf('function cameraCaptureDialog', renderStart);
+  assert.ok(renderStart >= 0 && renderEnd > renderStart, 'the active render owner must be present');
+  const renderOwner = app.slice(renderStart, renderEnd);
   assert.match(renderOwner, /if \(\(!retainedTranscript && !runtimePatched\) \|\| state\.pendingChatScrollToLatestId \|\| state\.pendingChatSendScrollToLatestId\) restoreChatScroll\(\)/);
 });
 
 test('opening the assistant answer menu never scrolls the preserved transcript to reveal its focused item', () => {
-  const renderOwner = app.slice(app.indexOf('function renderUnified()'), app.indexOf('function cameraCaptureDialog'));
-  assert.match(renderOwner, /else if \(state\.assistantMessageMenu\) document\.querySelector\('\.assistant-message-menu \[role="menuitem"\]'\)\?\.focus\(\{ preventScroll: true \}\)/);
+  const originalObserver = globalThis.MutationObserver;
+  const originalCss = globalThis.CSS;
+  let paint;
+  const listeners = new Map();
+  const doc = { activeElement: null, addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type) };
+  const transcript = { scrollTop: 731, scrollLeft: 42 };
+  const focusCalls = [];
+  const control = action => ({
+    action, getClientRects: () => [{}], closest: () => null,
+    hasAttribute: name => name === 'data-action', getAttribute: () => action,
+    focus(options) {
+      focusCalls.push({ action, options }); doc.activeElement = this;
+      if (!options?.preventScroll) transcript.scrollTop = 0;
+    },
+  });
+  let controls = [control('copy-message'), control('find-message')];
+  const layer = {
+    querySelectorAll: () => controls,
+    contains: node => controls.includes(node),
+    querySelector: selector => controls.find(node => selector === `[data-action="${node.action}"]`),
+  };
+  const root = { ownerDocument: doc, querySelector: selector => selector.split(',').some(value => value.trim() === '.assistant-message-menu') ? layer : null };
+  globalThis.MutationObserver = class { constructor(fn) { paint = fn; } observe() {} disconnect() {} };
+  globalThis.CSS = { escape: value => value };
+  let dispose;
+  try {
+    dispose = installMessageMenuLayerOwner(root, () => {});
+    paint();
+    assert.equal(doc.activeElement, controls[0]);
+    controls[1].focus({ preventScroll: true }); listeners.get('focusin')();
+    controls = [control('copy-message'), control('find-message')];
+    paint();
+    assert.equal(doc.activeElement, controls[1], 'late render restores the selected menu action');
+    assert.deepEqual(transcript, { scrollTop: 731, scrollLeft: 42 });
+    assert.ok(focusCalls.every(call => call.options?.preventScroll === true));
+    assert.match(app, /installMessageMenuLayerOwner\(app,/);
+  } finally {
+    dispose?.();
+    if (originalObserver === undefined) delete globalThis.MutationObserver; else globalThis.MutationObserver = originalObserver;
+    if (originalCss === undefined) delete globalThis.CSS; else globalThis.CSS = originalCss;
+  }
 });
 
 test('assistant answer menu opens on primary pointerdown while click is keyboard-only fallback', async () => {
@@ -140,8 +189,8 @@ test('assistant answer menu opens on primary pointerdown while click is keyboard
   assert.match(app, /function bindAssistantMessageMenuTriggers\(\)/);
   assert.match(app, /button\.addEventListener\('pointerdown', event => \{[\s\S]*?event\.button !== 0[\s\S]*?toggleAssistantMessageMenu\(button\);/);
   assert.match(app, /button\.addEventListener\('click', event => \{[\s\S]*?event\.detail === 0[\s\S]*?toggleAssistantMessageMenu\(button\);/);
-  const renderStart = app.lastIndexOf('const nextShellHtml = renderChatFirstShell');
-  const renderCall = app.slice(renderStart, app.indexOf('if (retainedTranscript)', renderStart));
+  const renderStart = app.indexOf('const nextShellHtml = renderChatFirstShell');
+  const renderCall = app.slice(renderStart, app.indexOf('const runtimePatched', renderStart));
   assert.match(renderCall, /assistantMessageMenu: state\.assistantMessageMenu/);
   const css = await readFile(new URL('src/chat-shell.css', root), 'utf8');
   assert.match(css, /\.chat-message-action-more svg \{[^}]*pointer-events: none;/);
@@ -149,24 +198,33 @@ test('assistant answer menu opens on primary pointerdown while click is keyboard
 
 test('search, startup projections and preview reads never run blocking work on the AppKit thread', () => {
   assert.match(rust, /async fn run_desktop_store_blocking/);
-  assert.match(rust, /async fn run_desktop_store_paths_blocking/);
   assert.match(rust, /tauri::async_runtime::spawn_blocking/);
+  for (const name of ['list_desktop_workspaces', 'read_desktop_workspace']) {
+    const command = rustCommand(name);
+    assert.match(command, new RegExp(`async fn ${name}`));
+    assert.match(command, /run_desktop_(?:area_)?store_paths_blocking/);
+    assert.doesNotMatch(command, /run_desktop_store_blocking\(/);
+  }
   for (const name of [
-    'list_desktop_workspaces',
-    'read_desktop_workspace',
     'search_desktop_local_index',
     'catalog_desktop_local_index',
     'read_desktop_local_search_history',
-    'read_desktop_pdf_preview',
-    'read_desktop_audio_preview',
-    'read_desktop_text_preview',
     'read_desktop_local_backup_status',
     'read_desktop_privacy_inventory',
   ]) {
     const command = rustCommand(name);
     assert.match(command, new RegExp(`async fn ${name}`));
-    assert.match(command, /run_desktop_(?:store(?:_paths)?|preview_paths)_blocking/);
+    assert.match(command, /run_desktop_store_blocking/);
   }
+  for(const name of ['read_desktop_pdf_preview','read_desktop_audio_preview','read_desktop_text_preview']){
+    const command=rustCommand(name);
+    assert.match(command,new RegExp(`async fn ${name}`));
+    assert.match(command,/run_desktop_preview_paths_blocking/);
+  }
+  const previewWorker=rust.slice(rust.indexOf('async fn run_desktop_preview_paths_blocking'),rust.indexOf('\nfn read_bounded_preview_asset',rust.indexOf('async fn run_desktop_preview_paths_blocking')));
+  assert.match(previewWorker,/DESKTOP_PREVIEW_LANE\.acquire\(\)\.await/);
+  assert.match(previewWorker,/tauri::async_runtime::spawn_blocking\(move \|\|/);
+  assert.match(previewWorker,/let _permit = permit;[\s\S]*operation\(paths\)/);
   const localIndexQuery = rustCommand('query_desktop_local_index');
   assert.match(localIndexQuery, /run_desktop_store_paths_blocking/);
   assert.doesNotMatch(localIndexQuery, /run_desktop_store_blocking\(/);
@@ -196,7 +254,7 @@ test('search, startup projections and preview reads never run blocking work on t
   const searchOwner = app.slice(app.indexOf('async function runFullSearch('), app.indexOf('function scheduleFullSearch()'));
   assert.match(searchOwner, /withFullSearchDeadline\(pending, requestId\)/);
   const refreshOwner = app.slice(app.indexOf('async function refresh()'), app.indexOf('async function runP6eTemporaryMaintenanceAcceptance'));
-  assert.match(refreshOwner, /const \[\s*,\s*p6gCatalog,\s*p6gGlobalDefault,/);
+  assert.match(refreshOwner, /const \[\s*,\s*p6gCatalog,\s*openrouterRegistryStatus,\s*p6gGlobalDefault,/);
   assert.match(refreshOwner, /await Promise\.all\(\[/);
   assert.match(refreshOwner, /loadConversationReadState\(/);
   assert.match(refreshOwner, /loadTranscriptionState\(\)/);

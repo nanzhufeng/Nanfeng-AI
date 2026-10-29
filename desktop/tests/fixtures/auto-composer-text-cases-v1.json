@@ -1,0 +1,15 @@
+[
+ {"name":"short","glyph":"a","count":20,"task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"boundary2399","glyph":"a","count":2399,"task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"boundary2400","glyph":"a","count":2400,"task":"COMPLEX_REASONING","preset":"RELAYCORE_GPT_6_ASTRA"},
+ {"name":"padded2399","prefix":" \n","glyph":"a","count":2399,"suffix":" \t","task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"emoji2398","prefix":" ","glyph":"😀","count":1199,"suffix":"\n ","task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"emoji2400","prefix":" ","glyph":"😀","count":1200,"suffix":"\n","task":"COMPLEX_REASONING","preset":"RELAYCORE_GPT_6_ASTRA"},
+ {"name":"nbsp2399","prefix":" ","glyph":"a","count":2399,"suffix":"　","task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"nel2399","prefix":"\u0085 ","glyph":"a","count":2399,"suffix":"　\u0085","task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"bom-nel2399","prefix":"\ufeff\u0085","glyph":"a","count":2399,"task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"nel-bom2399","prefix":"\u0085\ufeff","glyph":"a","count":2398,"task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"keyword-not-substring","text":"debugging","task":"DEFAULT_TEXT","preset":"RELAYCORE_GPT_6_1_SOL"},
+ {"name":"keyword-cjk-boundary","text":"中文debug中文","task":"COMPLEX_REASONING","preset":"RELAYCORE_GPT_6_ASTRA"},
+ {"name":"keyword-chinese","text":" 请给出完整方案 ","task":"COMPLEX_REASONING","preset":"RELAYCORE_GPT_6_ASTRA"}
+]

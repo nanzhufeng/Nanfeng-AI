@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "bundleVersion": "n9.0.1-69-g3e11912860-20260917",
+  "target": "x86_64-pc-windows-msvc",
+  "license": "LGPL-3.0-or-later",
+  "releaseTag": "autobuild-2026-09-17-13-19",
+  "archiveName": "ffmpeg-n9.0.1-69-g3e11912860-win64-lgpl-shared-9.0.zip",
+  "archiveUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-17-13-19/ffmpeg-n9.0.1-69-g3e11912860-win64-lgpl-shared-9.0.zip",
+  "archiveSha256": "3fa84213e8c38fae99cdab620cb47f8cebfef6c550d5e950700948133edce5c6",
+  "upstreamSource": "https://github.com/FFmpeg/FFmpeg/tree/3e11912860",
+  "buildSource": "https://github.com/BtbN/FFmpeg-Builds/tree/3e6685e",
+  "archiveRoot": "ffmpeg-n9.0.1-69-g3e11912860-win64-lgpl-shared-9.0",
+  "runtimeFiles": [
+    {"name":"avcodec-63.dll","bytes":90353664,"sha256":"76c90b2146a6c26d195273bec51f347ed35340cc3bdf79f48fec7d35270deb2d"},
+    {"name":"avdevice-63.dll","bytes":4047872,"sha256":"fcfde53726e6e5e45def2443e37609d72b054083475b2bfc8ba360d2a1e6ce7d"},
+    {"name":"avfilter-12.dll","bytes":30806016,"sha256":"27455514b1ceab60f968532108edefb26716b7f0072beb855cf006c11c23304f"},
+    {"name":"avformat-63.dll","bytes":22668800,"sha256":"2cd3c7fa0e037bb9d5787c129d4a71d351d4d073fee4b91edb63df6fc4aafee1"},
+    {"name":"avutil-61.dll","bytes":3014144,"sha256":"198c72089402cd83ddd5c66fa50226ad4f716eacc43d10ef7c6a81e5af3a4f05"},
+    {"name":"ffmpeg.exe","bytes":538112,"sha256":"2deb3e0609ef34435248c0f46c8e597638924e1390028c124a154302186c1098"},
+    {"name":"ffprobe.exe","bytes":228864,"sha256":"437a508fcd30fb4d8a02ca91e85af64278e3217c208899a0c02c8a3cc1fa0950"},
+    {"name":"swresample-7.dll","bytes":733696,"sha256":"85846e143863936ec50ca5a64e27d6ca4b5a4e035efe521b1e9e2fdfe80e327f"},
+    {"name":"swscale-10.dll","bytes":2330624,"sha256":"f56f60a3b4299d16be4b7682683fac39d5686a42aa88bc93583abc9cd7e803cf"}
+  ],
+  "licenseFile": {"name":"LICENSE-FFMPEG-LGPL-3.0.txt","bytes":7651,"sha256":"da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"}
+}

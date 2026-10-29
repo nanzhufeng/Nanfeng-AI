@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { renderAndroidSettingsShell } from '../src/android-settings-shell.mjs';
+import { MODEL_SERVICE_PREVIEW_SETTINGS, renderAndroidSettingsShell } from '../src/android-settings-shell.mjs';
+import { desktopComposerModelCandidates } from '../src/chat-shell.mjs';
 import { createC12ModelNetworkPreview } from '../src/c12-model-network-preview-fixture.mjs';
 
 const base = {
@@ -31,6 +32,45 @@ test('C12 model overview exposes the implemented shared web-search owner without
   assert.ok(html.includes('开启后每次普通对话均检索公开网页并标注来源；可能产生服务费用'));
   assert.ok(!html.includes('Desktop 普通发送尚未建立网页检索执行器'));
   for (const entry of ['模型设置', '费用与用量', '上下文记录', '运行诊断']) assert.ok(html.includes(entry), entry);
+});
+
+test('verified OpenRouter registry keeps only mapped presets selectable in both model entry points', () => {
+  const registry = { status: 'VERIFIED', mappedPresetIds: ['GPT_6_LUNA'], mappedPresetCount: 1,
+    catalogVersion: 'fixture-catalog', verifiedAtMs: 1, sourceUrl: 'https://openrouter.ai/api/v1/models' };
+  const candidates = desktopComposerModelCandidates(MODEL_SERVICE_PREVIEW_SETTINGS.map(service => ({ ...service, enabled: true })), [], registry);
+  assert.ok(candidates.some(item => item.modelId === 'GPT_6_LUNA'));
+  assert.ok(!candidates.some(item => item.modelId === 'CLAUDE_OPUS_5_5'));
+  assert.ok(candidates.some(item => item.providerId === 'DEEPSEEK'));
+  const stale = desktopComposerModelCandidates(MODEL_SERVICE_PREVIEW_SETTINGS.map(service => ({ ...service, enabled: true })),
+    [{ providerId: 'OPENROUTER', modelId: 'CLAUDE_FABLE_5_1', displayName: 'Old Fable', tiers: ['DEEP'], available: true }], registry);
+  assert.ok(!stale.some(item => item.modelId === 'CLAUDE_FABLE_5_1'));
+  const unsupported = desktopComposerModelCandidates(MODEL_SERVICE_PREVIEW_SETTINGS.map(service => ({ ...service, enabled: true })),
+    [{ providerId: 'DEEPSEEK', modelId: 'local-only-p6g-candidate', displayName: 'Old local', tiers: ['BALANCED'], available: true }], registry);
+  assert.ok(!unsupported.some(item => item.modelId === 'local-only-p6g-candidate'));
+  const nativeLikeSettings = MODEL_SERVICE_PREVIEW_SETTINGS.map(service => ({ ...service, enabled: true,
+    presets: service.presets.map(preset => preset.id === 'GPT_6_LUNA'
+      ? { ...preset, modelId: 'openai/gpt-6-luna' } : preset) }));
+  const actualModelId = desktopComposerModelCandidates(nativeLikeSettings,
+    [{ providerId: 'OPENROUTER', modelId: 'openai/gpt-6-luna', displayName: 'Old Terra', tiers: ['BALANCED'], available: true }],
+    { ...registry, mappedModelIds: ['openai/gpt-6-luna'] });
+  assert.equal(actualModelId.filter(item => item.modelId === 'GPT_6_LUNA').length, 1);
+  assert.ok(!actualModelId.some(item => item.modelId === 'openai/gpt-6-luna'));
+  const html = renderAndroidSettingsShell({ ...base, page: 'model-configuration', picker: 'modelPreset',
+    modelProviderId: 'OPENROUTER', openrouterRegistryStatus: registry });
+  assert.match(html, /data-preset-id="CLAUDE_OPUS_5_5"[^>]*disabled/);
+  assert.match(html, /data-preset-id="GPT_6_LUNA"[^>]*aria-checked/);
+  assert.doesNotMatch(html, /data-preset-id="GPT_6_LUNA"[^>]*disabled/);
+});
+
+test('model provider tabs stay on the saving or connection-test owner until the operation ends', () => {
+  for (const busyState of [{ modelSettingsSaving: true }, { modelSettingsTesting: true }]) {
+    const html = renderAndroidSettingsShell({ ...base, page: 'model-configuration', ...busyState });
+    const tabs = [...html.matchAll(/<button data-action="select-model-service-provider"[^>]*>/g)].map(match => match[0]);
+    assert.equal(tabs.length, 5);
+    assert.ok(tabs.every(tab => /\sdisabled(?:\s|>)/.test(tab)));
+  }
+  const ready = renderAndroidSettingsShell({ ...base, page: 'model-configuration' });
+  assert.doesNotMatch(ready, /<button data-action="select-model-service-provider"[^>]*\sdisabled/);
 });
 
 test('C12 populated usage keeps Android four-way summary and selector while automatic task records stay visible', () => {

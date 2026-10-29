@@ -74,6 +74,47 @@ test('conversation find centers the matched text inside the conversation scroll 
   }), 0);
 });
 
+test('closing an interrupted composition resets it so reopened find accepts ordinary input', () => {
+  const clock = fakeTimers(), settled = [];
+  const c = createConversationFindInputController({onSettled:q=>settled.push(q),setTimer:clock.setTimer,clearTimer:clock.clearTimer});
+  c.onCompositionStart(); c.onInput({value:'未确认',isComposing:true}); c.cancel();
+  c.onInput({value:'重新查找'}); clock.run(CONVERSATION_FIND_SETTLE_MS);
+  assert.deepEqual(settled,['重新查找']);
+});
+
+test('pending cancellation inside a live composition does not end that composition', () => {
+  const clock = fakeTimers(), settled = [];
+  const c = createConversationFindInputController({onSettled:q=>settled.push(q),setTimer:clock.setTimer,clearTimer:clock.clearTimer});
+  c.onCompositionStart();c.onInput({value:'n',isComposing:true});c.onInput({value:'ni'});
+  clock.run(CONVERSATION_FIND_SETTLE_MS*2);assert.deepEqual(settled,[]);
+  c.onCompositionEnd('你');clock.run(CONVERSATION_FIND_SETTLE_MS);assert.deepEqual(settled,['你']);
+});
+
+test('a cancelled callback already queued by the host cannot settle a reopened identical query', () => {
+  const callbacks=[],settled=[];
+  const c=createConversationFindInputController({onSettled:q=>settled.push(q),setTimer:fn=>(callbacks.push(fn),callbacks.length),clearTimer:()=>{}});
+  c.onInput({value:'相同查询'});c.cancel();c.onInput({value:'相同查询'});
+  callbacks[0]();assert.deepEqual(settled,[]);callbacks[1]();assert.deepEqual(settled,['相同查询']);
+});
+
+test('a stale callback cannot detach a newer pending lookup from cancellation', () => {
+  const callbacks=[],settled=[];
+  const c=createConversationFindInputController({onSettled:q=>settled.push(q),setTimer:fn=>(callbacks.push(fn),callbacks.length),clearTimer:()=>{}});
+  c.onInput({value:'旧'});c.onInput({value:'新'});callbacks[0]();c.cancel();callbacks[1]();assert.deepEqual(settled,[]);
+});
+
+test('scope changes end abandoned composition while identical scope preserves current composition', () => {
+  const clock=fakeTimers(),settled=[],owner={};
+  const c=createConversationFindInputController({onSettled:q=>settled.push(q),setTimer:clock.setTimer,clearTimer:clock.clearTimer});
+  c.setScope(owner,'chat','ws','a',true);c.onCompositionStart();c.setScope(owner,'chat','ws','a',true);c.onInput({value:'候选'});clock.run(CONVERSATION_FIND_SETTLE_MS);assert.deepEqual(settled,[]);
+  c.setScope(owner,'chat','ws','b',true);c.onInput({value:'另一会话'});clock.run(CONVERSATION_FIND_SETTLE_MS);assert.deepEqual(settled,['另一会话']);
+});
+
+test('closing, new conversation, leaving page or replacing area owner invalidates pending callbacks', () => {
+  const owner={},changes=[[owner,'chat','ws','a',false],[owner,'chat','ws',null,true],[owner,'settings','ws','a',true],[{},'chat','ws','a',true]];
+  for(const next of changes){const callbacks=[],settled=[];const c=createConversationFindInputController({onSettled:q=>settled.push(q),setTimer:fn=>(callbacks.push(fn),callbacks.length),clearTimer:()=>{}});c.setScope(owner,'chat','ws','a',true);c.onInput({value:'旧'});c.setScope(...next);callbacks[0]();assert.deepEqual(settled,[])}
+});
+
 test('Desktop wires the find field through the composition-aware controller and the message-list scroll owner', async () => {
   const app = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const shell = await readFile(new URL('../src/chat-shell.mjs', import.meta.url), 'utf8');

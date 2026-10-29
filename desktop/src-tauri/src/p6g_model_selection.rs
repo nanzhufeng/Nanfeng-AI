@@ -85,6 +85,7 @@ pub struct CatalogCandidate {
     pub known_cost_micros: Option<u64>,
     pub latency_rank: u32,
     pub context_window_tokens: Option<u64>,
+    pub max_output_tokens: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -192,8 +193,8 @@ pub fn validate_catalog(
         {
             return Err("catalog candidate 无效");
         }
-        if item.context_window_tokens == Some(0) {
-            return Err("catalog context window 无效");
+        if item.context_window_tokens == Some(0) || item.max_output_tokens == Some(0) {
+            return Err("catalog token budget 无效");
         }
     }
     Ok(())
@@ -390,6 +391,7 @@ mod tests {
             known_cost_micros: cost,
             latency_rank: 1,
             context_window_tokens: Some(8192),
+            max_output_tokens: None,
         }
     }
 

@@ -1,0 +1,43 @@
+// Build-only candidate. This script never installs or starts the application.
+import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+import {resolve,dirname,join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {replaceInstallerProcessMacro,makeSilentFailuresNoninteractive} from './alignment-installer-policy.mjs';
+import {collectAlignmentPackageInputs} from './alignment-package-inputs.mjs';
+
+if(process.platform!=='win32'||process.argv.length!==2)throw Error('Production candidate repack only supports the fixed Windows Release recipe');
+const desktop=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const root=resolve(desktop,'output/windows-production-candidate');
+const owner=JSON.parse(await readFile(join(root,'.nanfeng-production-build-output.json'),'utf8'));
+if(owner.schemaVersion!==1||owner.kind!=='production-build-output'||owner.applicationIdentifier!=='com.nanzhufeng.ai.desktop'||resolve(owner.root)!==root)throw Error('Production output ownership mismatch');
+const receipt=JSON.parse(await readFile(join(root,'windows-user/current.json'),'utf8'));
+if(receipt.identifier!=='com.nanzhufeng.ai.desktop'||receipt.build!=='windows-x64-release'||receipt.buildProfile!=='release'||!/^[A-F0-9]{64}$/.test(receipt.sha256))throw Error('Production executable receipt mismatch');
+const expected=join(root,'windows-user',receipt.sha256,'NanfengAI.exe');
+const hash=async p=>createHash('sha256').update(await readFile(p)).digest('hex').toUpperCase();
+if(resolve(receipt.executable)!==expected||await hash(expected)!==receipt.sha256)throw Error('Production executable bytes mismatch');
+const target=resolve(desktop,process.env.CARGO_TARGET_DIR||'src-tauri/target','x86_64-pc-windows-msvc/release');
+if(await hash(join(target,'nanfeng-ai-desktop-spike.exe'))!==receipt.sha256)throw Error('Fresh target differs from frozen production executable');
+const generated=await readFile(join(target,'nsis/x64/installer.nsi'),'utf8');
+if(!generated.includes('!define BUNDLEID "com.nanzhufeng.ai.desktop"')||!generated.includes('!define INSTALLMODE "currentUser"')||!generated.includes('!define MAINBINARYNAME "nanfeng-ai-desktop-spike"'))throw Error('Fresh production identity or installation policy mismatch');
+const checker=join(desktop,'src-tauri/resources/alignment-launcher/Check-InstalledProcess.ps1');
+const patchedUtils='\uFEFF'+replaceInstallerProcessMacro(await readFile(join(target,'nsis/x64/utils.nsh'),'utf8'),checker).replace(/^\uFEFF/,'');
+const inputs=await collectAlignmentPackageInputs(desktop,target,generated,patchedUtils,{productionCandidate:true});
+const base=join(root,receipt.sha256+'-'+inputs.sha256.slice(0,16));let directory;
+for(let i=0;i<100;i++){const p=base+(i?'-attempt'+i:'');try{await mkdir(p);directory=p;break}catch(e){if(e.code!=='EEXIST')throw e}}
+if(!directory)throw Error('Prior candidate outputs retained; too many repeated inputs');
+const sourceDir=join(directory,'nsis-source');await mkdir(sourceDir);
+const installer=join(directory,'NanfengAI-Windows-Production-Candidate-Setup.exe');
+let source=makeSilentFailuresNoninteractive(generated);
+if(source.split('!define OUTFILE "nsis-output.exe"').length!==2)throw Error('Fresh NSIS output anchor changed');
+source=source.replace('!define OUTFILE "nsis-output.exe"',`!define OUTFILE "${installer}"`);
+await writeFile(join(sourceDir,'installer.nsi'),'\uFEFF'+source.replace(/^\uFEFF/,''));await writeFile(join(sourceDir,'utils.nsh'),patchedUtils);
+for(const name of ['FileAssociation.nsh','SimpChinese.nsh'])await copyFile(join(target,'nsis/x64',name),join(sourceDir,name));
+await writeFile(join(directory,'input-manifest.json'),JSON.stringify({...inputs.manifest,sha256:inputs.sha256},null,2)+'\n');
+await inputs.verify();
+const p=spawnSync(resolve(process.env.LOCALAPPDATA,'tauri/NSIS/makensis.exe'),['/NOCONFIG','/V2',join(sourceDir,'installer.nsi')],{cwd:sourceDir,stdio:'inherit',windowsHide:true});
+if(p.error)throw p.error;if(p.status!==0)process.exit(p.status??1);
+await inputs.verify();if(await hash(expected)!==receipt.sha256)throw Error('Production application changed during packaging');
+const packageReceipt={schemaVersion:1,qualification:'production identity; build and payload verification only; not installed or launched',identifier:receipt.identifier,buildProfile:'release',executable:expected,sha256:receipt.sha256,installer,installerSha256:await hash(installer),packageInputSha256:inputs.sha256,processPolicy:'exact installed path read-only check; no process termination; silent failure aborts',sourceDir,createdAt:new Date().toISOString()};
+await writeFile(join(root,'package-current.json'),JSON.stringify(packageReceipt,null,2)+'\n');console.log(JSON.stringify(packageReceipt));
