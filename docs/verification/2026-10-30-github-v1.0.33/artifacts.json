@@ -1,0 +1,76 @@
+{
+  "source_commit": "9886ce5dcc5e57a5372c9ac6331b8063743ef86c",
+  "frozen_at": "2026-10-30T12:13:25.211592+00:00",
+  "assets": [
+    {
+      "name": "Nanfeng-AI-Android-1.0.33.apk",
+      "bytes": 28705471,
+      "sha256": "59e42172d9f1ca49fc735c4353e8483765f258872d1581c031ba58a886622b47"
+    },
+    {
+      "name": "Nanfeng-AI-macOS-1.0.33.dmg",
+      "bytes": 17539047,
+      "sha256": "c3ac6907eefa862ccacc82f6fa0151bbe983a13e28e50a7da9198721e1964d2c"
+    }
+  ],
+  "android_evidence": {
+    "schema_version": 1,
+    "release_tag": "v1.0.33",
+    "platform": "android",
+    "source_commit": "9886ce5dcc5e57a5372c9ac6331b8063743ef86c",
+    "candidate": {
+      "path": "Nanfeng-AI-Android-1.0.33.apk",
+      "sha256": "59e42172d9f1ca49fc735c4353e8483765f258872d1581c031ba58a886622b47",
+      "built_at": "2026-10-30T12:13:25.211592+00:00"
+    },
+    "installed_package_sha256": "59e42172d9f1ca49fc735c4353e8483765f258872d1581c031ba58a886622b47",
+    "environment": {
+      "device": "own emulator-5618 Pixel 7",
+      "os": "Android 15"
+    },
+    "screenshots": [
+      {
+        "path": "android-conversation.png",
+        "sha256": "d8565163920edaf7337497ea76cadf9dd356d1c1f82647fcf8b907237b2650f1",
+        "captured_at": "2026-10-30T12:17:45.931180+00:00",
+        "description": "Normal conversation interface; isolated empty local data; no API key."
+      },
+      {
+        "path": "android-settings.png",
+        "sha256": "511e29590ec219c7109a5c5cc4974ed4d3c33f73329f479fe67d76c9e25a19de",
+        "captured_at": "2026-10-30T12:20:34.708297+00:00",
+        "description": "Normal settings interface; isolated empty local data; no API key."
+      }
+    ]
+  },
+  "macos_evidence": {
+    "schema_version": 1,
+    "release_tag": "v1.0.33",
+    "platform": "macos",
+    "source_commit": "9886ce5dcc5e57a5372c9ac6331b8063743ef86c",
+    "candidate": {
+      "path": "Nanfeng-AI-macOS-1.0.33.dmg",
+      "sha256": "c3ac6907eefa862ccacc82f6fa0151bbe983a13e28e50a7da9198721e1964d2c",
+      "built_at": "2026-10-30T12:13:25.211592+00:00"
+    },
+    "installed_package_sha256": "c3ac6907eefa862ccacc82f6fa0151bbe983a13e28e50a7da9198721e1964d2c",
+    "environment": {
+      "device": "isolated frozen DMG bundle on Apple Silicon Mac",
+      "os": "26.5.2"
+    },
+    "screenshots": [
+      {
+        "path": "macos-conversation.png",
+        "sha256": "9f99120a6019e2be3c64f126d59105b2bfe2c5b784d108bcc86e1d532c752399",
+        "captured_at": "2026-10-30T12:13:48.343990+00:00",
+        "description": "Normal conversation interface; isolated empty local data; no API key."
+      },
+      {
+        "path": "macos-settings.png",
+        "sha256": "5c953917949121f2ca4ed8d5184c0268aa6b7092aea9313cef6b6ac71dafc621",
+        "captured_at": "2026-10-30T12:15:44.748003+00:00",
+        "description": "Normal settings interface; isolated empty local data; no API key."
+      }
+    ]
+  }
+}

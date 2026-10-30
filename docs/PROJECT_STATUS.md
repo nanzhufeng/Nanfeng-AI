@@ -1,5 +1,9 @@
 # Project Status
 
+## 2026-10-30：v1.0.33 发布候选已冻结
+
+复盘23文件已提交 `1cf711e`，已合并远端 Windows 文档；双端候选基于 `9886ce5`，构建、原签名与隔离启动／预览通过。GitHub上传与下载回读正在执行，完成状态以[本轮发布回执](verification/2026-10-30-github-v1.0.33/REPORT.md)为准。主设备、收费服务和云端部署本轮未执行。
+
 - 当前文档复盘（2026-10-30）：基于HEAD `0c5afbdbf61c7d50fd8f257720f3b92763901083` 完成2,277文件／202本地ref可达提交的清单和结构检查，并定向核对核心owner。更新开发档案、长期规则、五类Skill与可迁移经验；业务源码／配置／schema／应用测试未改，未提交／安装／发布。本轮检查与限制见[完整复盘](verification/2026-10-30-project-retrospective/REPORT.md)。
 
 - 当前checkpoint：`2c22021c861ce2e74022e94cf116dfa47ada1201`；76份实现／合同／脱敏证据已提交，6份核心新增文件纳入Git。本轮只补增量回归和文档固化；完整证据见[checkpoint报告](verification/2026-10-30-code-checkpoint/REPORT.md)。本地提交，未推送／发布／安装。
