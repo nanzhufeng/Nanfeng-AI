@@ -1,0 +1,62 @@
+{
+  "verifiedAt": "2026-10-30T19:12:43+08:00",
+  "codeCheckpoint": "2c22021c861ce2e74022e94cf116dfa47ada1201",
+  "priorHead": "096341f8d6241927ccd2ae08b56f7339416ae933",
+  "scope": "COMMIT plus later documentation-only consolidation",
+  "codeFilesInCheckpoint": 76,
+  "newCoreFiles": [
+    "app/src/acceptanceSupport/java/com/nanzhufeng/ai/acceptance/PublicAcceptanceBudgetLedger.kt",
+    "app/src/acceptanceSupport/java/com/nanzhufeng/ai/acceptance/PublicAcceptanceBudgetPolicy.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/ProviderResponseProjection.kt",
+    "app/src/test/java/com/nanzhufeng/ai/acceptance/PublicAcceptanceBudgetLedgerTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/acceptance/PublicAcceptanceBudgetPolicyTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/ProviderStreamInterruptionTest.kt"
+  ],
+  "sourceManifest": "../2026-10-30-risk-boundary-audit/source-hashes.json",
+  "matchedSourceInputs": 784,
+  "sourceDrift": 0,
+  "reused": {
+    "android": {
+      "passed": 1578,
+      "skipped": 10,
+      "failed": 0
+    },
+    "rust": {
+      "passed": 472,
+      "ignored": 38,
+      "failed": 0
+    },
+    "androidReleaseLintBuildSign": "PASS; unchanged frozen bytes"
+  },
+  "executed": {
+    "desktop": {
+      "passed": 563,
+      "skipped": 12,
+      "failed": 0,
+      "lint": "PASS",
+      "typecheck": "PASS",
+      "inventory": "PASS",
+      "build": "PASS"
+    },
+    "modelProtocolTests": 16,
+    "contractTests": 29,
+    "golden": [
+      "v1 PASS",
+      "v2 PASS",
+      "sync PASS"
+    ],
+    "contracts": 114,
+    "domains": 40,
+    "chatModels": 23
+  },
+  "notRun": [
+    "new paid service calls",
+    "main device install",
+    "native application reopen",
+    "new macOS bundle",
+    "GitHub push or release"
+  ],
+  "preservedExcludedUntracked": 323,
+  "privacy": "No credentials, raw provider payload, private host paths or user message content selected",
+  "localTag": "checkpoint-model-service-20261030"
+}

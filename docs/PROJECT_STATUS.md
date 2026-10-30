@@ -1,5 +1,7 @@
 # Project Status
 
+- 当前checkpoint：`2c22021c861ce2e74022e94cf116dfa47ada1201`；76份实现／合同／脱敏证据已提交，6份核心新增文件纳入Git。本轮只补增量回归和文档固化；完整证据见[checkpoint报告](verification/2026-10-30-code-checkpoint/REPORT.md)。本地提交，未推送／发布／安装。
+
 - 当前增量：[共用失败边界／合同架构复查](verification/2026-10-30-risk-boundary-audit/REPORT.md)。已修双端 UNKNOWN 被聚合丢失并继续回答、Android 流超时计量丢失／原始 SSE 字节门、清点停止状态及验收预算在途预留遗漏；纠正动态 profile 优先级旧文档。Android最终1578 PASS／10 skip，Rust472 PASS／38 ignored，Release／Lint／验收包及原签名通过，准确候选见该目录最终回执。本轮无新增收费／手机安装；新源码真实服务未运行，旧22模型成功不冒充新候选验收。
 
 - 前轮增量：[其他模型共用链路复查](verification/2026-10-30-other-model-stream-audit/REPORT.md)。用户确认现装 Opus 打通；其余22模型真实文本＋Markdown附件问答／完整终态／准确身份／四项内容／最终候选零网络重开通过。新增预算占用¥0.221136，无未知预留。已补共用响应关闭及辅助断流计量遗漏、双端估价边界，最终Android1570 PASS／10 skip、Release／Lint，Rust相关6和维护45通过。原生媒体／联网搜索／Desktop本轮未实测，不写全通过；新正式候选未覆盖主设备、未提交发布。
@@ -14,16 +16,16 @@
 
 ## Verified
 
-- Last verified: 2026-10-28T17:34:35+08:00（v1.0.32 双端正式包构建、验签、隔离实装／启动与四张预览；GitHub 正式发布与公开下载字节通过）
+- Last verified: 2026-10-30T19:12:43+08:00（本轮Desktop／协议门实际执行；Android／Rust／正式包复用同日784输入零漂移的最终证据）
 - Verified branch: main
-- Code baseline: 7fc45689117302c01fbb73d0e2eddcaf2014d25d；双端最终可执行文件内实读同一提交，后续文档／图片增量不重建。
-- Verification scope: COMMIT；Android 1548 PASS／10 skip、Release Lint／正式编译；Rust 469 PASS／38 ignored；Node 563 PASS／12 skip、lint／typecheck／inventory；维护45、114合同／40域与23聊天模型门通过。隔离界面不替代既有真实服务证据。
+- Code baseline: `2c22021c861ce2e74022e94cf116dfa47ada1201`；后续为纯文档收口，不重新打包。
+- Verification scope: COMMIT；Android1578 PASS／10skip，Rust472 PASS／38ignored，Node563 PASS／12skip，Release／Lint／签名及维护45／golden三类／114合同门通过。[回归边界](verification/2026-10-30-code-checkpoint/regression.json)。本轮未新增真实服务或主设备验证。
 - Verified by: Codex
 - Status: Active
 
 ## Current
 
-- [2026-10-30 Opus EOF 排查](verification/2026-10-30-opus-eof/REPORT.md)：现装精确修复包的真实普通对话11.2秒报TRANSPORT_IO_EOFException。原始断流／费用未知尚未闭环；已定位并局部修复运行诊断不刷新这一独立问题，未覆盖或重新发送。当前基线之上另有诊断 UI、验收读取和 Transport／Executor 异常处理候选，验证范围单独见报告。
+- [2026-10-30 Opus EOF 排查](verification/2026-10-30-opus-eof/REPORT.md)：原故障为11.2秒EOF，后续正式修复已覆盖且用户确认可用；原499关闭方仍未知。本地checkpoint已包含诊断刷新、Transport／Executor、辅助停止及计量修复；最新候选未再次覆盖，不能与现装包混同。
 
 - [v1.0.32 发布回执](verification/2026-10-28-github-v1.0.32/REPORT.md)：当前核心源码已推 main，双端最终包验签、准确字节与四张隔离空数据预览完成；正式 Release 两安装包已上传，公开下载字节一致，三个源码 CI 检查全部成功。云同步测试 mock 的 TCP 分段读取已修，本轮完整 Rust 默认回归通过；真实云服务未新增验收。
 
@@ -96,14 +98,15 @@
 
 ## In Progress
 
-- 当前v6逐事实证据与原模型长答的更广真实验收仍有缺口；旧v5或局部原件回放不替代新版服务证据。
-- Muse新Responses多可读附件/媒体及正式双端UI/picker/生命周期/扫描媒体；普通文字已通过，不能扩大到所有材料。
+- 本次代码checkpoint与文档收口已完成；未验证业务层列入下方Verification Gaps，不作为已执行工作。
 
 ## Blocked
 
-- 真实服务旧失败仍未闭环：RC Gemini Pro历史404／本轮控制中断结果未知、旧Mac原件UNKNOWN、Sol另一题504。本地checkpoint不因此阻塞，但不能宣称全部真实链路通过；未知结果不自动重发。
+- 本地checkpoint无阻塞。原499连接责任、既有未知请求和跨端partial费用缺口尚未闭环；不得自动重发来清除未知。
 
 ## Tests
+
+2026-10-30 checkpoint：复用Android1578／10skip、Rust472／38ignored及原签名正式包；本轮新跑Node563／12skip和lint/typecheck/inventory/build、维护45／golden三类／合同静态门。784源码／测试／配置输入0漂移；[完整回归回执](verification/2026-10-30-code-checkpoint/regression.json)。
 
 v1.0.32（2026-10-28）：Android1548 PASS／10 skip、Release Lint；Rust469 PASS／38 ignored；Node563 PASS／12 skip、lint／typecheck／inventory；维护45、golden v1/v2/sync、114合同／40域、23聊天／1独立／7组门通过。正式双端构建／原证书验签、隔离准确安装包回读与正常页面采图通过，见[本次检查](verification/2026-10-28-github-v1.0.32/checks.json)。不新增付费业务或主设备覆盖。以下保留原日期历史范围。
 
@@ -136,27 +139,19 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 ## Verification Gaps
 
-- 本次Mercury图片：原手机当前未连接，正式修复候选未覆盖；公开图片联网请求NETWORK未知，不重发。公开订单图读图＋回答成功只覆盖该独立样本；复杂图表、外屏实际布局、原图原网络及其他媒体未验收。
-
-- 本轮正式保数据覆盖已完成，但正式UI／用户原始材料未实测；不是21模型×全部格式的真实矩阵，模型生成内容仍出现单位／表述错误，不能将联网通过等同事实准确性通过。
-
-- 新标题三场景已双端真实生成／落库／重开；正式原生UI的主进度／标题刷新与本增量正式覆盖未做。注入超时不证明DeepSeek或Qwen当前上游故障。
-
-- 新增Argon尚未做真实Provider生成／来源／媒体、双端原生菜单验证；本地回归不能替代。
-
-- [Luna初始矩阵](verification/2026-10-13-luna-routing-implementation/REPORT.md)有双端20部署调用、18款多附件完整成功和14格式代表模型正交成功；非20×14全部组合。后续普通文字成功不抹原Pro404/原UNKNOWN或新媒体缺口。
-- 正式双端UI/系统picker/后台休眠/强杀、扫描/OCR/音视频真实Provider、Mac页脚系统复制与About旧占位原生可达性。
-- 线上Google/Supabase迁移/RLS/RPC/头像及网关、Windows/公证未确认。v1.0.29远端Release及双端资产下载hash已核验，见发布回执。
-- 43历史引用缺失及7XML原始取证格式失败已分类保留，不改写冻结原件；历史本机/ignored产物不进入新checkpoint完整证明。
+- 最新checkpoint／正式候选未新增真实服务、隔离原生重开或主设备对话；旧22模型文本附件成功与历史混合附件验收按准确候选使用，不扩写成当前全媒体／联网矩阵通过。
+- 原11:03 EOF／499发起方未知；Desktop中途IO／空闲超时和Android取消／超限未扩展partial计量结果类型。[当前风险边界](verification/2026-10-30-risk-boundary-audit/REPORT.md)。
+- 线上Google／Supabase／网关、Windows／公证及其他原生系统场景未在本轮重新核验。历史失败及历史报告中的未验证项保留原日期，不能当作本轮重现失败或新通过。
+- 既有历史快照缺链／XML格式问题仍保留，未改写冻结原件；Desktop静态inventory仍有未被测试引用的action／invoke，见checkpoint报告。
 
 ## Sync & Safety
 
-- Sync checked at: 2026-10-28T17:37:12+08:00；本节写入前观察，当前回执提交尚未推送。
-- Code baseline：`7fc45689117302c01fbb73d0e2eddcaf2014d25d` 已推 main；核心新增实现／回归／合同与脱敏验收均已提交。README、四张当前预览与发布回执作为后续纯文档／图片提交。
-- Remote sync: 源码 PUSHED；v1.0.32 正式标签指向构建源码，两个安装包已公开下载核对一致，三个源码 CI 检查全部成功。以[发布回执](verification/2026-10-28-github-v1.0.32/REPORT.md)最终结果为准。
-- Installed sync: 本轮仅隔离模拟器与 Mac 独立数据根；OPPO 及 `/Applications` 未覆盖。上次主设备 d3abf030 修复包与 GitHub 新版本不能只按版本号推断一致。
-- Rollback point: 原 main `dd3c8e89921feee8be5bc0185bf3174e6fed4bae` 保留于历史；禁止 reset／clean／stash 覆盖本地排除材料。
-- Secrets/config: 本轮 0 新 Provider 请求；不改原应用配置；高置信凭据与私有用户目录扫描通过，历史原始材料留本地。
+- Sync checked at: 2026-10-30T19:12:43+08:00；代码checkpoint已提交，文档收口随后提交。
+- Code baseline: `2c22021c861ce2e74022e94cf116dfa47ada1201`；核心新增实现／回归／合同与当日脱敏证据已纳Git。
+- Remote sync: LOCAL ONLY；本轮未push／fetch／Release。历史v1.0.32公开发布见[10月28日回执](verification/2026-10-28-github-v1.0.32/REPORT.md)，不是新checkpoint已发布。
+- Installed sync: 手机仍为用户确认可用的上一Opus修复包；本轮未操作设备，新候选未安装。同版本不能推断同字节。
+- Rollback point: 代码checkpoint `2c22021c861ce2e74022e94cf116dfa47ada1201`，前基线 `096341f8d6241927ccd2ae08b56f7339416ae933` 保留历史；用独立worktree核对，不破坏当前或排除材料。
+- Secrets/config: 本轮0新Provider请求，配置／凭据不变；核心闭包扫描无密钥、私有路径或用户正文；323历史未跟踪文件保留。
 
 ## Next
 

@@ -1,0 +1,34 @@
+[
+  {
+    "command": "protocol/scripts/verify-contract-governance.py",
+    "exitCode": 0,
+    "result": {
+      "state": "PASS",
+      "contracts": 114,
+      "domains": 40,
+      "scope": "offline contract coverage and precedence; not full semantic or runtime proof"
+    }
+  },
+  {
+    "command": "protocol/scripts/audit-contract-consistency.py",
+    "exitCode": 0,
+    "result": {
+      "state": "PASS",
+      "contracts": 114,
+      "domains": 40,
+      "errors": [],
+      "scope": "offline metadata/owner links and explicitly reviewed obsolete clauses; not complete semantic or runtime proof"
+    }
+  },
+  {
+    "command": "protocol/scripts/verify-model-service-contract.py",
+    "exitCode": 0,
+    "result": {
+      "state": "PASS",
+      "chatModels": 23,
+      "specialModels": 1,
+      "credentialGroups": 7,
+      "scope": "offline source and contract consistency; not live acceptance"
+    }
+  }
+]

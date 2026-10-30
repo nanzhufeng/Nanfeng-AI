@@ -2,13 +2,21 @@
 
 > 当前合同读取门：[全项目合同索引](contracts/CONTRACT_INDEX.md) · [合同治理](CONTRACT_GOVERNANCE_CURRENT.md)。
 
-> 最近增量为 2026-10-30 共用失败边界／合同架构复查。用户已确认现装 Opus 打通；此前22模型真实回执与本轮故障回归分别绑定各自源码，不能混用。原始 EOF 关闭方仍未知。
+> 最近增量为 2026-10-30 本地checkpoint与文档固化。用户已确认现装 Opus 打通；此前22模型真实回执与本轮故障回归分别绑定各自源码，不能混用。原始 EOF 关闭方仍未知。
 >
 > 全项目状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)；本页只保留最近阶段与继续工作所需边界。
 
 
 
-## 当前：共用失败边界修复，最终回归通过
+## 当前：代码checkpoint及增量正式沉淀
+
+- 代码基准 `2c22021c861ce2e74022e94cf116dfa47ada1201`，76文件提交已包含6份新增核心源码／测试及当日安全证据；后续为纯文档收口。报告与最终回归见[checkpoint](verification/2026-10-30-code-checkpoint/REPORT.md)。没有新增业务改动。
+- 784输入hash与已完成Android／Rust／正式包验证一致，复用不重跑。补跑Node563 PASS／12skip、lint/typecheck/inventory/build，维护45、三golden及合同门通过。签名正式候选hash仍 `c6ac19be33a6a77ad0b31698057b5982180635fcd3593c28f00ffc6c77d97507`，产物内构建提交不因新文档commit改变。
+- 323份旧未跟踪取证／快照／设计图继续保留；不混入核心闭包，不清理。AGENTS／已有五类Skill沿用，本轮未写记忆或新增长期规则。
+- 本轮0新增收费、0设备安装，未push／发布／新的原生重开；最新代码真实服务未验证。原499关闭方与跨端partial费用缺口见前轮报告，未因checkpoint关闭。
+- 下一步先读本节与报告，核对候选／源码边界；不重复本次已完成的回归、文档整理或此前UNKNOWN请求。需要改业务或交付时沿现有owner和保数据门继续。
+
+## 前轮：共用失败边界修复，最终回归通过
 
 - 目标：按代码、合同、架构检查遗漏并修复，保留已打通路由。发现 UNKNOWN 在清点／分批检索丢失而继续付费回答、流超时丢已知计量、原始 SSE 大小门漏项，以及验收预算没有网络前落盘预留。双端停止边界和 Android Transport 已补；没有新增 UI、切换 Provider／Key／模型或改 schema。
 - Android 最后补齐清点 HTTP408／504、超限与缺失终态后的全套结果1578 PASS／10 skip；Rust472 PASS／38 ignored。正式候选SHA256 `c6ac19be33a6a77ad0b31698057b5982180635fcd3593c28f00ffc6c77d97507`，Release／Lint及原签名通过；准确构建／验签／源码hash见[最终回执目录](verification/2026-10-30-risk-boundary-audit/REPORT.md)，禁止把中间构建作为最终包。
