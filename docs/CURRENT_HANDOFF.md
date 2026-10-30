@@ -1,8 +1,8 @@
 # 当前交接
 
-## 2026-10-30：v1.0.33 发布候选已冻结
+## 2026-10-30：v1.0.33 GitHub 正式发布完成
 
-复盘23文件已提交 `1cf711e`，已合并远端 Windows 文档；双端候选基于 `9886ce5`，构建、原签名与隔离启动／预览通过。GitHub上传与下载回读正在执行，完成状态以[本轮发布回执](verification/2026-10-30-github-v1.0.33/REPORT.md)为准。主设备、收费服务和云端部署本轮未执行。
+复盘23文件已提交 `1cf711e`，已合并远端 Windows 文档；双端候选基于 `9886ce5`，构建、原签名与隔离启动／预览通过。GitHub Latest正式发布、三个附件回下载SHA256与三个云端检查均通过，详见[本轮发布回执](verification/2026-10-30-github-v1.0.33/REPORT.md)。主设备、收费服务和云端部署本轮未执行。
 
 > 当前合同读取门：[全项目合同索引](contracts/CONTRACT_INDEX.md) · [合同治理](CONTRACT_GOVERNANCE_CURRENT.md)。
 

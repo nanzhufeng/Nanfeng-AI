@@ -1,0 +1,56 @@
+{
+  "checked_at": "2026-10-30T12:37:58.373122+00:00",
+  "release": "https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.33",
+  "tag": "v1.0.33",
+  "build_source_commit": "9886ce5dcc5e57a5372c9ac6331b8063743ef86c",
+  "draft": false,
+  "prerelease": false,
+  "latest": true,
+  "published_at": "2026-10-30T12:37:37Z",
+  "assets": [
+    {
+      "name": "Nanfeng-AI-Android-1.0.33.apk",
+      "bytes": 28705471,
+      "sha256": "59e42172d9f1ca49fc735c4353e8483765f258872d1581c031ba58a886622b47",
+      "download_match": true,
+      "url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.33/Nanfeng-AI-Android-1.0.33.apk"
+    },
+    {
+      "name": "Nanfeng-AI-macOS-1.0.33.dmg",
+      "bytes": 17539047,
+      "sha256": "c3ac6907eefa862ccacc82f6fa0151bbe983a13e28e50a7da9198721e1964d2c",
+      "download_match": true,
+      "url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.33/Nanfeng-AI-macOS-1.0.33.dmg"
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 190,
+      "sha256": "6f3866b5108b40fe6d167f4307c2cddab68594ebcdf56a75755efadcd92351ea",
+      "download_match": true,
+      "url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.33/SHA256SUMS"
+    }
+  ],
+  "ci": {
+    "url": "https://github.com/nanzhufeng/Nanfeng-AI/actions/runs/41055382175",
+    "headSha": "f1993730a6ae67ea3c753167ac027d0d8f5f3589",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "Android compile only",
+        "conclusion": "success"
+      },
+      {
+        "name": "Protocol, Supabase contracts, and gateway",
+        "conclusion": "success"
+      },
+      {
+        "name": "Desktop source checks",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "main_device_install": false,
+  "paid_calls": 0,
+  "mac_primary_install": false,
+  "isolated_runtime_cleanup": "own app and emulator stopped; AVD data retained"
+}

@@ -1,0 +1,12 @@
+{
+  "indexed_inputs": 784,
+  "indexed_drift": [
+    "app/build.gradle.kts"
+  ],
+  "all_application_changes": [
+    "app/build.gradle.kts",
+    "desktop/src-tauri/tauri.conf.json"
+  ],
+  "change_type": "product version only",
+  "business_inputs_unchanged": true
+}
