@@ -1,0 +1,56 @@
+{
+  "verifiedAt": "2026-10-30T19:40:51+08:00",
+  "head": "0c5afbdbf61c7d50fd8f257720f3b92763901083",
+  "scope": "DOCUMENTATION_AND_PROJECT_SKILLS_ONLY",
+  "initialInventoryFiles": 2277,
+  "modifiedExisting": [
+    ".agents/skills/nanfeng-ai-code-review/SKILL.md",
+    ".agents/skills/nanfeng-ai-debugging/SKILL.md",
+    ".agents/skills/nanfeng-ai-development/SKILL.md",
+    ".agents/skills/nanfeng-ai-document-sync/SKILL.md",
+    ".agents/skills/nanfeng-ai-testing-delivery/SKILL.md",
+    "AGENTS.md",
+    "docs/CURRENT_HANDOFF.md",
+    "docs/PROJECT_STATUS.md",
+    "docs/南枫AI完整开发档案.md",
+    "docs/可迁移开发经验.md"
+  ],
+  "unauthorizedChanged": [],
+  "missingOriginal": [],
+  "originalUntrackedPreserved": 323,
+  "sourceInputsReused": 784,
+  "sourceInputDrift": 0,
+  "newFilesScope": "docs/verification/2026-10-30-project-retrospective",
+  "currentChangedLinks": "PASS",
+  "historicalSnapshotMissingLinks": 37,
+  "relativeLinkCheckerLimit": "common inline links only; excludes remote URLs and fragment validation",
+  "diffCheck": "PASS",
+  "privacyScan": "PASS on added text/evidence",
+  "staticSyntax": {
+    "not-checked": 1389,
+    "python:passed": 15,
+    "json:passed": 438,
+    "xml:passed": 87,
+    "non-text": 119,
+    "node:passed": 216,
+    "failed:ParseError": 7,
+    "bash:passed": 5,
+    "zsh:passed": 1
+  },
+  "projectSkills": {
+    "count": 5,
+    "yaml": "PASS Ruby safe_load",
+    "pythonQuickValidate": "NOT RUN missing PyYAML"
+  },
+  "tests": {
+    "modelAndContract": 45,
+    "supabasePolicy": 10,
+    "gateway": "PASS",
+    "newAndroidRustBuild": "NOT RUN docs only; reused accurate hashes"
+  },
+  "workflowAudit": "no hard errors; existing global AGENTS size warning retained",
+  "noBusinessCodeConfigSchemaTestsChanged": true,
+  "gitCommitPush": "NOT RUN",
+  "paidRequests": 0,
+  "installations": 0
+}

@@ -1,0 +1,18 @@
+{
+  "head": "0c5afbdbf61c7d50fd8f257720f3b92763901083",
+  "scope": "Tracked and non-ignored untracked working-tree bytes and all locally available Git refs; no file bodies or secrets emitted",
+  "tracked_files": 1954,
+  "inventory_files": 2277,
+  "untracked_files": 323,
+  "bytes": 88947060,
+  "kinds": {
+    "text": 2158,
+    "binary": 119
+  },
+  "commits": 202,
+  "limitations": [
+    "No ignored data read",
+    "No binary visual verification",
+    "Not a line-by-line semantic or external deployment audit"
+  ]
+}

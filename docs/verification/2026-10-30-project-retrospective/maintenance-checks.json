@@ -1,0 +1,49 @@
+{
+  "modelTests": {
+    "exitCode": 0,
+    "summary": [
+      "----------------------------------------------------------------------",
+      "Ran 16 tests in 0.207s",
+      "",
+      "OK"
+    ]
+  },
+  "contractTests": {
+    "exitCode": 0,
+    "summary": [
+      "----------------------------------------------------------------------",
+      "Ran 29 tests in 1.679s",
+      "",
+      "OK"
+    ]
+  },
+  "governance": {
+    "exitCode": 0,
+    "result": {
+      "state": "PASS",
+      "contracts": 114,
+      "domains": 40,
+      "scope": "offline contract coverage and precedence; not full semantic or runtime proof"
+    }
+  },
+  "consistency": {
+    "exitCode": 0,
+    "result": {
+      "state": "PASS",
+      "contracts": 114,
+      "domains": 40,
+      "errors": [],
+      "scope": "offline metadata/owner links and explicitly reviewed obsolete clauses; not complete semantic or runtime proof"
+    }
+  },
+  "models": {
+    "exitCode": 0,
+    "result": {
+      "state": "PASS",
+      "chatModels": 23,
+      "specialModels": 1,
+      "credentialGroups": 7,
+      "scope": "offline source and contract consistency; not live acceptance"
+    }
+  }
+}

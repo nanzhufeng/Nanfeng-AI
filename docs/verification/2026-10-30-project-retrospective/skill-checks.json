@@ -1,0 +1,41 @@
+{
+  "validator": "Ruby YAML.safe_load plus structure and UI consistency",
+  "pythonQuickValidate": "NOT RUN: PyYAML unavailable; no dependency installed",
+  "skills": [
+    {
+      "name": "nanfeng-ai-code-review",
+      "lines": 45,
+      "frontmatterBytes": 251,
+      "yaml": "PASS",
+      "ui": "PASS"
+    },
+    {
+      "name": "nanfeng-ai-testing-delivery",
+      "lines": 49,
+      "frontmatterBytes": 214,
+      "yaml": "PASS",
+      "ui": "PASS"
+    },
+    {
+      "name": "nanfeng-ai-development",
+      "lines": 43,
+      "frontmatterBytes": 228,
+      "yaml": "PASS",
+      "ui": "PASS"
+    },
+    {
+      "name": "nanfeng-ai-document-sync",
+      "lines": 41,
+      "frontmatterBytes": 253,
+      "yaml": "PASS",
+      "ui": "PASS"
+    },
+    {
+      "name": "nanfeng-ai-debugging",
+      "lines": 44,
+      "frontmatterBytes": 224,
+      "yaml": "PASS",
+      "ui": "PASS"
+    }
+  ]
+}

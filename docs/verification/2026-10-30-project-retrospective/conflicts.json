@@ -1,0 +1,96 @@
+[
+  {
+    "id": "DOC-01",
+    "oldSource": "docs/南枫AI完整开发档案.md@0c5afbdb",
+    "oldClaim": "current Android 1.0.31/code95 and Desktop product 1.0.31",
+    "currentEvidence": [
+      "app/build.gradle.kts:versionCode=96/versionName=1.0.32",
+      "desktop/src-tauri/tauri.conf.json:version=1.0.32"
+    ],
+    "resolution": "Updated current product table; dated release records retained",
+    "status": "RESOLVED_DOCUMENT_ONLY"
+  },
+  {
+    "id": "DOC-02",
+    "oldSource": "docs/南枫AI完整开发档案.md@0c5afbdb",
+    "oldClaim": "Desktop main user_version44",
+    "currentEvidence": [
+      "desktop/src-tauri/src/lib.rs:migrate current<45 and pragma user_version45"
+    ],
+    "resolution": "Use active main-store migration, distinguish other stores",
+    "status": "RESOLVED_DOCUMENT_ONLY"
+  },
+  {
+    "id": "DOC-03",
+    "oldSource": "docs/南枫AI完整开发档案.md@0c5afbdb",
+    "oldClaim": "current22 chat deployments/OpenRouter9",
+    "currentEvidence": [
+      "protocol/model-service/model-service-v1.json:23 chat, OpenRouter10, official7, RelayCore6"
+    ],
+    "resolution": "Current inventory corrected; historical22-model acceptance not relabeled",
+    "status": "RESOLVED_DOCUMENT_ONLY"
+  },
+  {
+    "id": "DOC-04",
+    "oldSource": "docs/南枫AI完整开发档案.md@0c5afbdb",
+    "oldClaim": "current directory and history totals reflect older retrospective",
+    "currentEvidence": [
+      "files.json",
+      "history.json",
+      "history-scope.json"
+    ],
+    "resolution": "Current2277 files and202/200 history counts; preserve old dated evidence in Git",
+    "status": "RESOLVED_DOCUMENT_ONLY"
+  },
+  {
+    "id": "DOC-05",
+    "oldSource": "C12 broad search-failure analysis clause and historical test fixtures",
+    "currentEvidence": [
+      "docs/verification/2026-10-30-risk-boundary-audit/red-check.json",
+      "AttachmentWebSearchCoordinator",
+      "Failure::stops_followup"
+    ],
+    "resolution": "Reuse prior checkpoint fix and current C12; no additional business edit in retrospective",
+    "status": "PREVIOUSLY_RESOLVED_RECONFIRMED"
+  },
+  {
+    "id": "DOC-06",
+    "oldSource": "model architecture cached-profile precedence text before checkpoint",
+    "currentEvidence": [
+      "docs/model-service/MODEL_SERVICE_ARCHITECTURE.md",
+      "AndroidModelProfileDirectory.mergeCachedProfiles"
+    ],
+    "resolution": "Current seed deployment/capability bounds and allowed cached fields remain authoritative",
+    "status": "PREVIOUSLY_RESOLVED_RECONFIRMED"
+  },
+  {
+    "id": "DOC-07",
+    "oldSource": "prior current-state prose mixed code commit, installed package and released version",
+    "currentEvidence": [
+      "docs/verification/2026-10-30-code-checkpoint/REPORT.md",
+      "docs/verification/2026-10-30-opus-eof/phone-cover-check.json",
+      "docs/verification/2026-10-28-github-v1.0.32/REPORT.md"
+    ],
+    "resolution": "Separate source/byte/installation/release identities and evidence dates",
+    "status": "RECONCILED_PROVENANCE"
+  },
+  {
+    "id": "DOC-08",
+    "oldSource": "legacy encrypted terminology and residual cipher migration paths",
+    "currentEvidence": [
+      "supabase/migrations/202609180007_p8_account_isolated_sync.sql:nfai.sync.direct payload object"
+    ],
+    "resolution": "Document service-readable direct payload, distinguish legacy ciphertext migration; no protocol change",
+    "status": "CLARIFICATION_NOT_NEW_RUNTIME_FAILURE"
+  },
+  {
+    "id": "RULE-01",
+    "oldSource": "AGENTS.md interpreted any future no-install request as main-device-only",
+    "currentEvidence": [
+      "current user task boundaries",
+      "project user-authorization precedence"
+    ],
+    "resolution": "Replace blanket interpretation with respecting current task scope on all environments; preserve device safety rules",
+    "status": "LONG_TERM_RULE_CLEANUP"
+  }
+]

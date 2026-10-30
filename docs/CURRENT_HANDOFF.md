@@ -2,13 +2,21 @@
 
 > 当前合同读取门：[全项目合同索引](contracts/CONTRACT_INDEX.md) · [合同治理](CONTRACT_GOVERNANCE_CURRENT.md)。
 
-> 最近增量为 2026-10-30 本地checkpoint与文档固化。用户已确认现装 Opus 打通；此前22模型真实回执与本轮故障回归分别绑定各自源码，不能混用。原始 EOF 关闭方仍未知。
+> 最近增量为 2026-10-30 全项目文档复盘，业务基线仍为已建立的本地checkpoint。用户已确认现装 Opus 打通；此前22模型真实回执与本轮故障回归分别绑定各自源码，不能混用。原始 EOF 关闭方仍未知。
 >
 > 全项目状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)；本页只保留最近阶段与继续工作所需边界。
 
 
 
-## 当前：代码checkpoint及增量正式沉淀
+## 当前：全项目文档复盘完成，业务文件未改
+
+- 基线HEAD `0c5afbdbf61c7d50fd8f257720f3b92763901083`；本次只有文档／Skill工作树增量，未提交。2,277文件、202本地ref提交／200主线祖先的完整元数据，以及核心owner定向检查见[复盘报告](verification/2026-10-30-project-retrospective/REPORT.md)。不要把结构扫描等同全部代码逐行或运行验证。
+- 重整完整开发档案、AGENTS长期边界、现有五类独立Skill与可迁移经验；修正旧产品版本、Desktop主库版本、聊天部署数、目录／历史统计及证据混用。当前行为仍归原合同，未追加业务修复。
+- 762适用语法通过，7历史XML格式失败；1,389项not-checked、119非文本。45模型／合同测试、Supabase10和Go本地检查通过；五Skill经Ruby安全YAML解析，Python quick_validate因无PyYAML未运行。旧快照37缺链保留原件，当前新增／修改链接另行验收。
+- 收尾与原清单逐项比对，仅授权文档／Skill变化；应用代码、配置、schema、测试、HEAD及原323份未跟踪历史文件不变。完整边界见verification.json／changes.json，不依赖上下文口述。
+- 原499责任、其他中断partial计量、新候选真实服务／原生／主设备和外部部署缺口继续保留。本次没有付费请求、安装、提交／推送／发布；不重跑已验链路来替代文档复盘。
+
+## 前轮：代码checkpoint及增量正式沉淀
 
 - 代码基准 `2c22021c861ce2e74022e94cf116dfa47ada1201`，76文件提交已包含6份新增核心源码／测试及当日安全证据；后续为纯文档收口。报告与最终回归见[checkpoint](verification/2026-10-30-code-checkpoint/REPORT.md)。没有新增业务改动。
 - 784输入hash与已完成Android／Rust／正式包验证一致，复用不重跑。补跑Node563 PASS／12skip、lint/typecheck/inventory/build，维护45、三golden及合同门通过。签名正式候选hash仍 `c6ac19be33a6a77ad0b31698057b5982180635fcd3593c28f00ffc6c77d97507`，产物内构建提交不因新文档commit改变。

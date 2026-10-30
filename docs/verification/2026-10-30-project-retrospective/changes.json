@@ -1,0 +1,32 @@
+{
+  "baselineHead": "0c5afbdbf61c7d50fd8f257720f3b92763901083",
+  "modified": [
+    ".agents/skills/nanfeng-ai-code-review/SKILL.md",
+    ".agents/skills/nanfeng-ai-debugging/SKILL.md",
+    ".agents/skills/nanfeng-ai-development/SKILL.md",
+    ".agents/skills/nanfeng-ai-document-sync/SKILL.md",
+    ".agents/skills/nanfeng-ai-testing-delivery/SKILL.md",
+    "AGENTS.md",
+    "docs/CURRENT_HANDOFF.md",
+    "docs/PROJECT_STATUS.md",
+    "docs/南枫AI完整开发档案.md",
+    "docs/可迁移开发经验.md"
+  ],
+  "added": [
+    "docs/verification/2026-10-30-project-retrospective/REPORT.md",
+    "docs/verification/2026-10-30-project-retrospective/changes.json",
+    "docs/verification/2026-10-30-project-retrospective/conflicts.json",
+    "docs/verification/2026-10-30-project-retrospective/files.json",
+    "docs/verification/2026-10-30-project-retrospective/history-scope.json",
+    "docs/verification/2026-10-30-project-retrospective/history.json",
+    "docs/verification/2026-10-30-project-retrospective/links-before.json",
+    "docs/verification/2026-10-30-project-retrospective/maintenance-checks.json",
+    "docs/verification/2026-10-30-project-retrospective/semantic-review.json",
+    "docs/verification/2026-10-30-project-retrospective/skill-checks.json",
+    "docs/verification/2026-10-30-project-retrospective/structure.json",
+    "docs/verification/2026-10-30-project-retrospective/summary.json",
+    "docs/verification/2026-10-30-project-retrospective/verification.json"
+  ],
+  "unchangedBusinessFiles": true,
+  "preservedPriorUntracked": 323
+}

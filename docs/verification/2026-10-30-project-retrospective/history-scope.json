@@ -1,0 +1,24 @@
+{
+  "allLocalRefs": 202,
+  "headAncestors": 200,
+  "branchOnly": [
+    {
+      "commit": "d519e83ccb6d9d715936f9e9dcc29c3d2f7fd4d9",
+      "subject": "checkpoint: freeze dual-platform search routing and accounting"
+    },
+    {
+      "commit": "8d434cbdaad834dd1df47ddfd5c8ad7131d48d13",
+      "subject": "docs: record final regression and exact source checkpoint"
+    }
+  ],
+  "monthlyAllRefs": {
+    "2026-08": 142,
+    "2026-09": 40,
+    "2026-10": 20
+  },
+  "dateRange": [
+    "2026-08-20",
+    "2026-10-30"
+  ],
+  "remoteFetch": "NOT RUN"
+}

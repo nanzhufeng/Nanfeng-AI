@@ -1,0 +1,192 @@
+{
+  "scope": "Common inline local Markdown links; excludes code fences, remote URLs, fragments and local absolute paths",
+  "markdownFiles": 319,
+  "absoluteLocalReferencesNotPortableEvidence": 6,
+  "missing": [
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "contracts/CONTRACT_INDEX.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "CONTRACT_GOVERNANCE_CURRENT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "verification/2026-10-13-independent-search-final/REPORT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "NANFENG_ISLAND_CURRENT_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "../release-evidence/2026-09-19-startup-install/REPORT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "CONVERSATION_APP_ENTRY_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "releases/v1.0.22.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "releases/v1.0.21.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "../release-evidence/2026-09-18-markdown-install/REPORT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "../release-evidence/2026-09-18-markdown-regression/REPORT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260915-project-retrospective/REVIEW.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260915-project-retrospective/validation.json",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260913-final-checkpoint/",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "../desktop/scripts/migrate-android-p5d-backup.py",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260910/row-action-feedback-verification.json",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260910/PREVIEW_LAYER_FIXES.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260910/DEEPSEEK_V41_UPGRADE.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260910/deepseek-v41-verification.json",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260910/BOUNDARY_FIXES.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260910/boundary-fix-verification.json",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260910/verification.json",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "review/20260910/BOUNDARY_REVIEW.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "DESKTOP_CHAT_FIRST_UI_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "C14_LOCAL_DATA_PARITY_CONTRACT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "archive/CURRENT_HANDOFF_BEFORE_20260910_CHECKPOINT.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "南枫AI完整开发档案.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/CURRENT_HANDOFF.md",
+      "target": "可迁移开发经验.md",
+      "historicalSnapshot": true
+    },
+    {
+      "file": "docs/verification/2026-10-13-search-routing-plan/before-docs/PROJECT_STATUS.md",
+      "target": "verification/2026-10-13-independent-search-final/REPORT.md",
+      "historicalSnapshot": true
+    }
+  ]
+}

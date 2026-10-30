@@ -1,0 +1,66 @@
+{
+  "scope": "Targeted semantic review after complete structural inventory; not every source line or runtime path",
+  "areas": [
+    {
+      "area": "Android composition and chat",
+      "entry": "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt",
+      "checked": "NormalChatOpenRouterExecutor; private assets and persistent attempts"
+    },
+    {
+      "area": "Room persistence and data areas",
+      "entry": "app/src/main/java/com/nanzhufeng/ai/data/local/NanfengAiDatabase.kt",
+      "checked": "schema72 and area-specific owner; RoomConversationRepository transactions"
+    },
+    {
+      "area": "Desktop composition and stores",
+      "entry": "desktop/src-tauri/src/lib.rs",
+      "checked": "Tauri registration and main user_version45; independent area/store boundaries"
+    },
+    {
+      "area": "Provider and attachment pipeline",
+      "entry": "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "checked": "adapters, inventory, batches, unknown stopping and cost owner; prior fault receipts"
+    },
+    {
+      "area": "Desktop search execution",
+      "entry": "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+      "checked": "failure certainty and checkpoints; prior Rust full-suite receipt"
+    },
+    {
+      "area": "Import and backups",
+      "entry": "app/src/main/java/com/nanzhufeng/ai/data/AndroidLocalBackupRestoreManager.kt",
+      "checked": "staging, SHA256/readback and referenced format contracts; not a new restore test"
+    },
+    {
+      "area": "Sync trust boundary",
+      "entry": "supabase/migrations/202609180007_p8_account_isolated_sync.sql",
+      "checked": "direct payload object; Android and Desktop legacy migration paths distinguished"
+    },
+    {
+      "area": "Background and other features",
+      "entry": "app/src/main/java/com/nanzhufeng/ai/ai/ScheduledMonitorExecutor.kt",
+      "checked": "owner and contract routing only; no new OS scheduling acceptance"
+    },
+    {
+      "area": "Gateway and avatar services",
+      "entry": "upload-gateway/main.go",
+      "checked": "offset/hash/TTL and route ownership; local Go and Supabase policy tests"
+    },
+    {
+      "area": "CI and delivery",
+      "entry": ".github/workflows/source-verification.yml",
+      "checked": "declared checks versus full app, native and real-service gaps"
+    },
+    {
+      "area": "Model and contract governance",
+      "entry": "protocol/model-service/model-service-v1.json",
+      "checked": "23 models,7 credential groups and manifest owners; static gates"
+    },
+    {
+      "area": "Five project Skills",
+      "entry": ".agents/skills",
+      "checked": "separate development/debug/test/review/doc workflows; parsed metadata and links"
+    }
+  ],
+  "noNewRemoteAcceptance": true
+}

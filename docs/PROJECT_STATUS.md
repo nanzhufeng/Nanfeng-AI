@@ -1,5 +1,7 @@
 # Project Status
 
+- 当前文档复盘（2026-10-30）：基于HEAD `0c5afbdbf61c7d50fd8f257720f3b92763901083` 完成2,277文件／202本地ref可达提交的清单和结构检查，并定向核对核心owner。更新开发档案、长期规则、五类Skill与可迁移经验；业务源码／配置／schema／应用测试未改，未提交／安装／发布。本轮检查与限制见[完整复盘](verification/2026-10-30-project-retrospective/REPORT.md)。
+
 - 当前checkpoint：`2c22021c861ce2e74022e94cf116dfa47ada1201`；76份实现／合同／脱敏证据已提交，6份核心新增文件纳入Git。本轮只补增量回归和文档固化；完整证据见[checkpoint报告](verification/2026-10-30-code-checkpoint/REPORT.md)。本地提交，未推送／发布／安装。
 
 - 当前增量：[共用失败边界／合同架构复查](verification/2026-10-30-risk-boundary-audit/REPORT.md)。已修双端 UNKNOWN 被聚合丢失并继续回答、Android 流超时计量丢失／原始 SSE 字节门、清点停止状态及验收预算在途预留遗漏；纠正动态 profile 优先级旧文档。Android最终1578 PASS／10 skip，Rust472 PASS／38 ignored，Release／Lint／验收包及原签名通过，准确候选见该目录最终回执。本轮无新增收费／手机安装；新源码真实服务未运行，旧22模型成功不冒充新候选验收。
@@ -105,6 +107,8 @@
 - 本地checkpoint无阻塞。原499连接责任、既有未知请求和跨端partial费用缺口尚未闭环；不得自动重发来清除未知。
 
 ## Tests
+
+2026-10-30完整复盘：762项适用语法检查通过，7历史XML失败、1,389项not-checked、119非文本；模型／合同45测试和静态门、Supabase10／Go本地测试通过。五Skill的YAML／UI结构通过；业务回归复用前轮准确输入，最终保真见[本轮回执](verification/2026-10-30-project-retrospective/verification.json)。
 
 2026-10-30 checkpoint：复用Android1578／10skip、Rust472／38ignored及原签名正式包；本轮新跑Node563／12skip和lint/typecheck/inventory/build、维护45／golden三类／合同静态门。784源码／测试／配置输入0漂移；[完整回归回执](verification/2026-10-30-code-checkpoint/regression.json)。
 
