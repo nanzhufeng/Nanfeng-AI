@@ -26,6 +26,8 @@
 - RC Opus 既有同组 ID 对 `claude-opus-5.5`／`claude-opus-5-5` 在附件读取校验与最终身份提示中共用既有规范化规则；不增加别名或跨型号替换，真实不同型号仍保留身份不匹配提示。
 - OpenRouter 文本聊天的流式能力来自接口合同，不依据模型目录 `supported_parameters` 是否含 `stream`。Android 新目录和旧缓存均按文本接口支持流式处理，读图与最终回答不再因缺少该可选目录项退为非流式。参见[官方 Streaming](https://openrouter.ai/docs/api_reference/streaming)。特殊用途的显式非流式短任务保持其已有协议。
 - Android 仅对取得输出流期间、正文尚未开始写出且因 EOF／Socket 原因造成的 TLS 握手断开重连一次，保持原接收方、原材料、原请求身份与正常证书验证。证书错误／协议错误不重连；正文开始写出后的异常不自动重发，UNKNOWN 不重试。安全诊断可保存异常类及根因类，不能保存异常原文、正文或密钥。
+- Android 普通回答流在读取 IO 中断时保留已经解码的事实，普通发送、附件识读／清点、检索辅助 owner 将已返回的各次调用用量／金额／模型身份交给原计量账本；Attempt 仍为 UNKNOWN，不将部分内容提升为完整回答，不追加付费请求。错误对象的字符串与诊断码不得包含部分正文、思考或异常原文。只收到部分思考不等于可见回答完成；本条不改变既有“完成后补写思考”的持久化边界。已解析协议终态后，输入流关闭的 IO 异常不能抹去该终态及计量；没有协议终态时关闭失败仍未知。非流式响应完整读取后，关闭输入流的 IO 异常同样不能覆盖已收到的 HTTP／正文；协议成功仍由 Adapter 校验，不把读取中断当作完整读取。辅助调用的失败 partial 只用于保留计量事实，不用作已验证材料或联网证据。取消保持优先。流中 Socket／总时限超时保留已解码计量，仍归 TIMEOUT／UNKNOWN；尚未取得响应的超时沿用原失败类型，不增加重试。SSE 大小门按原始响应字节累计，包含思考、工具、注释和未结束行；超限保持 RESPONSE_TOO_LARGE，不以可见正文长度代替原始字节，也不把超限转为普通网络失败；清点／检索的超限、HTTP408／504 或缺失协议终态保留未知停止边界，不继续最终调用。
+- Transport 的本地接收／进度回调异常交还执行 owner 按本地中断收尾，不能误归为 Provider 网络失败；明确用户取消仍优先。网络错误的安全阶段码只说明本地正在打开请求、写正文、等响应头、读响应或关闭响应，不推断哪一跳负责。普通发送诊断保留已真实收到的 HTTP 状态；未收到则为空，不补造状态或回填旧记录。
 - Android附件读取规划的失败分类保留网络／超时／HTTP拒绝／响应过大事实；网络失败与最终调用共用安全的传输种类／异常类／根因类码，不把无HTTP响应折叠为数据格式错误，也不保存异常原文或改写旧记录。
 - Chat流式finish_reason=error必须保持失败，尾部usage仍保留；[DONE]不能把服务错误转为成功。Mac完成但空正文保留已返回计量，cost-only已知失败也进入本地重开恢复，未返回金额不填零。 Mac Chat的length／max_tokens／content_filter／sensitive终态同样保留正文及已报告计量；流式等待末尾usage帧再结算，JSON保留已有partial事实，仍失败／联网未核实。已提交但未结账的上述失败可在重开时本地恢复，不新增请求；RC无验证币种的usage.cost不当USD。
 
@@ -48,7 +50,7 @@
 - RC Sol/Astra普通文字自身Responses首次发送即在web_search中设置external_web_access=true、tool_choice=required与include=[web_search_call.action.sources]。system映射developer，完整纯文本块合并为一个input_text，原生非文本投影保序。本条不恢复旧Sol附件助手；当前RC附件使用下节Luna与原RC普通回答接口，失败后不改变协议/参数重发。字段出现、搜索执行、原生来源与完整终态分别验证。
 - RC Sol/Astra自身Responses共用现有复杂度分类：简单文字显式`reasoning.effort=low`与`search_context_size=low`，复杂文字两项为`medium`；不再让Sol单独缺少这两项而依赖服务默认值。严格终态与原生来源门继续保留。Android对非completed状态的`response.completed`先解析已返回身份、Token与来源，再保持INCOMPLETE，不能提前丢字段，也不能将失败改成成功。本轮动态真实结果及服务/验收入口缺口见[双端联网一致性检查](verification/2026-10-13-native-search-consistency/REPORT.md)。
 - RC GPT自身Responses任务的prompt_cache_key是执行身份/Provider/模型带版本前缀的SHA-256，只发送64位小写十六进制，不含正文/Key/文件名/原ID；它是有界路由元数据，不授权缓存复用或UNKNOWN重发。Luna使用OpenRouter协议，RC附件最终普通Chat Completions及Claude/Gemini回答不注入Responses专属字段。旧附件Responses批次规则仅解释对应旧调用；不保证渠道固定账号或上游成功。
-- RelayCore 辅助检索与附件主分析是两个独立阶段。检索失败时，当前附件的已授权原模型仍可生成材料分析，正文与实际用量保留；整体失败状态及 `WEB_SEARCH_NO_SOURCES` 不变，所有外部主张标为未核实。检索仅接收已披露的当前附件核验要点与公开网址，不接收整份文件／文件名／系统／记忆；逐项来源覆盖遵循本合同共用规则，授权版本遵循RelayCore当前合同，不自动换模型、补造来源或重发 UNKNOWN；取消阻止后续主调用。协议入口按 [RelayCore 当前合同](RELAYCORE_MODEL_CURRENT_CONTRACT.md) 的具体模型选择，发送、重试和连接测试一致。
+- RelayCore 辅助检索与附件主分析是两个独立阶段。检索明确失败且不是 UNKNOWN、取消、本地持久化或授权失败时，当前附件的已授权原模型仍可生成材料分析，正文与实际用量保留；整体失败状态及 `WEB_SEARCH_NO_SOURCES` 不变，所有外部主张标为未核实。检索仅接收已披露的当前附件核验要点与公开网址，不接收整份文件／文件名／系统／记忆；逐项来源覆盖遵循本合同共用规则，授权版本遵循RelayCore当前合同，不自动换模型、补造来源或重发 UNKNOWN；取消阻止后续主调用。协议入口按 [RelayCore 当前合同](RELAYCORE_MODEL_CURRENT_CONTRACT.md) 的具体模型选择，发送、重试和连接测试一致。
 - HTTP、SSE 和 Android 定时监控执行同一完成要求。解码器收到完整的服务端终止事件后立即收尾；若完整终止事件已经到达但连接未关闭或缺少最后一个空行，也按该终止事件处理。JSON截断、非终止事件、读取超时且没有终止事件仍是未完成。联网失败明确保留失败状态及已有正文，不静默回退为离线成功、不自动换 Provider、不自动重发未知结果。历史无证据记录保留原始审计，不能伪造补证；显式重试重新处理原用户请求，不接成无限续写。
 - 普通展示来源接受无凭据、具有host的绝对HTTP(S) URL，标题清理换行/方括号并去重。用于辅助外发与逐项绑定的公开URL由AttachmentWebSearchPlan.publicUrl及attachment_web_search_v1::public_url共同规范化：拒绝私有/本机host（含localhost子域和末尾点变体）、userinfo、凭据参数及非法端口；清除fragment、utm_*、gclid/fbclid/msclkid/_ga，保留其他语义查询参数。规范化同时用于事项、检查点与最终来源，不从展示标题推断身份。详情与历史读取遵从[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。
 - 官方依据：[Responses 能力限制](https://api-docs.deepseek.com/guides/responses_api/)、[原生搜索说明](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/)、[官方搜索适配实现](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/web/web-search-deepseek/src/provider.ts)。2026-09-19 实测及安装状态见当前交接；下文旧验收数字是历史阶段记录。
@@ -59,7 +61,7 @@
 - Luna检索模型固定为`OPENROUTER / openai/gpt-6-luna`，`openrouter:web_search`显式`engine=native`且首次请求`tool_choice=required`，渠道`only=[OpenAI]`、`allow_fallbacks=false`；不改为OpenAI官方直连，不启用其他候选。Luna只接收本次已披露问题及全部附件的公开核验要点；不接收原件、文件名、系统、记忆或前几条私人对话。
 - 检索结果使用逐事项正文和原生行内引用，不要求JSON输出以免丢失annotations。事项只接受与服务原生结构化来源匹配的规范化URL；正文自行写出的URL不补造证据。摘要、ID、真实来源与完整终态分别校验。来源的已允许追踪参数规范化同时作用于证据正文、检查点和最终来源投影，不能在交回原模型时漏掉有效来源。
 - Sol/Astra普通文字Responses发送`include=[web_search_call.action.sources]`；工具、required、身份、取消和终态规则保持原有合同。附件助手完成后，原选RC模型按自己的普通回答协议、完整材料及当前证据生成，不重复发搜索工具；回答Provider、模型和Key分组保持原值。
-- 实际接收方及准确材料授权见P3J；旧Sol／智谱授权不能放行Luna。检索与回答分别记真实调用、币种和金额，OpenRouter回报USD与RC本地CNY估算分别保留，不把未知金额当0或把不同币种直接相加。来源或事项不足准确失败／未完成，合法材料分析可以保留；取消、落库失败和UNKNOWN不引发下一次自动外发。
+- 实际接收方及准确材料授权见P3J；旧Sol／智谱授权不能放行Luna。检索与回答分别记真实调用、币种和金额，OpenRouter回报USD与RC本地CNY估算分别保留，不把未知金额当0或把不同币种直接相加。来源或事项不足准确失败／未完成，合法材料分析可以保留；取消、落库失败和UNKNOWN不引发下一次自动外发。 此边界覆盖附件清点、批次检索、定向补查和最终回答。聚合器必须原样保留失败身份，不能把 UNKNOWN 降成普通停止字符串或包含部分结果的 Ready；此前已完成的逐项检查点与物理计量继续保留。
 - 本节定义已接入的路由行为，真实服务／格式／UI覆盖结果只见PROJECT_STATUS及本轮验收报告；源码接入不能推导全部模型已通过。
 
 ## 历史独立网页搜索服务（只读兼容）

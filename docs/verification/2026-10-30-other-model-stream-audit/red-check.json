@@ -1,0 +1,32 @@
+[
+  {
+    "suite": "ProviderStreamInterruptionTest",
+    "tests": 9,
+    "failures": [
+      {
+        "test": "complete non streaming body survives cleanup EOF but a read EOF remains unknown",
+        "type": "java.lang.AssertionError"
+      }
+    ]
+  },
+  {
+    "suite": "AttachmentInventoryFailureContractsTest",
+    "tests": 6,
+    "failures": [
+      {
+        "test": "interrupted attachment reading retains known usage without becoming ready",
+        "type": "java.lang.AssertionError"
+      }
+    ]
+  },
+  {
+    "suite": "RelayCoreWebSearchCompanionTest",
+    "tests": 14,
+    "failures": [
+      {
+        "test": "interrupted search retains known usage and unknown status without another call",
+        "type": "java.lang.AssertionError"
+      }
+    ]
+  }
+]

@@ -1,5 +1,15 @@
 # Project Status
 
+- 当前增量：[共用失败边界／合同架构复查](verification/2026-10-30-risk-boundary-audit/REPORT.md)。已修双端 UNKNOWN 被聚合丢失并继续回答、Android 流超时计量丢失／原始 SSE 字节门、清点停止状态及验收预算在途预留遗漏；纠正动态 profile 优先级旧文档。Android最终1578 PASS／10 skip，Rust472 PASS／38 ignored，Release／Lint／验收包及原签名通过，准确候选见该目录最终回执。本轮无新增收费／手机安装；新源码真实服务未运行，旧22模型成功不冒充新候选验收。
+
+- 前轮增量：[其他模型共用链路复查](verification/2026-10-30-other-model-stream-audit/REPORT.md)。用户确认现装 Opus 打通；其余22模型真实文本＋Markdown附件问答／完整终态／准确身份／四项内容／最终候选零网络重开通过。新增预算占用¥0.221136，无未知预留。已补共用响应关闭及辅助断流计量遗漏、双端估价边界，最终Android1570 PASS／10 skip、Release／Lint，Rust相关6和维护45通过。原生媒体／联网搜索／Desktop本轮未实测，不写全通过；新正式候选未覆盖主设备、未提交发布。
+
+- 前轮历史：正式候选已保数据覆盖 OPPO并准确回读；最新 SDK37 候选真实 Opus 联网 HTTP200／COMPLETED、1767字、5来源，正文／模型／费用重开一致。当时主手机新对话未验，随后用户已确认打通；原 EOF／499 关闭方未知，不倒推事故根因。保守预算已达¥4.412992，停止新增收费，预留不足风险已记录。见[最新报告](verification/2026-10-30-opus-eof/REPORT.md)。
+
+- 2026-10-30增量：[异常处理候选与架构复核](verification/2026-10-30-opus-eof/REPORT.md)。原链路内修复已完成响应被关闭 IO 覆盖、读取 IO 后已知主调用计量丢失；155 项定向回归及三项静态合同门通过。未新增真实服务请求／安装，原手机 499／EOF 根因仍未闭环。
+
+- 2026-10-30续查：[Opus真实服务与原499取证](verification/2026-10-30-opus-eof/REPORT.md)。三条新联网／两轮对话完整返回并零网络重开；原请求服务端先200后cancelled／499、57思考Token、USD0.02812，关闭责任未定，根因修复未完成。仅新增验收读取修正，未改生产Transport或覆盖手机。
+
 > 当前实现、代码checkpoint与分层验证优先。历史执行过程见[当前交接](CURRENT_HANDOFF.md)；未完成的真实验收不因本地回归或提交关闭。
 
 ## Verified
@@ -12,6 +22,8 @@
 - Status: Active
 
 ## Current
+
+- [2026-10-30 Opus EOF 排查](verification/2026-10-30-opus-eof/REPORT.md)：现装精确修复包的真实普通对话11.2秒报TRANSPORT_IO_EOFException。原始断流／费用未知尚未闭环；已定位并局部修复运行诊断不刷新这一独立问题，未覆盖或重新发送。当前基线之上另有诊断 UI、验收读取和 Transport／Executor 异常处理候选，验证范围单独见报告。
 
 - [v1.0.32 发布回执](verification/2026-10-28-github-v1.0.32/REPORT.md)：当前核心源码已推 main，双端最终包验签、准确字节与四张隔离空数据预览完成；正式 Release 两安装包已上传，公开下载字节一致，三个源码 CI 检查全部成功。云同步测试 mock 的 TCP 分段读取已修，本轮完整 Rust 默认回归通过；真实云服务未新增验收。
 

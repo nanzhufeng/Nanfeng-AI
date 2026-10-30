@@ -1,0 +1,109 @@
+{
+  "checkedAt": "2026-10-30T03:51:48.538542+00:00",
+  "scope": "Three real Opus calls in isolated Android production executor; original mobile EOF remains unresolved",
+  "selectedModel": "anthropic/claude-opus-5.5",
+  "productionTransportChanged": false,
+  "paidCalls": 3,
+  "calls": [
+    {
+      "run": "opus-web-control-01",
+      "index": 0,
+      "requestedModel": "anthropic/claude-opus-5.5",
+      "returnedModel": "anthropic/claude-opus-5.5",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 129,
+      "firstFrameMillis": 6086,
+      "answerChars": 638,
+      "sourceCount": 4,
+      "inputTokens": 14483,
+      "outputTokens": 709,
+      "contextMarkerPresent": false
+    },
+    {
+      "run": "opus-warm-dialogue-02",
+      "index": 0,
+      "requestedModel": "anthropic/claude-opus-5.5",
+      "returnedModel": "anthropic/claude-opus-5.5",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 119,
+      "firstFrameMillis": 7268,
+      "answerChars": 639,
+      "sourceCount": 3,
+      "inputTokens": 23246,
+      "outputTokens": 746,
+      "contextMarkerPresent": true
+    },
+    {
+      "run": "opus-warm-dialogue-02",
+      "index": 1,
+      "requestedModel": "anthropic/claude-opus-5.5",
+      "returnedModel": "anthropic/claude-opus-5.5",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 105,
+      "firstFrameMillis": 4261,
+      "answerChars": 318,
+      "sourceCount": 2,
+      "inputTokens": 19726,
+      "outputTokens": 564,
+      "contextMarkerPresent": true
+    }
+  ],
+  "reopen": {
+    "networkCalls": 0,
+    "conversations": [
+      {
+        "answers": 1,
+        "allReturnedTextPersisted": true,
+        "activeLeafMatchesFinalCall": true,
+        "footerCostLabel": "¥0.551818",
+        "returnedModels": [
+          "anthropic/claude-opus-5.5"
+        ]
+      },
+      {
+        "answers": 2,
+        "allReturnedTextPersisted": true,
+        "activeLeafMatchesFinalCall": true,
+        "footerCostLabel": "¥0.673267",
+        "returnedModels": [
+          "anthropic/claude-opus-5.5"
+        ]
+      }
+    ]
+  },
+  "cleanup": {
+    "temporaryCredentialEntries": 0,
+    "bootstrapPresent": false,
+    "reversePorts": 0,
+    "credentialOwnerUnchanged": true,
+    "paidCalls": 3,
+    "allThreeCompleted": true,
+    "databasePreserved": true,
+    "ownedEmulatorAndAvdRemoved": true
+  },
+  "budgetLimitCnyMicros": 3000000,
+  "conservativeBudgetCnyMicros": 2401600,
+  "originalRetried": false,
+  "originalServerEvidence": {
+    "createdAt": "2026-10-30T03:03:27.845Z",
+    "upstreamInitialStatus": 200,
+    "upstreamAttempts": 1,
+    "finalProviderStatus": 499,
+    "cancelled": true,
+    "inputTokens": 6745,
+    "outputTokens": 57,
+    "reasoningTokens": 57,
+    "costUsd": 0.02812,
+    "errorOwnership": "undeterminable",
+    "errorOwnershipCause": "unknown"
+  },
+  "originalClosureInitiator": "UNKNOWN",
+  "originalRepairStatus": "NOT FIXED",
+  "mainDeviceInstalled": false,
+  "nativeUiAcceptance": "NOT RUN",
+  "supportDraft": "Prepared privately; not sent; user requested no further questions",
+  "phoneNetworkPolicyEvidence": "No incident-time BLOCKED row attributed to app UID10611; not proof of network stability"
+}

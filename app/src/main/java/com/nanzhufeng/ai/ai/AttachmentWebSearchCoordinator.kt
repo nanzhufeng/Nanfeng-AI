@@ -36,7 +36,7 @@ internal object AttachmentWebSearchCoordinator {
         }
         for(batch in plan.items.filter {it.id !in parts}.chunked(batchSize)) {
             val result=invoke(batch)
-            if(result is RelayCoreWebSearchCompanion.Result.Failed && result.code=="USER_CANCELLED") return result
+            if(result is RelayCoreWebSearchCompanion.Result.Failed && result.stopsFollowup) return result
             if(result is RelayCoreWebSearchCompanion.Result.Ready) retain(result,batch)
             else if(result is RelayCoreWebSearchCompanion.Result.Failed && result.code!="WEB_SEARCH_BUDGET_EXHAUSTED") failedItems+=batch.map {it.id}
             val retry=when(result) {
@@ -50,7 +50,7 @@ internal object AttachmentWebSearchCoordinator {
                 if(targeted is RelayCoreWebSearchCompanion.Result.Ready) retain(targeted,listOf(item))
                 else {
                     val failed=targeted as RelayCoreWebSearchCompanion.Result.Failed
-                    if(failed.code=="USER_CANCELLED") return failed
+                    if(failed.stopsFollowup) return failed
                     // A failed supplement cannot erase a prior, actually searched
                     // unverified result. UNKNOWN still stops the task below.
                     if(item.id !in parts && failed.code!="WEB_SEARCH_BUDGET_EXHAUSTED") failedItems+=item.id

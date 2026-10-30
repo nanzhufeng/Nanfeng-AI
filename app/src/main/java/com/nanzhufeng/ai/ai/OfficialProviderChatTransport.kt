@@ -223,21 +223,29 @@ sealed interface ProviderChatOutcome {
     ) : ProviderChatOutcome
     data object TimedOut : ProviderChatOutcome
     /**
-     * A bounded local transport fact. It deliberately contains no exception message, URL,
-     * credential, request body, or response data, so it is safe to persist in diagnostics.
+     * Only diagnosticCode is safe for diagnostics. The optional decoded partial stays inside
+     * execution/accounting; it is never a completed answer or permission to repeat a request.
      */
-    data class NetworkFailure(val kind: ProviderNetworkFailureKind, val exceptionClass: String? = null, val causeClass: String? = null) : ProviderChatOutcome {
+    data class NetworkFailure(val kind: ProviderNetworkFailureKind, val exceptionClass: String? = null, val causeClass: String? = null,
+        val partialResponse: StreamedResponse? = null, val stage: ProviderTransportStage? = null,
+        val httpStatus: Int? = null) : ProviderChatOutcome {
+        val failureCode: String get() = if (kind == ProviderNetworkFailureKind.TIMEOUT) "TIMEOUT" else "NETWORK"
         fun diagnosticCode(): String = "TRANSPORT_${kind.name}" +
             (exceptionClass?.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) }?.let { "_$it" } ?: "") +
-            (causeClass?.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) }?.let { "_CAUSE_$it" } ?: "")
+            (causeClass?.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) }?.let { "_CAUSE_$it" } ?: "") +
+            (stage?.let { "_AT_${it.name}" } ?: "")
+        override fun toString(): String = "NetworkFailure(${diagnosticCode()}, partialResponsePresent=${partialResponse != null})"
     }
     data object ResponseTooLarge : ProviderChatOutcome
     data object Cancelled : ProviderChatOutcome
 }
 
-enum class ProviderNetworkFailureKind { DNS, TLS, CONNECT, PROTOCOL, IO }
+enum class ProviderNetworkFailureKind { DNS, TLS, CONNECT, PROTOCOL, IO, TIMEOUT }
+/** Local operation only; it does not identify which network peer caused a disconnect. */
+enum class ProviderTransportStage { OPEN_REQUEST, REQUEST_BODY, RESPONSE_HEADERS, RESPONSE_BODY, RESPONSE_CLOSE }
 
 internal fun classifyProviderNetworkFailure(error: Throwable): ProviderNetworkFailureKind = when (error) {
+    is SocketTimeoutException -> ProviderNetworkFailureKind.TIMEOUT
     is UnknownHostException -> ProviderNetworkFailureKind.DNS
     is SSLException -> ProviderNetworkFailureKind.TLS
     is ConnectException, is NoRouteToHostException -> ProviderNetworkFailureKind.CONNECT
@@ -257,6 +265,8 @@ class OfficialProviderChatTransport(
 
     private fun executeAttempt(request: ProviderChatRequest, credential: CharArray, reconnectBeforeBody: Boolean): ProviderChatOutcome {
         var bodyStarted = false
+        var stage = ProviderTransportStage.OPEN_REQUEST
+        var responseStatus: Int? = null
         return runCatching {
         val requestBody = request.effectiveBody()
         val connection = openConnection(request.endpoint).apply {
@@ -281,39 +291,72 @@ class OfficialProviderChatTransport(
                 connection.setRequestProperty("anthropic-version", "2023-06-01")
             }
             connection.outputStream.use {
+                stage = ProviderTransportStage.REQUEST_BODY
                 bodyStarted = true
                 requestBody.writeTo(it)
             }
             if (request.cancellation?.isCancelled() == true) return ProviderChatOutcome.Cancelled
+            stage = ProviderTransportStage.RESPONSE_HEADERS
             val status = connection.responseCode
-            if (status in 200..299) request.onAccepted()
+            responseStatus = status.takeIf { it in 100..599 }
+            if (status in 200..299) invokeLocalCallback(request.onAccepted)
+            stage = ProviderTransportStage.RESPONSE_BODY
             if (status in 200..299 && request.expectsStream) {
-                val streamed = connection.inputStream.use { stream ->
+                val stream = connection.inputStream
+                var closeFailure: IOException? = null
+                val streamed = try {
                     ProviderSseDecoder.read(
                         stream,
-                        request.onTextDelta,
+                        { delta -> invokeLocalCallback { request.onTextDelta(delta) } },
                         request.streamEventDecoder,
                         request.streamTextMode,
                         request.maxResponseBytes,
                         request.maxStreamDurationMillis,
                     )
+                } finally {
+                    // Closing a consumed response must not replace its parsed result (or the
+                    // primary read failure). This layer alone owns the input stream.
+                    try { stream.close() } catch (error: IOException) { closeFailure = error }
                 }
-                return ProviderChatOutcome.StreamedResponse(
+                if (request.cancellation?.isCancelled() == true) return ProviderChatOutcome.Cancelled
+                val response = ProviderChatOutcome.StreamedResponse(
                     status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedProviderCost, streamed.toolCallEncountered, streamed.toolCalls, streamed.cachedInputTokens, streamed.reasoningTokens,
                     webSources = streamed.webSources,
                     webSearchPerformed = streamed.webSearchPerformed,
                     finishReason = streamed.finishReason,
                     returnedModelId = streamed.returnedModelId,
                 )
+                // Only a parsed protocol terminal makes a cleanup failure irrelevant.
+                // A partial answer plus a close error must remain UNKNOWN.
+                val hasTerminal = streamed.finishReason != null && streamed.finishReason != "MISSING_COMPLETION"
+                val failure = streamed.readFailure ?: closeFailure.takeUnless { hasTerminal }
+                return if (failure == null) response else ProviderChatOutcome.NetworkFailure(
+                    classifyProviderNetworkFailure(failure), failure.javaClass.simpleName,
+                    generateSequence(failure.cause) { it.cause }.take(8).lastOrNull()?.javaClass?.simpleName,
+                    partialResponse = response,
+                    stage = if (streamed.readFailure != null) ProviderTransportStage.RESPONSE_BODY else ProviderTransportStage.RESPONSE_CLOSE,
+                    httpStatus = responseStatus,
+                )
             }
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.use { it.readAtMost(request.maxResponseBytes) }
+            val body = try { stream?.readAtMost(request.maxResponseBytes) } finally {
+                // A fully read HTTP body belongs to the adapter even if cleanup fails.
+                // If reading throws, keep that primary error instead of replacing it.
+                try { stream?.close() } catch (_: IOException) { }
+            }
+            if (request.cancellation?.isCancelled() == true) return ProviderChatOutcome.Cancelled
             if (stream != null && body == null) return ProviderChatOutcome.ResponseTooLarge
             ProviderChatOutcome.HttpResponse(status, body?.toString(Charsets.UTF_8).orEmpty())
         } finally {
             connection.disconnect()
         }
     }.getOrElse { error ->
+        // Local persistence/progress callbacks belong to the execution owner. Mapping their
+        // IOExceptions to NETWORK hides a local failure behind a provider outage diagnostic.
+        if (error is ProviderLocalCallbackException) {
+            if (request.cancellation?.isCancelled() == true) return@getOrElse ProviderChatOutcome.Cancelled
+            throw error.original
+        }
         when {
             request.cancellation?.isCancelled() == true -> ProviderChatOutcome.Cancelled
             // A peer reset/EOF during TLS setup has sent no request body. Reconnect once
@@ -325,9 +368,14 @@ class OfficialProviderChatTransport(
             error is ProviderResponseTooLargeException -> ProviderChatOutcome.ResponseTooLarge
             else -> ProviderChatOutcome.NetworkFailure(classifyProviderNetworkFailure(error),
                 error.javaClass.simpleName.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) },
-                generateSequence(error.cause) { it.cause }.take(8).lastOrNull()?.javaClass?.simpleName?.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) })
+                generateSequence(error.cause) { it.cause }.take(8).lastOrNull()?.javaClass?.simpleName?.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) },
+                stage = stage, httpStatus = responseStatus)
         }
     }
+    }
+
+    private fun invokeLocalCallback(callback: () -> Unit) {
+        try { callback() } catch (error: Exception) { throw ProviderLocalCallbackException(error) }
     }
 
     private fun transientTlsDisconnect(error: Throwable): Boolean {
@@ -362,6 +410,7 @@ internal object ProviderSseDecoder {
         val finishReason: String? = null,
         val webSearchPerformed: Boolean = false,
         val returnedModelId: String? = null,
+        val readFailure: IOException? = null,
     )
 
     fun read(
@@ -399,7 +448,11 @@ internal object ProviderSseDecoder {
             val elapsedMillis = (nanoTime() - startedAtNanos) / 1_000_000L
             if (elapsedMillis > maxDurationMillis) throw ProviderHardStreamTimeoutException()
         }
-        BufferedReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
+        var readFailure: IOException? = null
+        // The transport owns resource cleanup. Keep read errors separate from decoder and
+        // persistence callback errors; never turn the latter into a partial network result.
+        run {
+            val reader = BufferedReader(InputStreamReader(BoundedProviderResponseInput(input,maxResponseBytes), Charsets.UTF_8))
             var eventData = StringBuilder()
             fun consumeEvent() {
                 val data = eventData.toString().trim()
@@ -443,9 +496,13 @@ internal object ProviderSseDecoder {
                 }
             }
             while (true) {
-                enforceDuration()
-                val line = reader.readLine() ?: break
-                enforceDuration()
+                try { enforceDuration() } catch (error: SocketTimeoutException) { readFailure=error;break }
+                val line = try { reader.readLine() } catch (error: IOException) {
+                    if (error is ProviderResponseTooLargeException) throw error
+                    readFailure = error
+                    break
+                } ?: break
+                try { enforceDuration() } catch (error: SocketTimeoutException) { readFailure=error;break }
                 when {
                     line.isEmpty() -> consumeEvent()
                     line.startsWith(":") -> Unit
@@ -461,12 +518,13 @@ internal object ProviderSseDecoder {
                 // A choice finish_reason alone must still allow trailing usage events.
                 if (done || nativeProtocolEnded) break
             }
-            consumeEvent()
+            if (readFailure == null) consumeEvent()
         }
         if (textMode == ProviderStreamTextMode.FILTER_QWEN_WEB_SEARCH) {
             traceFilter.finish().takeIf(String::isNotEmpty)?.let { visible -> output.append(visible); if(textMode!=ProviderStreamTextMode.MESSAGES_SEARCH_API) onDelta(visible) }
         }
         val finishReason = when {
+            readFailure != null -> "MISSING_COMPLETION"
             terminalFailureCode != null -> terminalFailureCode
             terminal == ProviderStreamTerminal.INCOMPLETE -> "INCOMPLETE"
             terminal == ProviderStreamTerminal.FAILED -> "FAILED"
@@ -483,11 +541,24 @@ internal object ProviderSseDecoder {
             output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens,
             reportedProviderCost, toolCallEncountered,
             pendingToolCalls.values.mapNotNull { pending -> pending.name?.let { ChatToolCall(pending.id, it, pending.arguments.toString().ifBlank { "{}" }) } },
-            cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason, webSearchPerformed, returnedModelId,
+            cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason, webSearchPerformed, returnedModelId, readFailure,
         )
     }
 }
 
+/** Bound raw SSE bytes, including reasoning, tools, comments and a line without a newline. */
+private class BoundedProviderResponseInput(private val source: java.io.InputStream,private val maximum:Int):java.io.InputStream() {
+    private var consumed=0L
+    private fun count(bytes:Int) {if(bytes>0) {consumed+=bytes;if(consumed>maximum) throw ProviderResponseTooLargeException()}}
+    override fun read():Int = source.read().also {if(it>=0) count(1)}
+    override fun read(buffer:ByteArray,offset:Int,length:Int):Int {
+        if(length==0) return 0
+        val allowed=minOf(length.toLong(),maximum.toLong()-consumed+1).toInt()
+        return source.read(buffer,offset,allowed).also(::count)
+    }
+}
+
+private class ProviderLocalCallbackException(val original: Exception) : RuntimeException()
 private class ProviderHardStreamTimeoutException : SocketTimeoutException("stream duration exceeded")
 private class ProviderResponseTooLargeException : IOException("provider response too large")
 

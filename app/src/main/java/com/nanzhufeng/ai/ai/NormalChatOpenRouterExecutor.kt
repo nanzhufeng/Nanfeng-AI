@@ -845,7 +845,7 @@ class NormalChatOpenRouterExecutor(
                 .copy(actualModelId=billed?.returnedModelId,cachedInputTokens=billed?.cachedInputTokens,reasoningTokens=billed?.reasoningTokens,cost=settled?.first ?: ProviderCost(),costSource=settled?.second))
             if(reply==null || !lastAuditAppendSucceeded) {
                 val error=failure?.code;val code=when(error) {"NETWORK"->Code.NETWORK;"TIMEOUT"->Code.TIMEOUT;else->Code.RESPONSE_INCOMPLETE}
-                val status=if(error=="USER_CANCELLED") NormalChatSendAttemptStatus.CANCELLED else if(code in setOf(Code.NETWORK,Code.TIMEOUT)) NormalChatSendAttemptStatus.UNKNOWN else NormalChatSendAttemptStatus.FAILED
+                val status=if(error=="USER_CANCELLED") NormalChatSendAttemptStatus.CANCELLED else if(failure?.unknown==true || code in setOf(Code.NETWORK,Code.TIMEOUT)) NormalChatSendAttemptStatus.UNKNOWN else NormalChatSendAttemptStatus.FAILED
                 sendAttempts.transition(attempt.attemptId,setOf(NormalChatSendAttemptStatus.SENDING,NormalChatSendAttemptStatus.ACCEPTED),status,clock.instant(),if(error=="USER_CANCELLED") error else code.name)
                 return if(error=="USER_CANCELLED") OneResult.Cancelled else OneResult.Failed(if(!lastAuditAppendSucceeded) Code.LOCAL_ATTEMPT_PERSISTENCE else code)
             }
@@ -906,11 +906,12 @@ class NormalChatOpenRouterExecutor(
                     val inventoryReply=(inventory as? AttachmentSearchInventory.Result.Ready)?.reply
                     val inventoryError=(inventory as? AttachmentSearchInventory.Result.Failed)?.code
                     inventoryFailureDetail=(inventory as? AttachmentSearchInventory.Result.Failed)?.safeDiagnosticDetail
-                    val inventoryCost=providerSettledConversationCost(inventoryReply?.reportedProviderCost)
-                    boundAudit.append(auditRecord(executionProviderId,adapter.endpoint(config.provider.fixedEndpoint,ChatRequestOptions.Standard),modelId,preset,choice,"attachment-inventory",at,inventoryReply?.inputTokens,inventoryReply?.outputTokens,
-                        if(inventoryReply!=null) "RELAY_WEB_RETRIEVAL_INVENTORY_SUCCEEDED" else "RELAY_WEB_RETRIEVAL_${inventoryError}").copy(actualModelId=inventoryReply?.returnedModelId,cachedInputTokens=inventoryReply?.cachedInputTokens,reasoningTokens=inventoryReply?.reasoningTokens,cost=inventoryCost?.first ?: ProviderCost(),costSource=inventoryCost?.second))
+                    val inventoryBilling=inventoryReply ?: (inventory as? AttachmentSearchInventory.Result.Failed)?.reply
+                    val inventoryCost=providerSettledConversationCost(inventoryBilling?.reportedProviderCost)
+                    boundAudit.append(auditRecord(executionProviderId,adapter.endpoint(config.provider.fixedEndpoint,ChatRequestOptions.Standard),modelId,preset,choice,"attachment-inventory",at,inventoryBilling?.inputTokens,inventoryBilling?.outputTokens,
+                        if(inventoryReply!=null) "RELAY_WEB_RETRIEVAL_INVENTORY_SUCCEEDED" else "RELAY_WEB_RETRIEVAL_${inventoryError}").copy(actualModelId=inventoryBilling?.returnedModelId,cachedInputTokens=inventoryBilling?.cachedInputTokens,reasoningTokens=inventoryBilling?.reasoningTokens,cost=inventoryCost?.first ?: ProviderCost(),costSource=inventoryCost?.second))
                     inventoryText=listOfNotNull(inventoryText,inventoryReply?.text).joinToString("\n\n").takeIf {it.isNotBlank()}
-                    if(inventoryReply!=null) searchMaterial+="\n\n${inventoryReply.text}" else inventoryFailure=RelayCoreWebSearchCompanion.Result.Failed(inventoryError ?: "RESPONSE_FORMAT")
+                    if(inventoryReply!=null) searchMaterial+="\n\n${inventoryReply.text}" else inventoryFailure=RelayCoreWebSearchCompanion.Result.Failed(inventoryError ?: "RESPONSE_FORMAT",unknown=(inventory as? AttachmentSearchInventory.Result.Failed)?.unknown==true)
                     if(!lastAuditAppendSucceeded) inventoryFailure=RelayCoreWebSearchCompanion.Result.Failed("LOCAL_ATTEMPT_PERSISTENCE")
                 }
             }
@@ -969,7 +970,7 @@ class NormalChatOpenRouterExecutor(
                         latencyMs=java.time.Duration.between(startedAt,clock.instant()).toMillis().coerceAtLeast(0),
                     ))
                 }
-                if (attachments.isEmpty() || failed.code.startsWith("LOCAL_") || failed.code.startsWith("EGRESS_") || failed.code=="CREDENTIAL_MISSING" || failed.code == "USER_CANCELLED" || cancellation?.isCancelled() == true) {
+                if (attachments.isEmpty() || failed.stopsFollowup || cancellation?.isCancelled() == true) {
                     credential.fill('\u0000')
                     val state = if (failed.code == "USER_CANCELLED") NormalChatSendAttemptStatus.CANCELLED else if (failed.unknown) NormalChatSendAttemptStatus.UNKNOWN else NormalChatSendAttemptStatus.FAILED
                     sendAttempts.transition(attempt.attemptId,setOf(NormalChatSendAttemptStatus.SENDING,NormalChatSendAttemptStatus.ACCEPTED),state,clock.instant(),failed.code)
@@ -1282,14 +1283,28 @@ class NormalChatOpenRouterExecutor(
                 recordTransportDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.TIMEOUT)
                 boundAudit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedEffortWire, requestedAt, null, null, "TIMEOUT"))
             }
-            is ProviderChatOutcome.NetworkFailure -> OneResult.Failed(Code.NETWORK).also {
-                sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), "NETWORK")
+            is ProviderChatOutcome.NetworkFailure -> OneResult.Failed(if(outcome.failureCode=="TIMEOUT") Code.TIMEOUT else Code.NETWORK).also {
+                // A socket failure does not revoke facts already received for this physical
+                // call. Keep it UNKNOWN while retaining its known settlement and attribution.
+                val partial = outcome.partialResponse
+                val usage = ProviderUsage(partial?.inputTokens, partial?.outputTokens,
+                    cachedInputTokens = partial?.cachedInputTokens, reasoningTokens = partial?.reasoningTokens)
+                val (cost, costSource) = resolvedConversationCost(
+                    com.nanzhufeng.ai.domain.accountingPricingModelId(executionProviderId, modelId, partial?.returnedModelId),
+                    usage, partial?.reportedProviderCost, resolvedModel.displayName, requestedAt)
+                val bufferedTail = continuationStream.finish()
+                if (bufferedTail.isNotEmpty()) runtime?.append(bufferedTail)
+                sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), outcome.failureCode)
                 recordTransportDiagnostic(
                     conversationId, executionProviderId, endpoint, modelId, contextMessages,
-                    providerAttachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.NETWORK,
+                    providerAttachments, requestOptions, requestedAt, if(outcome.failureCode=="TIMEOUT") ProviderDiagnosticErrorClass.TIMEOUT else ProviderDiagnosticErrorClass.NETWORK,
                     safeDetail = outcome.diagnosticCode(),
+                    httpStatus = outcome.httpStatus,
                 )
-                boundAudit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedEffortWire, requestedAt, null, null, "NETWORK"))
+                boundAudit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedEffortWire, requestedAt,
+                    partial?.inputTokens, partial?.outputTokens, outcome.failureCode).copy(
+                    actualModelId = partial?.returnedModelId, cachedInputTokens = partial?.cachedInputTokens,
+                    reasoningTokens = partial?.reasoningTokens, cost = cost, costSource = costSource))
             }
             ProviderChatOutcome.ResponseTooLarge -> OneResult.Failed(Code.RESPONSE_FORMAT).also {
                 sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), "RESPONSE_TOO_LARGE")
@@ -1383,12 +1398,13 @@ class NormalChatOpenRouterExecutor(
         attachments: List<ChatAttachment>, options: ChatRequestOptions, requestedAt: java.time.Instant,
         errorClass: ProviderDiagnosticErrorClass,
         safeDetail: String? = null,
+        httpStatus: Int? = null,
     ) {
         diagnostics.append(
             ProviderDiagnosticRecord(
                 createdAt = clock.instant(), conversationId = conversationId.value, providerId = providerId,
                 endpointHost = ProviderDiagnosticRecord.endpointHost(endpoint), apiModelId = modelId,
-                httpStatus = null, errorClass = errorClass, redactedBody = safeDetail,
+                httpStatus = httpStatus, errorClass = errorClass, redactedBody = safeDetail,
                 requestShape = requestShape(messages, attachments, options),
                 latencyMs = java.time.Duration.between(requestedAt, clock.instant()).toMillis().coerceAtLeast(0),
             ),

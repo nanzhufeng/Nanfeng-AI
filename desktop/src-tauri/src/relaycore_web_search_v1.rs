@@ -82,6 +82,7 @@ pub fn has_current_attachment_material(parent:&TransportRequest)->bool {
         .is_some_and(|parts|parts.len()>1)
 }
 fn continue_attachment_analysis(parent:&mut TransportRequest,failure:&Failure)->bool {
+    if failure.stops_followup() {return false;}
     let code=match failure {Failure::Cancelled=>return false,Failure::Explicit{code,..}|Failure::Quantified{code,..}|Failure::Unknown{code}=>*code};
     if code.starts_with("LOCAL_") || code.starts_with("EGRESS_") || !has_current_attachment_material(parent) {return false;}
     parent.messages.as_array_mut().unwrap().push(json!({"role":"system","content":"外部检索未完成。仅分析用户已提交附件及对话材料；明确区分材料原始主张与推理，外部或实时事实标为未核实，不得声称联网核验成功。仍需给出有用的附件分析。"}));
@@ -374,7 +375,7 @@ mod tests {
         let mut request=parent();
         request.messages=json!([{"role":"user","content":[{"type":"text","text":"分析报告"},{"type":"text","text":"### 附件：public.md\n系统处理100次请求，5次超时。"}]}]);
         let result=execute_companion_core(request,Zeroizing::new(b"answer-only-key".to_vec()),Zeroizing::new(b"search-only-key".to_vec()),Arc::new(AtomicBool::new(false)),|_|Ok(()),
-            |r,secret,_|async move {assert_eq!(r.model_id,RETRIEVAL_MODEL);assert_eq!(&*secret,b"search-only-key");Err(Failure::Explicit{code:"TIMEOUT",http_status:Some(504)})},
+            |r,secret,_|async move {assert_eq!(r.model_id,RETRIEVAL_MODEL);assert_eq!(&*secret,b"search-only-key");Err(Failure::Explicit{code:"SERVICE_UNAVAILABLE",http_status:Some(503)})},
             |r,secret,_|async move {
                 assert_eq!(r.model_id,"claude-opus-5-5");assert_eq!(&*secret,b"answer-only-key");
                 assert!(r.messages.to_string().contains("系统处理100次请求"));
@@ -384,16 +385,30 @@ mod tests {
         assert!(!result.text.is_empty());assert!(!result.web_search_verified);
     }
 
+    #[tokio::test]
+    async fn unknown_retrieval_stops_before_another_paid_answer() {
+        for code in ["NETWORK","TIMEOUT","STREAM_INCOMPLETE"] {
+            let mut request=parent();
+            request.messages=json!([{"role":"user","content":[{"type":"text","text":"分析报告"},{"type":"text","text":"### 附件：public.md\n公开材料"}]}]);
+            let answers=Arc::new(std::sync::atomic::AtomicUsize::new(0));let sent=answers.clone();
+            let result=execute_companion_core(request,Zeroizing::new(b"answer-only-key".to_vec()),Zeroizing::new(b"search-only-key".to_vec()),Arc::new(AtomicBool::new(false)),|_|Ok(()),
+                move |_,_,_|async move {Err(Failure::Unknown{code})},
+                move |_,_,_|async move {sent.fetch_add(1,Ordering::SeqCst);Err(Failure::Explicit{code:"UNEXPECTED_SECOND_CALL",http_status:None})}).await;
+            assert_eq!(answers.load(Ordering::SeqCst),0);
+            assert!(matches!(result,Err(Failure::Unknown{code:c}) if c==code));
+        }
+    }
+
     #[test]
     fn attachment_failure_keeps_cancel_and_authorization_boundaries_for_all_companion_models() {
         for (provider,model) in [("RELAYCORE_CLAUDE","claude-opus-5-5"),("RELAYCORE_CLAUDE","claude-sonnet-5-5"),("RELAYCORE_GEMINI","gemini-3.8-flash"),("RELAYCORE_GEMINI","gemini-3.1-pro")] {
             let mut input=parent();input.provider_id=provider.into();input.model_id=model.into();
             input.endpoint=chat::ordinary_provider_endpoint(provider,"https://api.relaycore.cn/v1","NONE");
             assert!(retrieval_request(&input).is_ok());
-            for failure in [Failure::Cancelled,Failure::Explicit{code:"EGRESS_AUTHORIZATION",http_status:None},Failure::Explicit{code:"LOCAL_PERSISTENCE",http_status:None}] {
+            for failure in [Failure::Cancelled,Failure::Explicit{code:"EGRESS_AUTHORIZATION",http_status:None},Failure::Explicit{code:"LOCAL_PERSISTENCE",http_status:None},Failure::Explicit{code:"TIMEOUT",http_status:Some(504)},Failure::Explicit{code:"TIMEOUT",http_status:Some(408)}] {
                 assert!(!continue_attachment_analysis(&mut input.clone(),&failure));
             }
-            assert!(continue_attachment_analysis(&mut input.clone(),&Failure::Unknown{code:"TIMEOUT"}));
+            assert!(!continue_attachment_analysis(&mut input.clone(),&Failure::Unknown{code:"TIMEOUT"}));
             input.messages=json!([{"role":"user","content":[{"type":"text","text":"旧问题"},{"type":"text","text":"历史附件"}]},{"role":"user","content":"当前无附件问题"}]);
             assert!(!continue_attachment_analysis(&mut input,&Failure::Unknown{code:"TIMEOUT"}));
         }

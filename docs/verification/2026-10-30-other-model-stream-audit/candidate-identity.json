@@ -1,0 +1,7 @@
+{
+  "acceptanceSha256": "509b66b383ec5ac1d473d55fed709e46eb455b4626eba94622267db1234930fb",
+  "releaseSha256": "d9ff370b6e2fc5cec9669a79933d30610e2a746454cbd3ceb3a639015597855d",
+  "releaseSignerSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+  "releaseDebuggable": false,
+  "releasePackage": "package: name='com.nanzhufeng.ai' versionCode='96' versionName='1.0.32' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'"
+}

@@ -1,0 +1,108 @@
+{
+  "verifiedAt": "2026-10-30T13:26:42+08:00",
+  "sourceSha256": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt": "8a69966627f30a873f2fc7b5a025f4b1db08c36063b2952a36223bd191e14a89",
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "2ac9879d8c0d5a9173e94d59d896d01ebfb59e5a536e1cbcd356bc8d67c49364",
+    "app/src/test/java/com/nanzhufeng/ai/ai/ProviderStreamInterruptionTest.kt": "e7b8a16b3c4f02ece7e2749703e80fd79d59babd49870c438422989d9997bd6c",
+    "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt": "0d5a479b6b79f2f8875bf39ddca41b6077562f233f26c3421dffcd7baf3e9c2b"
+  },
+  "tests": [
+    {
+      "class": "com.nanzhufeng.ai.ai.AttachmentInventoryFailureContractsTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.NormalChatCompletionPersistenceContractsTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.NormalChatGenerationStabilityTest",
+      "tests": 56,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.P2KOpenRouterInferenceTransportContractsTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderAdapterContractsTest",
+      "tests": 62,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderSseDecoderContractsTest",
+      "tests": 22,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderStreamInterruptionTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderTlsConnectionRecoveryTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.QwenHistoryKnowledgeRefinerTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "contracts": [
+    {
+      "script": "verify-contract-governance.py",
+      "result": {
+        "state": "PASS",
+        "contracts": 114,
+        "domains": 40,
+        "scope": "offline contract coverage and precedence; not full semantic or runtime proof"
+      }
+    },
+    {
+      "script": "audit-contract-consistency.py",
+      "result": {
+        "state": "PASS",
+        "contracts": 114,
+        "domains": 40,
+        "errors": [],
+        "scope": "offline metadata/owner links and explicitly reviewed obsolete clauses; not complete semantic or runtime proof"
+      }
+    },
+    {
+      "script": "verify-model-service-contract.py",
+      "result": {
+        "state": "PASS",
+        "chatModels": 23,
+        "specialModels": 1,
+        "credentialGroups": 7,
+        "scope": "offline source and contract consistency; not live acceptance"
+      }
+    }
+  ],
+  "liveProviderAfterChange": "NOT RUN",
+  "mainDeviceAcceptance": "NOT RUN",
+  "originalEofRootCause": "UNKNOWN"
+}

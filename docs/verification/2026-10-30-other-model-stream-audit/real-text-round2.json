@@ -1,0 +1,88 @@
+{
+  "scope": "Android SDK37 fresh Markdown attachment questions for eight prior NOT SENT models; web disabled",
+  "candidateAcceptanceSha256": "509b66b383ec5ac1d473d55fed709e46eb455b4626eba94622267db1234930fb",
+  "successfulModels": [
+    {
+      "preset": "GLM_5_3",
+      "requested": "glm-5.3",
+      "returned": "glm-5.3",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "allFourExpectedFacts": true,
+      "answerChars": 93,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "RELAYCORE_OPUS_5_5",
+      "requested": "claude-opus-5.5",
+      "returned": "claude-opus-5.5",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "allFourExpectedFacts": true,
+      "answerChars": 84,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "RELAYCORE_SONNET_5_5",
+      "requested": "claude-sonnet-5-5",
+      "returned": "claude-sonnet-5-5",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "allFourExpectedFacts": true,
+      "answerChars": 65,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "RELAYCORE_GPT_6_1_SOL",
+      "requested": "gpt-6.1-sol",
+      "returned": "gpt-6.1-sol",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "allFourExpectedFacts": true,
+      "answerChars": 40,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "RELAYCORE_GPT_6_ASTRA",
+      "requested": "gpt-6-astra",
+      "returned": "gpt-6-astra",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "allFourExpectedFacts": true,
+      "answerChars": 40,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "RELAYCORE_GEMINI_3_8_FLASH",
+      "requested": "gemini-3.8-flash",
+      "returned": "gemini-3.8-flash",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "allFourExpectedFacts": true,
+      "answerChars": 81,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "RELAYCORE_GEMINI_3_1_PRO",
+      "requested": "gemini-3.1-pro",
+      "returned": "gemini-3.1-pro",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "allFourExpectedFacts": true,
+      "answerChars": 35,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "QWEN_3_6_FLASH",
+      "requested": "qwen3.6-flash",
+      "returned": "qwen3.6-flash",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "allFourExpectedFacts": true,
+      "answerChars": 66,
+      "reopenBodyModelFeeEqual": true
+    }
+  ],
+  "providerCalls": 8,
+  "replayedCalls": 0
+}

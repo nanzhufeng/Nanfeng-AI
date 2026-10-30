@@ -194,7 +194,12 @@ object ConversationCostEstimator {
         val normalizedModelId = modelId.lowercase()
         val price = relayPrice(normalizedModelId,modelDisplayName,at)
             ?: currentQwenPrice(normalizedModelId,input,at)
+            ?: (if (normalizedModelId == "glm-5.3" && !at.isBefore(Instant.ofEpochMilli(1793351790000L)))
+                price("zhipu-glm-5.3-observed-2026-10-30-v1", "8", "28", "2", "CNY") else null)
             ?: deepSeekPrice(normalizedModelId, at)
+            // Observed public catalog update, not a claimed upstream historical cutover.
+            ?: (if (normalizedModelId == "google/gemini-3.8-flash" && !at.isBefore(Instant.ofEpochMilli(1793350322077L)))
+                price("openrouter-gemini-3.8-flash-observed-2026-10-30-v1", "0.825", "4.125", "0.0825") else null)
             ?: prices[normalizedModelId]
             ?: inputTieredPrices[normalizedModelId]?.firstOrNull { input <= it.upperInclusiveInputTokens }?.price
             ?: scheduledPrices[normalizedModelId]?.firstOrNull { it.untilExclusive == null || at.isBefore(it.untilExclusive) }?.price

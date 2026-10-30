@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-10-30T04:23:54.621082+00:00",
+  "deviceSdk": 37,
+  "originalActivityResumed": "2026-10-30 11:03:00",
+  "foregroundServiceStarted": "2026-10-30 11:03:25",
+  "foregroundServiceStopped": "2026-10-30 11:03:37",
+  "activityPaused": "2026-10-30 11:04:12",
+  "incidentTimeProcessExitRecorded": false,
+  "incidentTimeVpnLogcatAvailable": false,
+  "newPaidCalls": 0,
+  "productionChanges": 0,
+  "rootCause": "UNRESOLVED",
+  "fixed": false
+}

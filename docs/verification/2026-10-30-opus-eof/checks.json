@@ -1,0 +1,35 @@
+{
+  "checked_at": "2026-10-30T03:23:59.647803+00:00",
+  "baseline": "096341f8d6241927ccd2ae08b56f7339416ae933",
+  "scope": "WORKTREE diagnostics refresh only",
+  "tests": [
+    {
+      "name": "com.nanzhufeng.ai.ui.ModelSettingsUiContractsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.nanzhufeng.ai.ai.ProviderTlsConnectionRecoveryTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.nanzhufeng.ai.ai.ProviderAdapterContractsTest",
+      "tests": "62",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "release_kotlin_compile": "PASS",
+  "first_build": "Kotlin compiler memory exhaustion; fallback could not decode Chinese source paths; rerun serial in-process with 4GB heap passed; no repository build configuration changed",
+  "original_eof_root_cause": "UNKNOWN",
+  "original_failure_retried": false,
+  "paid_calls": 0,
+  "installed": false,
+  "business_recovery": "NOT VERIFIED"
+}

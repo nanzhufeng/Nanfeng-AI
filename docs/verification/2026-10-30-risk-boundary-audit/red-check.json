@@ -1,0 +1,35 @@
+{
+  "androidUnknownFollowup": {
+    "failed": 2,
+    "observed": "unknown retrieval followed by second request; expected one physical call, observed two"
+  },
+  "desktopCompanion": {
+    "passed": 9,
+    "failed": 2,
+    "ignored": 6
+  },
+  "desktopBatch": {
+    "passed": 21,
+    "failed": 2,
+    "ignored": 9
+  },
+  "androidStream": {
+    "failed": 2,
+    "observed": [
+      "Socket timeout loses partial usage",
+      "Reasoning or comment line exceeds raw response byte cap without rejection"
+    ]
+  },
+  "firstGreenAdditionalFindings": [
+    "Android coordinator erased unknown flag while aggregating",
+    "Three existing Android fixtures used HTTP504 as an explicit analysis-allowed failure; made known HTTP503 explicit and kept timeout stops separate",
+    "Four successful inventory fixtures omitted protocol terminal; made stop explicit rather than weakening missing-terminal rejection"
+  ],
+  "finalInventoryBoundary": {
+    "failed": 2,
+    "tests": [
+      "unresolved timeout size and missing terminal inventory must stop downstream requests",
+      "unknown attachment retrieval stops before final answer and preserves received accounting"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "tests": 1580,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 10,
+  "passed": 1570,
+  "androidBuildExitCode": 0,
+  "rustRelatedPassed": 6,
+  "protocolPassed": 16,
+  "contractGovernanceTestsPassed": 29
+}

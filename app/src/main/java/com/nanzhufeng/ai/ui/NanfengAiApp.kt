@@ -817,7 +817,10 @@ internal fun NanfengAiApp(
                 onRevealModelCredential = modelSettingsViewModel::revealStoredCredential,
                 onTestModelConnection = modelSettingsViewModel::testConnection,
                 invocationLedgerState = invocationLedgerViewModel.state,
-                onLoadInvocationLedger = invocationLedgerViewModel::load,
+                onLoadInvocationLedger = {
+                    modelSettingsViewModel.reloadDiagnostics()
+                    invocationLedgerViewModel.load()
+                },
                 conversationCostLedgerState = conversationCostLedgerViewModel.state,
                 onLoadConversationCostLedger = conversationCostLedgerViewModel::load,
                 privacyDataState = privacyDataViewModel.state,

@@ -1,0 +1,11 @@
+{
+  "sdk": 37,
+  "conversations": 2,
+  "savedAnswers": 3,
+  "sameTextsModelsCosts": true,
+  "networkCalls": 0,
+  "apkSha256": "6845d9416eebb3a1d3c1eb96e6ee8b887ff30ac6e259817cf2effee47237c62b",
+  "package": "com.nanzhufeng.ai.publicmodelacceptance",
+  "includesCallbackFix": false,
+  "scope": "SDK37 native Room reopen of previously successful control calls; not current network availability"
+}

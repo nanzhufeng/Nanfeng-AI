@@ -1,0 +1,53 @@
+{
+  "verifiedAt": "2026-10-30T13:19:46+08:00",
+  "productionSha256": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt": "42d8c39b0ee2e370ca94cfd4fe671ebfa0dcf78fbdc622acc9efe5a9bf7a2b1f",
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "e0a3e300c84062d0ec5db5ad5d41450ae1677395df857a661d213786720b2d8f"
+  },
+  "tests": [
+    {
+      "class": "com.nanzhufeng.ai.ai.NormalChatCompletionPersistenceContractsTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.NormalChatGenerationStabilityTest",
+      "tests": 56,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderAdapterContractsTest",
+      "tests": 62,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderSseDecoderContractsTest",
+      "tests": 22,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderStreamInterruptionTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderTlsConnectionRecoveryTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "scope": "synthetic socket through production transport, executor and Room; no real provider request",
+  "liveAfterChange": "NOT RUN"
+}

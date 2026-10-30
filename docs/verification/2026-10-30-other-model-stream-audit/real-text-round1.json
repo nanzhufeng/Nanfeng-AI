@@ -1,0 +1,185 @@
+{
+  "scope": "Android SDK37 real new Markdown attachment questions, web disabled",
+  "candidate": {
+    "acceptanceSha256": "825db1b6a0913ec871c9206938b9183053aaf28c8e84e8b7e2bfc4e93d5b2306",
+    "releaseSha256": "6f5b539089a8e68917b539159d9860df143d335d33d74a282887c866b86394da",
+    "releaseFile": "南枫AI.apk"
+  },
+  "attemptedMatrixPresets": 22,
+  "providerCalls": 14,
+  "successfulModels": [
+    {
+      "preset": "CLAUDE_SONNET_5_5",
+      "requested": "anthropic/claude-sonnet-5.5",
+      "returned": "anthropic/claude-sonnet-5.5",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 15,
+      "allFourExpectedFacts": true,
+      "answerChars": 102,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "CLAUDE_HAIKU_5_5",
+      "requested": "anthropic/claude-haiku-5.5",
+      "returned": "anthropic/claude-haiku-5.5",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 9,
+      "allFourExpectedFacts": true,
+      "answerChars": 39,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "DEEPSEEK_V4_FLASH",
+      "requested": "deepseek-flash",
+      "returned": "deepseek-flash",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 216,
+      "allFourExpectedFacts": true,
+      "answerChars": 71,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "GPT_6_1_TERRA",
+      "requested": "openai/gpt-6.1-terra",
+      "returned": "openai/gpt-6.1-terra",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 30,
+      "allFourExpectedFacts": true,
+      "answerChars": 45,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "GPT_6_LUNA",
+      "requested": "openai/gpt-6-luna",
+      "returned": "openai/gpt-6-luna",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 28,
+      "allFourExpectedFacts": true,
+      "answerChars": 71,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "MERCURY_3",
+      "requested": "inception/mercury-3",
+      "returned": "inception/mercury-3",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 3,
+      "allFourExpectedFacts": true,
+      "answerChars": 68,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "GLM_5_3_FLASH",
+      "requested": "glm-5.3-flash",
+      "returned": "glm-5.3-flash",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 219,
+      "allFourExpectedFacts": true,
+      "answerChars": 73,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "QWEN_3_7_PLUS",
+      "requested": "qwen3.7-plus",
+      "returned": "qwen3.7-plus",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 87,
+      "allFourExpectedFacts": true,
+      "answerChars": 35,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "GEMINI_3_8_FLASH",
+      "requested": "google/gemini-3.8-flash",
+      "returned": "google/gemini-3.8-flash",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 6,
+      "allFourExpectedFacts": true,
+      "answerChars": 78,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "GPT_6_1_SOL",
+      "requested": "openai/gpt-6.1-sol",
+      "returned": "openai/gpt-6.1-sol",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 31,
+      "allFourExpectedFacts": true,
+      "answerChars": 40,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "DEEPSEEK_V4_PRO",
+      "requested": "deepseek-v4-pro",
+      "returned": "deepseek-v4-pro",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 215,
+      "allFourExpectedFacts": true,
+      "answerChars": 73,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "MUSE_WONDER",
+      "requested": "meta/muse-wonder",
+      "returned": "meta/muse-wonder",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 7,
+      "allFourExpectedFacts": true,
+      "answerChars": 45,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "GEMINI_4_ARGON",
+      "requested": "google/gemini-4-argon",
+      "returned": "google/gemini-4-argon",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 7,
+      "allFourExpectedFacts": true,
+      "answerChars": 83,
+      "reopenBodyModelFeeEqual": true
+    },
+    {
+      "preset": "QWEN_3_8_MAX",
+      "requested": "qwen3.8-max",
+      "returned": "qwen3.8-max",
+      "httpStatus": 200,
+      "finish": "COMPLETED",
+      "validFrames": 31,
+      "allFourExpectedFacts": true,
+      "answerChars": 47,
+      "reopenBodyModelFeeEqual": true
+    }
+  ],
+  "notSentPresets": [
+    "GLM_5_3",
+    "RELAYCORE_OPUS_5_5",
+    "RELAYCORE_SONNET_5_5",
+    "RELAYCORE_GPT_6_1_SOL",
+    "RELAYCORE_GPT_6_ASTRA",
+    "RELAYCORE_GEMINI_3_8_FLASH",
+    "RELAYCORE_GEMINI_3_1_PRO",
+    "QWEN_3_6_FLASH"
+  ],
+  "runnerBootstrapError": "IllegalStateException",
+  "newConservativeBudgetMicros": 176627,
+  "zeroNetworkReopenCalls": 0,
+  "excluded": [
+    "native image/PDF/audio/video",
+    "web search",
+    "Desktop live",
+    "main phone current candidate"
+  ]
+}

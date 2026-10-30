@@ -1,0 +1,6 @@
+[
+  {
+    "test": "socket EOF retains received settlement through Room reopen without repeating request",
+    "failure": "java.lang.AssertionError: expected:<200> but was:<null>"
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "scope": "synthetic socket + production transport / executor / Room; no paid call",
+  "failures": [
+    {
+      "test": "cleanup EOF cannot erase a complete parsed answer and settlement",
+      "failure": "java.lang.AssertionError: parsed completion must survive resource cleanup"
+    },
+    {
+      "test": "socket EOF retains received settlement through Room reopen without repeating request",
+      "failure": "java.lang.AssertionError: expected:<9001> but was:<null>"
+    }
+  ]
+}

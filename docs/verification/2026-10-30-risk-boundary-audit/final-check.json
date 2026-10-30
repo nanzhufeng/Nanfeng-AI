@@ -1,0 +1,47 @@
+{
+  "verifiedAt": "2026-10-30T19:01:46+08:00",
+  "scope": "WORKTREE",
+  "sourceManifest": "source-hashes.json",
+  "sourceCount": 784,
+  "sourceDrift": 0,
+  "android": {
+    "passed": 1578,
+    "skipped": 10,
+    "failed": 0,
+    "unitCommand": ":app:testDebugUnitTest",
+    "buildTasks": [
+      ":app:assemblePublicModelAcceptance",
+      ":app:assembleRelease",
+      ":app:lintRelease"
+    ],
+    "buildResult": "PASS"
+  },
+  "desktop": {
+    "passed": 472,
+    "ignored": 38,
+    "failed": 0,
+    "buildScope": "Rust test compilation; no new macOS bundle",
+    "reproduceCommand": "cargo test --manifest-path desktop/src-tauri/Cargo.toml"
+  },
+  "maintenanceTests": {
+    "modelProtocol": 16,
+    "contractGovernance": 15,
+    "contractConsistency": 14,
+    "failed": 0
+  },
+  "staticContracts": {
+    "contracts": 114,
+    "domains": 40,
+    "chatModels": 23,
+    "state": "PASS"
+  },
+  "diffCheck": "PASS",
+  "newPaidRequests": 0,
+  "newCostCnyMicros": 0,
+  "mainDeviceInstall": "NOT RUN",
+  "nativeReopen": "NOT RUN",
+  "newCandidateLiveService": "NOT RUN",
+  "gitCommitPushRelease": "NOT RUN",
+  "documentationLinks": "PASS",
+  "evidencePrivacyScan": "PASS"
+}

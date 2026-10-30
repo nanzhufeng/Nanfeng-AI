@@ -18,6 +18,67 @@ import java.util.concurrent.CancellationException
 /** Production executor + Room owners; only provider I/O and credentials are synthetic. */
 @RunWith(RobolectricTestRunner::class)
 class NormalChatGenerationStabilityTest {
+    @Test fun `local accepted or text callback IO errors are not reported as network outages`() {
+        for (phase in listOf("accepted", "text")) Fixture(presetId=ModelPresetId.CLAUDE_OPUS_5_5,currentProfile=true).use { f ->
+            var opened=0
+            val connection=InterruptedStreamConnection("""data: {"model":"${f.model.modelId}","choices":[{"delta":{"content":"已收到的部分内容"},"finish_reason":"stop"}]}
+
+data: [DONE]
+
+""")
+            f.providerFactory={ request -> OfficialProviderChatTransport {opened++;connection}.execute(request.copy(
+                onAccepted={if(phase=="accepted") throw java.io.IOException("synthetic local callback error")},
+                onTextDelta={delta -> request.onTextDelta(delta);if(phase=="text") throw java.io.IOException("synthetic local callback error")},
+            ),"synthetic".toCharArray()) }
+            val (id,result)=f.send()
+            assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.LOCAL_EXECUTION_INTERRUPTED),result)
+            val attempt=f.attempts.findLatestForConversation(id)!!
+            assertEquals(NormalChatSendAttemptStatus.UNKNOWN,attempt.status)
+            assertEquals("LOCAL_EXECUTION_INTERRUPTED",attempt.safeErrorCode)
+            assertEquals(ConversationRuntimeStatus.FAILED,f.conversations.stateFor(id)!!.status)
+            if(phase=="text") assertTrue(f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}.content
+                .filterIsInstance<ContentBlock.Text>().any {it.text.contains("已收到的部分内容")})
+            assertEquals(1,opened);assertEquals(1,f.requestCount)
+            assertTrue(f.credential!!.all {it=='\u0000'})
+        }
+    }
+
+    @Test fun `socket EOF retains received settlement through Room reopen without repeating request`() {
+        val name="interrupted-settlement-${java.util.UUID.randomUUID()}"
+        val f=Fixture(databaseName=name,presetId=ModelPresetId.CLAUDE_OPUS_5_5,currentProfile=true)
+        try {
+            var opened=0
+            val connection=InterruptedStreamConnection("""data: {"model":"${f.model.modelId}","choices":[{"delta":{"content":"部分回答","reasoning":"部分思考"},"finish_reason":null}],"usage":{"prompt_tokens":100,"completion_tokens":20,"cost":0.009001}}
+
+""",failRead=true)
+            f.providerFactory={ request -> OfficialProviderChatTransport { opened++;connection }
+                .execute(request.copy(onAccepted={}),"synthetic".toCharArray()) }
+            val (id,result)=f.send()
+            assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+            assertEquals(1,opened)
+            assertEquals(1,f.requestCount)
+            assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(id)!!.status)
+            val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+            assertEquals(MessageDeliveryState.FAILED,answer.deliveryState)
+            assertTrue(answer.content.filterIsInstance<ContentBlock.Text>().any {it.text.contains("部分回答")})
+            val call=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.single {it.conversationId==id.value}
+            assertEquals(9001L,call.cost.totalMicros)
+            assertEquals(ConversationCostSource.PROVIDER_RESPONSE,call.costSource)
+            assertEquals(100L,call.usage.inputTokens)
+            assertEquals(20L,call.usage.outputTokens)
+            val diagnostic=RoomProviderDiagnosticStore(f.db).recent(8).single {it.conversationId==id.value}
+            assertEquals(200,diagnostic.httpStatus)
+            assertEquals("TRANSPORT_IO_EOFException_AT_RESPONSE_BODY",diagnostic.redactedBody)
+            f.close()
+            val reopened=Room.databaseBuilder(f.context,NanfengAiDatabase::class.java,name).allowMainThreadQueries().build()
+            try {
+                assertEquals(call,AndroidDirectChatCallAuditStore(f.context,reopened).listNewestFirst().mapNotNull {it.accounting}.single {it.conversationId==id.value})
+                assertEquals(answer,RoomConversationRepository(reopened).findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT})
+                assertEquals(diagnostic,RoomProviderDiagnosticStore(reopened).recent(8).single {it.conversationId==id.value})
+            } finally {reopened.close()}
+        } finally {runCatching {f.close()};f.context.deleteDatabase(name)}
+    }
+
     @Test fun `leading whitespace stream frames do not fail response persistence`() {
         Fixture(presetId=ModelPresetId.RELAYCORE_GPT_6_ASTRA,currentProfile=true).use {f ->
             f.streamed=true
@@ -197,6 +258,32 @@ class NormalChatGenerationStabilityTest {
         override fun close() { completionExecutor?.shutdown(); completionExecutor?.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS); db.close() }
     }
 
+    @Test fun `every selected model retains received fee for interrupted image reading retrieval or answer`() {
+        val presets=NanfengModelServiceCatalog.chatPresets.map {it.id}.filter {preset ->
+            ComposerModelRoutingCatalog.choices.any {it!=ComposerModelRoutingCatalog.auto && it.routes==listOf(preset)}
+        }
+        for(preset in presets) for(web in listOf(false,true)) Fixture(presetId=preset,webSearch=web,imageOnlyInput=true,currentProfile=true).use {f ->
+            f.providerFactory={request ->
+                val wire=java.io.ByteArrayOutputStream().also {request.effectiveBody().writeTo(it)}.toString(Charsets.UTF_8.name())
+                val model=org.json.JSONObject(wire).getString("model")
+                ProviderChatOutcome.NetworkFailure(ProviderNetworkFailureKind.IO,"EOFException",partialResponse=
+                    ProviderChatOutcome.StreamedResponse(200,"partial fixture",null,100,20,ProviderReportedCost(9001,"USD","synthetic-v1"),false,
+                        cachedInputTokens=40,reasoningTokens=10,finishReason="MISSING_COMPLETION",returnedModelId=model))
+            }
+            val (id,result)=f.send();f.providerAssertion?.let {throw it}
+            assertTrue("$preset/web=$web",result is NormalChatOpenRouterExecutor.Result.Failed)
+            assertEquals("$preset/web=$web must not send after uncertain reading or retrieval",1,f.requestCount)
+            assertFalse("$preset/web=$web",f.attempts.findLatestForConversation(id)!!.status==NormalChatSendAttemptStatus.COMPLETED)
+            val calls=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value}
+            assertEquals("$preset/web=$web",f.requestCount,calls.size)
+            for(call in calls) {
+                assertEquals("$preset/web=$web/${call.role}",9001L,call.cost.totalMicros)
+                assertEquals(ConversationCostSource.PROVIDER_RESPONSE,call.costSource)
+                assertEquals(100L,call.usage.inputTokens)
+            }
+        }
+    }
+
     @Test fun `every selectable current model uses authorized image preparation and its original final identity`() {
         val manifest=org.json.JSONObject(java.io.File("../protocol/model-service/model-service-v1.json").readText()).getJSONArray("models")
         for(i in 0 until manifest.length()) {
@@ -284,7 +371,7 @@ class NormalChatGenerationStabilityTest {
                     2 -> {assertTrue(wire.contains("台积电"));assertTrue(wire.contains("467.2"));assertTrue(body.has("plugins")); "[A1] 已核实\n台积电公开了2026年第三季度财报。\n来源：https://investor.tsmc.com/quarterly-results"}
                     else -> {assertTrue(wire.contains("image_url"));assertFalse(body.has("plugins")); "根据台积电官方财报核对图片。"}
                 }
-                ProviderChatOutcome.StreamedResponse(200,text,null,100,20,null,false,
+                ProviderChatOutcome.StreamedResponse(200,text,null,100,20,null,false,finishReason="stop",
                     webSources=if(f.requestCount==2) listOf(ProviderWebSource("https://investor.tsmc.com/quarterly-results")) else emptyList(),
                     webSearchPerformed=f.requestCount==2,returnedModelId="anthropic/claude-haiku-5.5")
             }
@@ -299,11 +386,11 @@ class NormalChatGenerationStabilityTest {
     @Test fun `Haiku opening image without public facts keeps enabled search and original image`() {
         for (search in listOf(true,false)) Fixture(presetId=ModelPresetId.CLAUDE_HAIKU_5_5,webSearch=search,imageOnlyInput=true).use { f ->
             f.streamed=true
-            f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"图片解读与查询结果",null,100,20,null,false,
+            f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"图片解读与查询结果",null,100,20,null,false,finishReason="stop",
                 webSources=if(search) listOf(ProviderWebSource("https://example.org/public-result")) else emptyList(),
                 webSearchPerformed=search,returnedModelId="anthropic/claude-haiku-5.5")
             if(search) f.providerFactory={ request ->
-                if(f.requestCount==1) ProviderChatOutcome.StreamedResponse(200,"无公开事实",null,100,20,null,false,returnedModelId="anthropic/claude-haiku-5.5")
+                if(f.requestCount==1) ProviderChatOutcome.StreamedResponse(200,"无公开事实",null,100,20,null,false,finishReason="stop",returnedModelId="anthropic/claude-haiku-5.5")
                 else requireNotNull(f.answerOutcome)
             }
             val (id,result)=f.send()
@@ -325,10 +412,10 @@ class NormalChatGenerationStabilityTest {
         presetId=ModelPresetId.CLAUDE_HAIKU_5_5,webSearch=true,imageOnlyInput=true,
     ).use { f ->
         f.streamed=true; f.partialText="已收到的图片分析"
-        f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"已收到的图片分析",null,100,20,ProviderReportedCost(120,"USD","test-receipt"),false,
+        f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"已收到的图片分析",null,100,20,ProviderReportedCost(120,"USD","test-receipt"),false,finishReason="stop",
             returnedModelId="anthropic/claude-haiku-5.5")
         f.providerFactory={ request ->
-            if(f.requestCount==1) ProviderChatOutcome.StreamedResponse(200,"无公开事实",null,100,20,null,false,returnedModelId="anthropic/claude-haiku-5.5")
+            if(f.requestCount==1) ProviderChatOutcome.StreamedResponse(200,"无公开事实",null,100,20,null,false,finishReason="stop",returnedModelId="anthropic/claude-haiku-5.5")
             else requireNotNull(f.answerOutcome)
         }
         val (id,result)=f.send()
@@ -435,6 +522,7 @@ class NormalChatGenerationStabilityTest {
 
     @Test fun `predicted attachment evidence cannot reject fitting material with the production fallback capacity`() {
         Fixture(webSearch=true,modelContextWindow=null).use { f ->
+            f.retrievalOutcome=ProviderChatOutcome.HttpResponse(503,"synthetic explicit rejection")
             f.attachmentText=(1..60).joinToString("\n") { "- 公开发布事项$it：Python版本在2025年10月7日发布，请核验官方公告。" }
             val (_,result)=f.send(withAttachment=true)
             assertTrue("input fits the real 32768 fallback; predicted future evidence must not reject it: $result",result != NormalChatOpenRouterExecutor.Result.Blocked(NormalChatOpenRouterExecutor.Code.CONTEXT_LIMIT))
@@ -443,12 +531,47 @@ class NormalChatGenerationStabilityTest {
         }
     }
 
+    @Test fun `stream timeout retains received fee without changing timeout or unknown state`() {
+        Fixture().use {f ->
+            f.answerOutcome=ProviderChatOutcome.NetworkFailure(ProviderNetworkFailureKind.TIMEOUT,"SocketTimeoutException",partialResponse=
+                ProviderChatOutcome.StreamedResponse(200,"partial",null,100,20,ProviderReportedCost(9001,"USD","synthetic-v1"),false,
+                    finishReason="MISSING_COMPLETION",returnedModelId=f.model.modelId))
+            val(id,result)=f.send()
+            assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.TIMEOUT),result)
+            assertEquals(1,f.requestCount)
+            assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(id)!!.status)
+            val call=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.single {it.conversationId==id.value}
+            assertEquals(9001L,call.cost.totalMicros);assertEquals(100L,call.usage.inputTokens)
+        }
+    }
+
+    @Test fun `unknown attachment retrieval stops before final answer and preserves received accounting`() {
+        for(outcome in listOf(ProviderChatOutcome.TimedOut,ProviderChatOutcome.ResponseTooLarge,
+            ProviderChatOutcome.HttpResponse(408,"{}"),ProviderChatOutcome.HttpResponse(504,"{}"),
+            ProviderChatOutcome.NetworkFailure(ProviderNetworkFailureKind.IO,"EOFException",partialResponse=
+                ProviderChatOutcome.StreamedResponse(200,"unverified",null,100,20,ProviderReportedCost(9001,"USD","synthetic-v1"),false,
+                    finishReason="MISSING_COMPLETION",returnedModelId="openai/gpt-6-luna")))) {
+            Fixture(webSearch=true).use { f ->
+                f.attachmentText="Python 3.14在2025年10月7日发布。"
+                f.retrievalOutcome=outcome
+                val(id,result)=f.send(withAttachment=true)
+                assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+                assertEquals("no final model request after unknown search",1,f.requestCount)
+                assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(id)!!.status)
+                if(outcome is ProviderChatOutcome.NetworkFailure) {
+                    val calls=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value}
+                    assertEquals(1,calls.size);assertEquals(9001L,calls.single().cost.totalMicros)
+                }
+            }
+        }
+    }
+
     @Test fun `unknown retrieval terminal never triggers a targeted paid resend`() {
         Fixture(webSearch=true,modelContextWindow=null).use { f ->
             f.attachmentText="- Python 3.14.0在2025年10月7日正式发布。"
             f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(200,"检索未确认的部分内容",null,100,20,null,false,finishReason="MISSING_COMPLETION")
             f.send(withAttachment=true)
-            assertEquals("one uncertain search plus independent authorized material answer, with no search resend",2,f.requestCount)
+            assertEquals("unknown retrieval must stop before any further paid call",1,f.requestCount)
         }
     }
     @Test fun `explicit content rejection stops all remaining searches without paid supplements`() {
@@ -645,7 +768,7 @@ class NormalChatGenerationStabilityTest {
                     }
                     else -> "结合材料与检索资料解释风险分散。"
                 }
-                ProviderChatOutcome.StreamedResponse(200,text,null,100,20,null,false,
+                ProviderChatOutcome.StreamedResponse(200,text,null,100,20,null,false,finishReason="stop",
                     webSources=if(f.requestCount==2) listOf(ProviderWebSource("https://example.org/diversification")) else emptyList(),
                     webSearchPerformed=f.requestCount==2,returnedModelId=if(f.requestCount==2) "openai/gpt-6-luna" else f.model.modelId)
             }
@@ -669,6 +792,7 @@ class NormalChatGenerationStabilityTest {
 
     @Test fun `failed web retrieval does not suppress an authorized attachment analysis`() {
         for (preset in listOf(ModelPresetId.RELAYCORE_OPUS_5_5, ModelPresetId.RELAYCORE_SONNET_5_5, ModelPresetId.RELAYCORE_GEMINI_3_8_FLASH, ModelPresetId.RELAYCORE_GEMINI_3_1_PRO)) Fixture(presetId=preset,webSearch=true).use {f ->
+            f.retrievalOutcome=ProviderChatOutcome.HttpResponse(503,"synthetic explicit rejection")
             val (id,result)=f.send(withAttachment=true)
             assertEquals(2,f.requestCount)
             assertTrue(f.requests.last().jsonBody.contains("\"model\":\"${f.model.modelId}\""))
@@ -686,6 +810,7 @@ class NormalChatGenerationStabilityTest {
 
     @Test fun `attachment analysis retains the streamed final suffix when retrieval failed`() {
         Fixture(webSearch=true).use {f ->
+            f.retrievalOutcome=ProviderChatOutcome.HttpResponse(503,"synthetic explicit rejection")
             f.streamed=true;f.streamChunks=listOf("完整");f.replyText="完整回答"
             val(id,result)=f.send(withAttachment=true)
             assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)

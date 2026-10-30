@@ -1,0 +1,34 @@
+{
+  "verifiedAt": "2026-10-30T19:01:01+08:00",
+  "scope": "WORKTREE",
+  "artifacts": [
+    {
+      "kind": "release",
+      "package": "com.nanzhufeng.ai",
+      "versionCode": "96",
+      "versionName": "1.0.32",
+      "sha256": "c6ac19be33a6a77ad0b31698057b5982180635fcd3593c28f00ffc6c77d97507",
+      "bytes": 28705480,
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "signatureVerified": true,
+      "debuggable": false,
+      "installedOnMainDevice": false,
+      "liveServiceValidation": "NOT RUN on this candidate"
+    },
+    {
+      "kind": "acceptance",
+      "package": "com.nanzhufeng.ai.publicmodelacceptance",
+      "versionCode": "96",
+      "versionName": "1.0.32-public-model-acceptance",
+      "sha256": "3036da5c4ee6969b4b84b9a48718195c3d00b0a383b9ba4b64f61559089c6a14",
+      "bytes": 40754681,
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "signatureVerified": true,
+      "debuggable": true,
+      "installedOnMainDevice": false,
+      "liveServiceValidation": "NOT RUN on this candidate"
+    }
+  ],
+  "installed": false,
+  "published": false
+}

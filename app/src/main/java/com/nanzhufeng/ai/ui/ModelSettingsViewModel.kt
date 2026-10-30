@@ -115,6 +115,14 @@ class ModelSettingsViewModel(
         refresh()
     }
 
+    /** Reload persisted failures when entering diagnostics, without probing providers or touching credentials. */
+    fun reloadDiagnostics() {
+        viewModelScope.launch {
+            val recentDiagnostics = withContext(Dispatchers.IO) { providerDiagnostics.recent(8) }
+            state = state.copy(recentDiagnostics = recentDiagnostics)
+        }
+    }
+
     fun showDialog() {
         state = state.copy(dialogVisible = true, revealedCredential = null, notice = null, error = null)
         refresh()

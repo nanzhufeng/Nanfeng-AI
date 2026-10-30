@@ -43,10 +43,14 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                 val rows=JSONArray();val ids=config.getJSONArray("conversationIds")
                 for(index in 0 until ids.length()) {
                     val id=ConversationId(ids.getString(index));val conversation=container.conversationRepository.findById(id)
-                    val assistant=conversation?.nodes?.lastOrNull {it.role==MessageRole.ASSISTANT}
+                    val assistant=conversation?.nodes?.singleOrNull {it.id==conversation.conversation.currentLeafMessageId && it.role==MessageRole.ASSISTANT}
                     val attribution=assistant?.let {container.assistantResponseModelAttributions.forMessages(listOf(it.id))[it.id]?.lastOrNull()}
                     rows.put(JSONObject().apply {
                         put("conversationId",id.value);put("assistantPresent",assistant!=null)
+                        put("savedAnswers",JSONArray(conversation?.nodes.orEmpty().filter {it.role==MessageRole.ASSISTANT}.map {node -> JSONObject().apply {
+                            put("messageId",node.id.value)
+                            put("text",node.content.filterIsInstance<ContentBlock.Text>().joinToString("\n") {it.text})
+                        }}))
                         put("publicAnswer",assistant?.content?.filterIsInstance<ContentBlock.Text>()?.joinToString("\n") {it.text}.orEmpty())
                         put("requestedModel",attribution?.modelId);put("webSearchUsed",attribution?.webSearchUsed)
                         put("footerCostLabel",attribution?.footerCostLabel())
@@ -71,9 +75,17 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
             try {
                 val physical=JSONArray()
                 val traceFile=File(filesDir,"public-physical-${config.getString("runId")}.json")
-                val roundTrip=config.optString("fixture") in setOf("attachment-roundtrip","terra-live-text","terra-web-attachments","terra-audio-only","terra-video-only")
+                val roundTrip=config.optString("fixture") in setOf("attachment-roundtrip","bounded-text-attachment","terra-live-text","terra-web-attachments","terra-audio-only","terra-video-only")
                 val budgetFile=File(filesDir,"public-roundtrip-budget.json")
-                var spentMicros=if(roundTrip && budgetFile.isFile) JSONObject(budgetFile.readText()).optLong("cnyMicros") else 0L
+                val previousBudget=if(roundTrip && budgetFile.isFile) JSONObject(budgetFile.readText()) else JSONObject()
+                var budgetState=PublicAcceptanceBudgetLedger.State(previousBudget.optLong("cnyMicros"),previousBudget.optLong("unknownReserveMicros"))
+                var spentMicros=budgetState.spent
+                fun persistBudget(next:PublicAcceptanceBudgetLedger.State) {
+                    val temporary=File(filesDir,budgetFile.name+".tmp")
+                    temporary.writeText(JSONObject().put("cnyMicros",next.spent).put("unknownReserveMicros",next.unknown).toString())
+                    check(temporary.renameTo(budgetFile))
+                    budgetState=next;spentMicros=next.spent
+                }
                 val budgetLimit=config.optLong("budgetCnyMicros",20_000_000L)
                 val callReserve=config.optLong("callReserveCnyMicros",3_000_000L).also { check(it in 1_000_000L..3_000_000L) }
                 val actualTransport=OfficialProviderChatTransport { url -> PublicLiveConnectionTrace.open(url,File(filesDir,"public-connection-${config.getString("runId")}.json")) }
@@ -125,11 +137,26 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                             limited.put(if(request.endpoint.endsWith("/responses")) "max_output_tokens" else "max_tokens",cap)
                             observed.copy(jsonBody=limited.toString(),body=null)
                         } else observed
-                        if(roundTrip) check(spentMicros+(if(JSONObject(outbound.jsonBody).optString("model")=="anthropic/claude-haiku-5.5") 1_000_000L else callReserve)<=budgetLimit) { "PUBLIC_ACCEPTANCE_BUDGET_STOP" }
                         if(roundTrip) File(filesDir,"public-request-${config.getString("runId")}-${physical.length()}.json").writeText(outbound.jsonBody)
                         val replay=if(roundTrip && config.optBoolean("replayReader",false)) JSONArray(File(filesDir,"public-reader-replay.json").readText()) else null
                         val requested=if(roundTrip) JSONObject(outbound.jsonBody).optString("model") else ""
                         val recorded=(0 until (replay?.length()?:0)).map {replay!!.getJSONObject(it)}.firstOrNull {it.optString("requestedModel")==requested && requested!="inception/mercury-3"}
+                        val reservedCost=if(roundTrip && !config.optBoolean("dryHandoff",false) && recorded==null) {
+                            val wire=JSONObject(outbound.jsonBody)
+                            val profiles=com.nanzhufeng.ai.data.AndroidModelProfileDirectory(this@PublicModelAcceptanceApplication)
+                            val model=NanfengModelServiceCatalog.chatPresets.mapNotNull {profiles.profile(it.id)}.singleOrNull {it.modelId==wire.optString("model")}
+                            try { PublicAcceptanceBudgetPolicy.requireAllowance(wire,model,spentMicros,budgetLimit,callReserve) }
+                            catch(error:IllegalStateException) {
+                                val reason=error.message?.takeIf {it.startsWith("PUBLIC_ACCEPTANCE_") && it.matches(Regex("[A-Z_]+"))} ?: "PUBLIC_ACCEPTANCE_PREFLIGHT_REJECTED"
+                                val file=File(filesDir,"public-preflight-${config.getString("runId")}.json")
+                                val rejected=if(file.isFile) JSONArray(file.readText()) else JSONArray()
+                                rejected.put(JSONObject().put("model",wire.optString("model")).put("reason",reason).put("sentToProvider",false));file.writeText(rejected.toString(2))
+                                throw error
+                            }
+                        } else callReserve
+                        if(roundTrip && !config.optBoolean("dryHandoff",false) && recorded==null) {
+                            persistBudget(PublicAcceptanceBudgetLedger.reserve(budgetState,reservedCost))
+                        }
                         val outcome=if(recorded!=null) ProviderChatOutcome.StreamedResponse(200,recorded.getString("publicFixtureReply"),null,recorded.optLong("input"),recorded.optLong("output"),null,false,finishReason=recorded.getString("finish"),returnedModelId=recorded.getString("returnedModel"))
                             else if(config.optBoolean("dryHandoff",false)) ProviderChatOutcome.Cancelled
                             else actualTransport.execute(outbound,credential)
@@ -139,9 +166,9 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                             val wireModel=JSONObject(outbound.jsonBody).optString("model")
                             val estimate=reply?.let {ConversationCostEstimator.estimate(wireModel,ProviderUsage(it.inputTokens,it.outputTokens),modelDisplayName=wireModel)}
                             val cost=reported?.let {ProviderCost(priceVersion=it.priceVersion,totalMicros=it.totalMicros,currencyCode=it.currencyCode)} ?: estimate
-                            val charged=cost?.totalMicros?.let {if(cost.currencyCode=="USD") it*8L else if(cost.currencyCode=="CNY") it else null} ?: if(wireModel=="anthropic/claude-haiku-5.5") 1_000_000L else callReserve
-                            spentMicros+=charged
-                            budgetFile.writeText(JSONObject().put("cnyMicros",spentMicros).put("unknownReserveMicros",if(cost==null)charged else 0L).toString())
+                            val complete=reply?.finishReason in setOf("stop","COMPLETED","length","max_tokens","INCOMPLETE","FAILED","CONTENT_FILTER","STREAM_PROVIDER_ERROR")
+                            val charged=cost?.totalMicros?.takeIf {complete}?.let {if(cost.currencyCode=="USD") Math.multiplyExact(it,8L) else if(cost.currencyCode=="CNY") it else null}
+                            persistBudget(PublicAcceptanceBudgetLedger.settle(budgetState,reservedCost,charged))
                         }
                         val wire=if(outbound.body!=null) {
                             val bytes=ByteArrayOutputStream();outbound.effectiveBody().writeTo(bytes)
@@ -222,8 +249,15 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                 val python=if(fresh) listOf("1.24.0","1.23.0").take(count).joinToString("\n") {"- Go $it 正式发布，核验go.dev官方发布日期。"} else listOf("3.14.0","3.13.0","3.12.0","3.11.0","3.10.0","3.9.0","3.8.0","3.7.0").take(count).joinToString("\n") {"- Python $it 正式发布，核验python.org官方发布日期。"}
                 val rust=if(fresh) listOf("128.0","127.0").take(count).map {"- Firefox $it 正式发布，核验mozilla.org官方发布日期。"} else listOf("1.90.0","1.89.0","1.88.0","1.87.0","1.86.0","1.85.0","1.84.0","1.83.0").take(count).map {"- Rust $it 正式发布，核验blog.rust-lang.org官方发布日期。"}
                 val fixture=config.optString("fixture")
+                val filter = config.optString("filter").split(',').filter(String::isNotBlank).toSet()
+                val requestTexts=config.optJSONArray("requestTexts")?.also {
+                    check(fixture=="terra-live-text" && it.length() in 1..2 && filter.size==1)
+                    check((0 until it.length()).all { index -> it.getString(index).isNotBlank() })
+                }
+                var continuedConversationId: String? = null
                 val suites=when(fixture) {
-                    "terra-live-text" -> listOf(emptyList())
+                    "terra-live-text" -> List(requestTexts?.length() ?: 1) { emptyList() }
+                    "bounded-text-attachment" -> listOf(listOf(import(container,"text/markdown","public-text-attachment.md",File(filesDir,"public-text-attachment.md").readBytes())))
                     "terra-audio-only" -> listOf(listOf(import(container,"audio/wav","fresh-audio.wav",File(filesDir,"fresh-audio.wav").readBytes())))
                     "terra-video-only" -> listOf(listOf(import(container,"video/mp4","fresh-video.mp4",File(filesDir,"fresh-video.mp4").readBytes())))
                     "terra-web-attachments" -> listOf(listOf(
@@ -255,7 +289,6 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                     "chinese" -> listOf(listOf("chinese-first.md","chinese-tail.md").map {name->import(container,"text/markdown",name,assets.open("public-search-fixtures/$name").use {it.readBytes()})})
                     else -> listOf(listOf(import(container,"text/markdown","公开Python发布报告.md",python.toByteArray()),import(container,"application/vnd.openxmlformats-officedocument.wordprocessingml.document","公开Rust发布报告.docx",docx(rust))))
                 }
-                val filter = config.optString("filter").split(',').filter(String::isNotBlank).toSet()
                 if(fixture=="rc-usage") check(filter.isNotEmpty() && filter.all {it in setOf("RELAYCORE_GEMINI_3_1_PRO","RELAYCORE_GEMINI_3_8_FLASH")})
                 val catalogCases=ComposerModelRoutingCatalog.choices.filter {it.routes.size==1 && it.id!=ComposerModelRoutingCatalog.auto.id}.map {it to it.routes.single()} + (ComposerModelRoutingCatalog.auto to ModelPresetId.QWEN_3_6_FLASH)
                 check(catalogCases.map {it.second}.toSet()==NanfengModelServiceCatalog.chatPresets.map {it.id}.toSet())
@@ -264,23 +297,24 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                     val groupFilter=config.optString("groupFilter").split(',').mapNotNull(String::toIntOrNull)
                     if(groupFilter.isNotEmpty() && group !in groupFilter) continue
                     if (filter.isNotEmpty() && preset.name !in filter) continue
-                    val snapshot = config.optString("conversationId").takeIf { it.isNotBlank() }?.let {
-                        check(fixture=="terra-live-text" && preset==ModelPresetId.GPT_6_1_TERRA)
+                    val snapshot = (continuedConversationId ?: config.optString("conversationId").takeIf { it.isNotBlank() })?.let {
+                        check(fixture=="terra-live-text" && filter.size==1)
                         requireNotNull(container.conversationRepository.findById(ConversationId(it)))
                     } ?: container.conversationRepository.save(ConversationTreeService(Clock.systemUTC()).create("公开双文件-${preset.name}"))
                     val id = snapshot.conversation.id
+                    if(requestTexts!=null) continuedConversationId=id.value
                     val draft = container.conversationRepository.saveDraft(id, ConversationDraft(
-                        text=if(roundTrip) config.getString("requestText") else if(fixture=="haiku-image") "分析这张订单图，用100字以内回答。" else if(fixture=="public-topic-mixed") "分析这两份附件，给出简洁结论和相关来源。" else if(fixture=="rc-usage") "只回答算式结果：1+1。不要解释。" else if(fixture=="user-report") config.optString("requestText","分析报告") else if(fixture=="rc-text") config.optString("requestText","请实际联网核验 Go 1.23.0 与 Firefox 138.0 的官方发布日期，中文简短列出两项日期与官方来源，并比较两者发布节奏。") else "分析本次全部公开附件，所有事项都实际联网核验，中文简短回答并引用来源。",
+                        text=if(roundTrip) requestTexts?.getString(group) ?: config.getString("requestText") else if(fixture=="haiku-image") "分析这张订单图，用100字以内回答。" else if(fixture=="public-topic-mixed") "分析这两份附件，给出简洁结论和相关来源。" else if(fixture=="rc-usage") "只回答算式结果：1+1。不要解释。" else if(fixture=="user-report") config.optString("requestText","分析报告") else if(fixture=="rc-text") config.optString("requestText","请实际联网核验 Go 1.23.0 与 Firefox 138.0 的官方发布日期，中文简短列出两项日期与官方来源，并比较两者发布节奏。") else "分析本次全部公开附件，所有事项都实际联网核验，中文简短回答并引用来源。",
                         attachments=references, updatedAt=java.time.Instant.now()))
                     val executor = container.normalChatOpenRouterExecutor
-                    val routing=executor.routingSnapshot().copy(webSearchEnabled=if(roundTrip) config.optBoolean("web",false) else fixture!="rc-usage").let { if(preset==ModelPresetId.QWEN_3_6_FLASH) it.copy(usablePresets=setOf(preset,ModelPresetId.CLAUDE_HAIKU_5_5,ModelPresetId.GEMINI_4_ARGON)) else it }
+                    val routing=executor.routingSnapshot().copy(webSearchEnabled=if(roundTrip) config.optBoolean("web",false) else fixture!="rc-usage").let { if(preset==ModelPresetId.QWEN_3_6_FLASH) it.copy(usablePresets=if(fixture=="bounded-text-attachment") setOf(preset) else setOf(preset,ModelPresetId.CLAUDE_HAIKU_5_5,ModelPresetId.GEMINI_4_ARGON)) else it }
                     val approval = NormalChatEgressAuthorization.forUserSend(draft, System.currentTimeMillis(), choice.id,routing)
                     check(approval.recipientPresets==listOf(preset))
                     if(roundTrip && spentMicros+callReserve>budgetLimit) {rows.put(JSONObject().put("preset",preset.name).put("notRunReason","PUBLIC_ACCEPTANCE_BUDGET_STOP"));save();break@matrix}
                     val started = System.currentTimeMillis()
                     val result = executor.execute(id, approval)
                     val after = container.conversationRepository.findById(id)!!
-                    val assistant = after.nodes.lastOrNull { it.role == MessageRole.ASSISTANT }
+                    val assistant = after.nodes.singleOrNull { it.id == after.conversation.currentLeafMessageId && it.role == MessageRole.ASSISTANT }
                     val context = container.contextSelectionAudits.recent(100).filter { it.conversationId == id.value }
                     val coverage = context.flatMap { it.selectedSources }.firstOrNull { it.kind=="联网核验范围" }?.title
                     val attribution = assistant?.let { container.assistantResponseModelAttributions.forMessages(listOf(it.id))[it.id]?.lastOrNull() }
@@ -301,6 +335,7 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                         val text=assistant?.content?.filterIsInstance<ContentBlock.Text>()?.joinToString("\n") {it.text}.orEmpty()
                         put("answerChars",text.length);put("publicAnswer",text);put("footerCostLabel",attribution?.footerCostLabel());put("costSource",attribution?.costSource?.name)
                     }); save()
+                    if(requestTexts!=null && result!=NormalChatOpenRouterExecutor.Result.Sent) break@matrix
                 }
             } catch (error: Throwable) {
                 rows.put(JSONObject().put("bootstrapError",true).put("errorClass",error.javaClass.simpleName).put("frames",JSONArray(error.stackTrace.take(8).map {it.className+"."+it.methodName+":"+it.lineNumber})));save()

@@ -9,6 +9,26 @@ import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 class RelayCoreWebSearchCompanionTest {
+    @Test fun `interrupted search retains known usage and unknown status without another call`() {
+        val search=model(ProviderId.OPENROUTER,"openai/gpt-6-luna")
+        val draft=ConversationDraft(text="public",updatedAt=Instant.EPOCH)
+        val choice=ComposerModelRoutingCatalog.choices.single {ModelPresetId.GPT_6_LUNA in it.routes}.id
+        val snapshot=NormalChatRoutingSnapshot(mapOf(ModelPresetId.GPT_6_LUNA to search),setOf(ModelPresetId.GPT_6_LUNA),false)
+        val approval=NormalChatEgressAuthorization.forUserSend(draft,1,choice,snapshot)
+        val secret="synthetic".toCharArray();var calls=0
+        val partial=ProviderChatOutcome.StreamedResponse(200,"partial",null,100,20,null,false,
+            finishReason="MISSING_COMPLETION",returnedModelId=search.modelId,cachedInputTokens=40,reasoningTokens=10)
+        val owner=RelayCoreWebSearchCompanion(object:ProviderChatTransport {
+            override fun execute(request:ProviderChatRequest,credential:CharArray):ProviderChatOutcome {
+                calls++;return ProviderChatOutcome.NetworkFailure(ProviderNetworkFailureKind.IO,"EOFException",partialResponse=partial)
+            }
+        })
+        val result=owner.search(search,"https://openrouter.ai/api/v1","public",emptyList(),approval,{secret},null,{}) as RelayCoreWebSearchCompanion.Result.Failed
+        assertEquals("NETWORK",result.code);assertTrue(result.unknown);assertEquals(1,calls)
+        assertEquals(100L,result.inputTokens);assertEquals(20L,result.outputTokens)
+        assertEquals(40L,result.partialReply?.cachedInputTokens);assertEquals(search.modelId,result.partialReply?.returnedModelId)
+        assertTrue(secret.all {it=='\u0000'})
+    }
     private fun model(provider: ProviderId, id: String) = ResolvedModel(provider,id,id,ModelCapabilities(true,false,true),131072,ModelHealth.AVAILABLE,null,null,maxOutputTokens=2048)
     @Test fun `both Relay GPT models require actual web tool execution`() {
         val adapter=RelayCoreChatAdapter(ProviderId.RELAYCORE_GPT)

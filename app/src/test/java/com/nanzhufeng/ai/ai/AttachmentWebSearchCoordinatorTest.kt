@@ -36,8 +36,15 @@ class AttachmentWebSearchCoordinatorTest {
         assertEquals((1..20).map {"A$it"},singles);assertEquals(25,calls);assertTrue(result.completeScope);assertFalse(result.reply.text.contains("证据不足"))
     }
     @Test fun `unknown child stops searching without a resend but retains prior evidence`() {
-        var calls=0;val result=AttachmentWebSearchCoordinator.run(plan(),{false},{batch,_ ->if(++calls==2) RelayCoreWebSearchCompanion.Result.Failed("NETWORK",unknown=true) else reply(batch)}) as RelayCoreWebSearchCompanion.Result.Ready
-        assertEquals(2,calls);assertFalse(result.completeScope);assertEquals(4,result.coveredCount);assertTrue(result.reply.text.contains("未完成查询"));assertFalse(result.reply.text.contains("检索后仍未核实"))
+        val saved=mutableSetOf<String>()
+        val cache=object:AttachmentSearchCheckpointCache {
+            override fun load(item:AttachmentWebSearchPlan.Item):RelayCoreWebSearchCompanion.Result.Ready?=null
+            override fun save(item:AttachmentWebSearchPlan.Item,evidence:String,result:RelayCoreWebSearchCompanion.Result.Ready) {saved+=item.id}
+        }
+        var calls=0;val result=AttachmentWebSearchCoordinator.run(plan(),{false},{batch,_ ->if(++calls==2) RelayCoreWebSearchCompanion.Result.Failed("NETWORK",unknown=true) else reply(batch)},cache=cache) as RelayCoreWebSearchCompanion.Result.Failed
+        assertEquals(2,calls);assertTrue(result.unknown);assertEquals("NETWORK",result.code)
+        assertEquals(setOf("A1","A2","A3","A4"),saved)
+
     }
     @Test fun `cancellation prevents any later batch and final answer`() {
         var cancelled=false;var calls=0;val result=AttachmentWebSearchCoordinator.run(plan(),{cancelled},{batch,_ ->calls++;cancelled=true;reply(batch)})

@@ -1,0 +1,6 @@
+[
+  {
+    "test": "local accepted or text callback IO errors are not reported as network outages",
+    "failure": "java.lang.AssertionError: expected:<Failed(code=LOCAL_EXECUTION_INTERRUPTED)> but was:<Failed(code=NETWORK)>"
+  }
+]

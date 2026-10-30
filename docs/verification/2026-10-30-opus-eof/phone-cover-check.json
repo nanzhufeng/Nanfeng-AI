@@ -1,0 +1,19 @@
+{
+  "versionName": "1.0.32",
+  "versionCode": 96,
+  "sha256": "9b9aac2e6c16c125a18aa999c194e08a3a18e1549a2269c2ddddecaec4e52a12",
+  "sameSignerAsBefore": true,
+  "nonDebug": true,
+  "sameDataIdentityFields": [
+    "appId",
+    "dataDir",
+    "firstInstallTime",
+    "ceDataInode",
+    "deDataInode"
+  ],
+  "dataIdentityUnchanged": true,
+  "uninstalled": false,
+  "clearedData": false,
+  "oldRequestRetried": false,
+  "actualPhoneConversationVerified": false
+}

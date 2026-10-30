@@ -6,7 +6,7 @@ import com.nanzhufeng.ai.domain.*
 internal object AttachmentSearchInventory {
     sealed interface Result {
         data class Ready(val reply:ChatAdapterDecodedResult.Text):Result
-        data class Failed(val code:String, val safeDiagnosticDetail:String?=null,val reply:ChatAdapterDecodedResult.Text?=null):Result
+        data class Failed(val code:String, val safeDiagnosticDetail:String?=null,val reply:ChatAdapterDecodedResult.Text?=null,val unknown:Boolean=false):Result
     }
     fun read(model:ResolvedModel,adapter:ChatProviderAdapter,endpoint:String,attachments:List<ChatAttachment>,transport:ProviderChatTransport,
              readCredential:()->CharArray,cancellation:ProviderChatCancellation?,onAccepted:()->Unit,materialText:String="",forAnswer:Boolean=false):Result {
@@ -24,19 +24,19 @@ internal object AttachmentSearchInventory {
         val reply=when(result) {
             is ProviderChatOutcome.StreamedResponse -> {
                 val decoded=ChatAdapterDecodedResult.Text(result.text,result.inputTokens,result.outputTokens,returnedModelId=result.returnedModelId,cachedInputTokens=result.cachedInputTokens,reasoningTokens=result.reasoningTokens,reportedProviderCost=result.reportedProviderCost)
-                if(result.statusCode !in 200..299 || result.finishReason in setOf("length","max_tokens","content_filter","INCOMPLETE","FAILED","MISSING_COMPLETION") || forAnswer && result.finishReason !in setOf("stop","COMPLETED")) return Result.Failed("RESPONSE_INCOMPLETE",reply=decoded)
+                if(result.statusCode !in 200..299 || result.finishReason==null || result.finishReason in setOf("length","max_tokens","content_filter","INCOMPLETE","FAILED","MISSING_COMPLETION") || forAnswer && result.finishReason !in setOf("stop","COMPLETED")) return Result.Failed("RESPONSE_INCOMPLETE",reply=decoded,unknown=result.finishReason=="MISSING_COMPLETION" || result.finishReason==null)
                 decoded
             }
             is ProviderChatOutcome.HttpResponse -> {
-                if(result.statusCode !in 200..299) return Result.Failed("HTTP_${result.statusCode}")
+                if(result.statusCode !in 200..299) return Result.Failed("HTTP_${result.statusCode}",unknown=result.statusCode in setOf(408,504))
                 val decoded=adapter.decodeNonStreaming(result.responseBody,options) as? ChatAdapterDecodedResult.Text
                 if(forAnswer && runCatching {org.json.JSONObject(result.responseBody).getJSONArray("choices").getJSONObject(0).optString("finish_reason")}.getOrNull()!="stop") return Result.Failed("RESPONSE_INCOMPLETE",reply=decoded)
                 decoded
             }
             ProviderChatOutcome.Cancelled -> return Result.Failed("USER_CANCELLED")
-            ProviderChatOutcome.TimedOut -> return Result.Failed("TIMEOUT")
-            is ProviderChatOutcome.NetworkFailure -> return Result.Failed("NETWORK", result.diagnosticCode())
-            ProviderChatOutcome.ResponseTooLarge -> return Result.Failed("RESPONSE_TOO_LARGE")
+            ProviderChatOutcome.TimedOut -> return Result.Failed("TIMEOUT",unknown=true)
+            is ProviderChatOutcome.NetworkFailure -> return Result.Failed(result.failureCode, result.diagnosticCode(), result.partialResponse?.decodedText(),unknown=true)
+            ProviderChatOutcome.ResponseTooLarge -> return Result.Failed("RESPONSE_TOO_LARGE",unknown=true)
         } ?: return Result.Failed("RESPONSE_FORMAT")
         if(forAnswer && reply.returnedModelId!=model.modelId) return Result.Failed("MODEL_IDENTITY_UNVERIFIED",reply=reply)
         if(reply.text.isBlank() || reply.text.length>32768 || (reply.returnedModelId!=null && !RelayCoreModels.sameApiModel(model.providerId,reply.returnedModelId,model.modelId))) return Result.Failed("RESPONSE_FORMAT",reply=reply)

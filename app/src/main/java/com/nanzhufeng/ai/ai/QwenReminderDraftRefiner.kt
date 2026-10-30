@@ -99,7 +99,7 @@ class QwenReminderDraftRefiner(
     private fun ProviderChatOutcome.safeCode() = when (this) {
         is ProviderChatOutcome.HttpResponse -> "HTTP_$statusCode"
         ProviderChatOutcome.TimedOut -> "TIMEOUT"
-        is ProviderChatOutcome.NetworkFailure -> "NETWORK"
+        is ProviderChatOutcome.NetworkFailure -> failureCode
         ProviderChatOutcome.ResponseTooLarge -> "RESPONSE_TOO_LARGE"
         ProviderChatOutcome.Cancelled -> "CANCELLED"
         is ProviderChatOutcome.StreamedResponse -> "UNEXPECTED_STREAM"

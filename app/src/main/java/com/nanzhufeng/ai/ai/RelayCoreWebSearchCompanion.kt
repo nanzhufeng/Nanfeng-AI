@@ -14,7 +14,9 @@ internal class RelayCoreWebSearchCompanion(private val transport: ProviderChatTr
                 ${reply.webSources.joinToString("\n") { "${it.title.orEmpty()}: ${it.url}" }}
             """.trimIndent()
         }
-        data class Failed(val code: String, val inputTokens: Long? = null, val outputTokens: Long? = null, val unknown: Boolean = false, val partialReply: ChatAdapterDecodedResult.Text? = null) : Result
+        data class Failed(val code: String, val inputTokens: Long? = null, val outputTokens: Long? = null, val unknown: Boolean = false, val partialReply: ChatAdapterDecodedResult.Text? = null) : Result {
+            val stopsFollowup: Boolean get() = unknown || code=="USER_CANCELLED" || code=="CREDENTIAL_MISSING" || code.startsWith("LOCAL_") || code.startsWith("EGRESS_")
+        }
     }
     fun search(model: ResolvedModel, endpoint: String, question: String, previousQuestions: List<String>, authorization: NormalChatEgressAuthorization?, readCredential: () -> CharArray, cancellation: ProviderChatCancellation?, onAccepted: () -> Unit, materialText: String = "", batchPlan:AttachmentWebSearchPlan.Plan?=null, receiverPreset:ModelPresetId=preset, receiverAdapter:ChatProviderAdapter?=null, receiverOptions:ChatRequestOptions?=null): Result {
         if (authorization?.allowsRecipient(receiverPreset,model.providerId,model.modelId)!=true) return Result.Failed("EGRESS_AUTHORIZATION_REQUIRED")
@@ -85,7 +87,10 @@ internal class RelayCoreWebSearchCompanion(private val transport: ProviderChatTr
             }
             ProviderChatOutcome.Cancelled -> Result.Failed("USER_CANCELLED")
             ProviderChatOutcome.TimedOut -> Result.Failed("TIMEOUT",unknown=true)
-            is ProviderChatOutcome.NetworkFailure -> Result.Failed("NETWORK",unknown=true)
+            ProviderChatOutcome.ResponseTooLarge -> Result.Failed("RESPONSE_TOO_LARGE",unknown=true)
+            is ProviderChatOutcome.NetworkFailure -> outcome.partialResponse?.decodedText().let { partial ->
+                Result.Failed(outcome.failureCode,partial?.inputTokens,partial?.outputTokens,unknown=true,partialReply=partial)
+            }
             else -> Result.Failed("RESPONSE_FORMAT")
         }
     }

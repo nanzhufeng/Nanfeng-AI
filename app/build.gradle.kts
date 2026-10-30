@@ -223,6 +223,9 @@ android {
             signingConfig = signingConfigs.findByName("formal")
         }
     }
+    // Share paid-test preflight with host tests, never with the production app.
+    sourceSets.getByName("test").kotlin.srcDir("src/acceptanceSupport/java")
+    sourceSets.getByName("publicModelAcceptance").kotlin.srcDir("src/acceptanceSupport/java")
 }
 
 gradle.taskGraph.whenReady {

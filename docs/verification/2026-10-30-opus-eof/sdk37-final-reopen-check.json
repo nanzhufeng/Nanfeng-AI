@@ -1,0 +1,11 @@
+{
+  "sdk": 37,
+  "conversations": 2,
+  "savedAnswers": 3,
+  "sameTextsModelsCosts": true,
+  "networkCalls": 0,
+  "sha256": "106ebff314f501289031dba877ebaa6474b8a3d97e664126985dfa19d596a4b8",
+  "package": "com.nanzhufeng.ai.publicmodelacceptance",
+  "includesCallbackAndStageFix": true,
+  "scope": "Native reopen of previously completed controls, no new provider request"
+}

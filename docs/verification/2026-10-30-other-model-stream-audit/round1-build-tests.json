@@ -1,0 +1,8 @@
+{
+  "tests": 1577,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 10,
+  "buildTasks": "testDebugUnitTest assembleRelease lintRelease assemblePublicModelAcceptance",
+  "exitCode": 0
+}

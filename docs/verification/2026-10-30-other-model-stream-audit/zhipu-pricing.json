@@ -1,0 +1,10 @@
+{
+  "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+  "observedAt": "2026-10-30T09:16:30Z",
+  "model": "glm-5.3",
+  "currency": "CNY",
+  "perMillionInput": 8,
+  "perMillionOutput": 28,
+  "perMillionCachedInput": 2,
+  "scope": "public official current text price; no claimed historical effective date; no inference"
+}

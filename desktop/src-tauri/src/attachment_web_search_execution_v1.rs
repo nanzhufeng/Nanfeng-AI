@@ -293,7 +293,11 @@ where
                     }
                 }
                 Err(Failure::Cancelled) => return Err(Failure::Cancelled),
-                Err(_) => stop = Some("附件读取失败或结果未知，未自动重发"),
+                Err(failure) => {
+                    if let Some(reply)=failure.quantified_reply() {audit(&request,Some(reply))?;}
+                    if failure.stops_followup() {return Err(failure);}
+                    stop = Some("附件读取失败，未自动重发");
+                },
             }
         }
     }
@@ -468,6 +472,10 @@ where
             Err(Failure::Cancelled) => return Err(Failure::Cancelled),
             Err(failure) => {
                 if let Some(reply)=failure.quantified_reply() {audit(&request,Some(reply))?;}
+                if failure.stops_followup() {
+                    cache.coverage(plan.items.len(),parts.len())?;
+                    return Err(failure);
+                }
                 for item in &batch.items {
                     failed_items.insert(item.id.clone());
                 }
@@ -1104,24 +1112,10 @@ mod tests {
                     Ok(response(&r, false))
                 })
             },
-            |r, _, _| {
-                assert!(r.messages.to_string().contains("未完成查询"));
-                std::future::ready(Ok(Completed { native_sources: Vec::new(),
-                    text: "部分分析".into(),
-                    reasoning: None,
-                    usage: Default::default(),
-                    reported_cost_micros: None,
-                    actual_model_id: None,
-                    web_search_verified: false,
-                    elapsed_ms: 0,
-                }))
-            },
+            |_, _, _| {panic!("unknown retrieval must not launch a final paid answer");std::future::ready(Err(fail("UNEXPECTED_ANSWER")))},
         )
-        .await
-        .unwrap();
-        assert!(!out.complete);
-        assert!(out.reply.web_search_verified);
-        assert_eq!(out.covered, 4);
+        .await;
+        assert!(matches!(out,Err(Failure::Unknown{code:"NETWORK"})));
         assert_eq!(*calls.lock().unwrap(), 2);
     }
     #[tokio::test]
@@ -1230,10 +1224,9 @@ mod tests {
                 }))
             },
         )
-        .await
-        .unwrap();
-        assert_eq!(first.covered, 4);
-        assert!(!first.complete);
+        .await;
+        assert!(matches!(first,Err(Failure::Unknown{code:"NETWORK"})));
+        assert_eq!(entries.lock().unwrap().len(),4);
         let out = execute_cached_core(
             parent("QWEN", "qwen3.7-plus", "QWEN_RESPONSES", 8),
             Zeroizing::new(vec![1]),

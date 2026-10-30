@@ -100,7 +100,7 @@ class ScheduledMonitorExecutor(
             }
             is ProviderChatOutcome.StreamedResponse -> return fail("UNEXPECTED_STREAM")
             ProviderChatOutcome.TimedOut -> return fail("TIMEOUT")
-            is ProviderChatOutcome.NetworkFailure -> return fail("NETWORK")
+            is ProviderChatOutcome.NetworkFailure -> return fail(outcome.failureCode)
             ProviderChatOutcome.ResponseTooLarge -> return fail("RESPONSE_TOO_LARGE")
             ProviderChatOutcome.Cancelled -> return fail("CANCELLED")
         }

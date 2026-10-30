@@ -1,0 +1,14 @@
+{
+  "scope": "before final inventory timeout and size boundary extension",
+  "android": {
+    "tests": 1587,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10
+  },
+  "rust": {
+    "passed": 472,
+    "failed": 0,
+    "ignored": 38
+  }
+}

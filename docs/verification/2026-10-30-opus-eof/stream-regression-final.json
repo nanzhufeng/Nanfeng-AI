@@ -1,0 +1,91 @@
+{
+  "verifiedAt": "2026-10-30T12:58:06+08:00",
+  "baselineHead": "096341f8d6241927ccd2ae08b56f7339416ae933",
+  "sourceSha256": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt": "059009350e696b2b5cb3b707efef43421122e853dfb8a737228ca36badddc819",
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "e0a3e300c84062d0ec5db5ad5d41450ae1677395df857a661d213786720b2d8f",
+    "app/src/test/java/com/nanzhufeng/ai/ai/ProviderStreamInterruptionTest.kt": "5a21dbfe2feb0d55379a84ac3c97a405b41fa5338724bea8335ce5dc174dd355",
+    "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt": "0ab7f1a6e231429e56dc324f2e9b0a77a53222a7f654f74bf0796f2714e9af9f"
+  },
+  "unitTests": [
+    {
+      "class": "com.nanzhufeng.ai.ai.NormalChatCompletionPersistenceContractsTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.NormalChatGenerationStabilityTest",
+      "tests": 55,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderAdapterContractsTest",
+      "tests": 62,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderSseDecoderContractsTest",
+      "tests": 22,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderStreamInterruptionTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.nanzhufeng.ai.ai.ProviderTlsConnectionRecoveryTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "contracts": [
+    {
+      "script": "verify-contract-governance.py",
+      "result": {
+        "state": "PASS",
+        "contracts": 114,
+        "domains": 40,
+        "scope": "offline contract coverage and precedence; not full semantic or runtime proof"
+      }
+    },
+    {
+      "script": "audit-contract-consistency.py",
+      "result": {
+        "state": "PASS",
+        "contracts": 114,
+        "domains": 40,
+        "errors": [],
+        "scope": "offline metadata/owner links and explicitly reviewed obsolete clauses; not complete semantic or runtime proof"
+      }
+    },
+    {
+      "script": "verify-model-service-contract.py",
+      "result": {
+        "state": "PASS",
+        "chatModels": 23,
+        "specialModels": 1,
+        "credentialGroups": 7,
+        "scope": "offline source and contract consistency; not live acceptance"
+      }
+    }
+  ],
+  "redEvidence": "stream-regression-red.json",
+  "scope": "candidate Android JVM production transport/executor/Room with synthetic socket; includes static contract tests",
+  "liveProviderAfterChange": "NOT RUN",
+  "mainDeviceInstall": "NOT RUN",
+  "originalEofRootCause": "UNKNOWN",
+  "newPaidCalls": 0
+}

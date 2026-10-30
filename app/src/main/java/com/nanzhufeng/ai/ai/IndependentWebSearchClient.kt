@@ -41,7 +41,7 @@ internal class IndependentWebSearchClient(private val transport: ProviderChatTra
             }
             ProviderChatOutcome.Cancelled -> Result.Failed("USER_CANCELLED")
             ProviderChatOutcome.TimedOut -> Result.Failed("TIMEOUT",true)
-            is ProviderChatOutcome.NetworkFailure -> Result.Failed("NETWORK",true)
+            is ProviderChatOutcome.NetworkFailure -> Result.Failed(response.failureCode,true)
             else -> Result.Failed("RESPONSE_FORMAT")
         }
     }

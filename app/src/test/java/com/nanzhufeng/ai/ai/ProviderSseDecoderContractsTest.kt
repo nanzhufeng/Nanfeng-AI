@@ -414,14 +414,11 @@ data: {"type":"message_stop"}
         val payload = "data: {\"choices\":[{\"delta\":{\"content\":\"仍在输出\"}}]}\n\n"
         var now = 0L
 
-        assertThrows(SocketTimeoutException::class.java) {
-            ProviderSseDecoder.read(
-                ByteArrayInputStream(payload.toByteArray()),
-                { },
-                QwenChatAdapter()::decodeStreamingEvent,
-                maxDurationMillis = 1,
-                nanoTime = { now.also { now += 2_000_000L } },
-            )
-        }
+        val result=ProviderSseDecoder.read(
+            ByteArrayInputStream(payload.toByteArray()),{},QwenChatAdapter()::decodeStreamingEvent,
+            maxDurationMillis=1,nanoTime={now.also {now+=2_000_000L}})
+        assertTrue(result.readFailure is SocketTimeoutException)
+        assertEquals("MISSING_COMPLETION",result.finishReason)
+
     }
 }

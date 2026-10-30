@@ -7,6 +7,24 @@ import org.junit.Test
 import java.time.Instant
 
 class ConversationCostEstimatorTest {
+    @Test fun `GLM current official estimate does not invent historical pricing`() {
+        val usage=ProviderUsage(1000,100,cachedInputTokens=500)
+        assertNull(ConversationCostEstimator.estimate("glm-5.3",usage,Instant.ofEpochMilli(1793351789999L)))
+        val current=requireNotNull(ConversationCostEstimator.estimate("glm-5.3",usage,Instant.ofEpochMilli(1793351790000L)))
+        assertEquals(7800L,current.totalMicros)
+        assertEquals("CNY",current.currencyCode)
+    }
+
+    @Test fun `Gemini observed tariff keeps prior estimates historical`() {
+        val usage=ProviderUsage(1_000,100,cachedInputTokens=500)
+        val before=requireNotNull(ConversationCostEstimator.estimate("google/gemini-3.8-flash",usage,Instant.ofEpochMilli(1793350322076L)))
+        val current=requireNotNull(ConversationCostEstimator.estimate("google/gemini-3.8-flash",usage,Instant.ofEpochMilli(1793350322077L)))
+        assertEquals(788L,before.totalMicros)
+        assertEquals(866L,current.totalMicros)
+        assertEquals("openrouter-gemini-3.8-flash-observed-2026-10-30-v1",current.priceVersion)
+        assertEquals(ConversationCostEstimator.GEMINI_3_8_OPENROUTER_PRICE_VERSION,before.priceVersion)
+    }
+
     @Test fun `Terra uses its current tariff and exact long context threshold`() {
         val regular=requireNotNull(ConversationCostEstimator.estimate("openai/gpt-6.1-terra",ProviderUsage(1_000,100,cachedInputTokens=500)))
         assertEquals(1025L,regular.totalMicros)
@@ -96,7 +114,7 @@ class ConversationCostEstimatorTest {
     }
 
     @Test fun `GLM flagship does not fabricate a China direct price while token attribution remains available`() {
-        assertNull(ConversationCostEstimator.estimate("glm-5.3", ProviderUsage(inputTokens = 1_443, outputTokens = 2_405)))
+        assertNull(ConversationCostEstimator.estimate("glm-5.3", ProviderUsage(inputTokens = 1_443, outputTokens = 2_405), Instant.parse("2026-10-29T00:00:00Z")))
     }
 
     @Test fun `qwen plus uses the published lower input tier for the reported screenshot tokens`() {

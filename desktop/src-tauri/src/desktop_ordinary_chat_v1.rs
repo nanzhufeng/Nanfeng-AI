@@ -252,6 +252,13 @@ pub enum Failure {
     },
 }
 impl Failure {
+    /// Follow-up calls must not hide an uncertain result or bypass local/egress failures.
+    pub fn stops_followup(&self) -> bool {
+        match self {
+            Self::Cancelled | Self::Unknown {..} => true,
+            Self::Explicit {code,http_status,..} | Self::Quantified {code,http_status,..} => code.starts_with("LOCAL_") || code.starts_with("EGRESS_") || (*code=="TIMEOUT" && matches!(*http_status,Some(408 | 504))),
+        }
+    }
     /// Decoded facts survive a semantic search failure; callers must keep it failed.
     pub fn quantified_reply(&self) -> Option<&Completed> {match self {Self::Quantified{reply,..}=>Some(reply),_=>None}}
 }

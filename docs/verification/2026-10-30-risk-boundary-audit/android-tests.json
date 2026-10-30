@@ -1,0 +1,54 @@
+{
+  "scope": "all debug unit tests after final fixes",
+  "summary": {
+    "tests": 1588,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10
+  },
+  "passed": 1578,
+  "relatedSuites": [
+    {
+      "name": "com.nanzhufeng.ai.ai.ProviderSseDecoderContractsTest",
+      "tests": "22",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.nanzhufeng.ai.ai.ProviderStreamInterruptionTest",
+      "tests": "11",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.nanzhufeng.ai.ai.AttachmentInventoryFailureContractsTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.nanzhufeng.ai.ai.NormalChatGenerationStabilityTest",
+      "tests": "59",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.nanzhufeng.ai.ai.AttachmentWebSearchCoordinatorTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.nanzhufeng.ai.acceptance.PublicAcceptanceBudgetLedgerTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ]
+}
