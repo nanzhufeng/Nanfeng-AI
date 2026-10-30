@@ -102,8 +102,8 @@ android {
         applicationId = "com.nanzhufeng.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 96
-        versionName = "1.0.32"
+        versionCode = 97
+        versionName = "1.0.33"
         buildConfigField("long", "BUILD_TIME_EPOCH_SECONDS", "${System.currentTimeMillis() / 1000L}L")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
