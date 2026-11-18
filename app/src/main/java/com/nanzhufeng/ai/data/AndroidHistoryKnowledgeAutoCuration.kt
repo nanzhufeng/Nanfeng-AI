@@ -24,6 +24,8 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -33,7 +35,7 @@ class AndroidHistoryKnowledgeCurationCheckpointStore(context: Context) : History
 
     @Synchronized
     override fun reserve(conversationId: ConversationId, sourceHash: String): HistoryKnowledgeCurationReservation {
-        return when (state(conversationId, sourceHash)) {
+        return synchronized(LOCK) { when (state(conversationId, sourceHash)) {
             CheckpointState.PROCESSED -> HistoryKnowledgeCurationReservation.ALREADY_PROCESSED
             CheckpointState.RUNNING -> {
                 writeState(conversationId, sourceHash, CheckpointState.UNKNOWN)
@@ -44,20 +46,22 @@ class AndroidHistoryKnowledgeCurationCheckpointStore(context: Context) : History
                 writeState(conversationId, sourceHash, CheckpointState.RUNNING)
                 HistoryKnowledgeCurationReservation.RESERVED
             }
-        }
+        } }
     }
 
     @Synchronized
     override fun markProcessed(conversationId: ConversationId, sourceHash: String) {
+        synchronized(LOCK) {
         val next = (preferences.getStringSet(ENTRIES, emptySet()).orEmpty() + token(conversationId, sourceHash))
             .toList().takeLast(MAX_ENTRIES).toSet()
         check(preferences.edit().putStringSet(ENTRIES, next).commit()) { "自动整理检查点无法写入本机。" }
         writeState(conversationId, sourceHash, CheckpointState.PROCESSED)
+        }
     }
 
     @Synchronized
     override fun markRetryableFailure(conversationId: ConversationId, sourceHash: String) {
-        writeState(conversationId, sourceHash, CheckpointState.RETRYABLE_FAILED)
+        synchronized(LOCK) { writeState(conversationId, sourceHash, CheckpointState.RETRYABLE_FAILED) }
     }
 
     private fun state(conversationId: ConversationId, sourceHash: String): CheckpointState {
@@ -75,7 +79,6 @@ class AndroidHistoryKnowledgeCurationCheckpointStore(context: Context) : History
         val next = preferences.getStringSet(STATES, emptySet()).orEmpty()
             .filterNot { it.startsWith(prefix) }
             .plus("$prefix${state.name}")
-            .takeLast(MAX_ENTRIES)
             .toSet()
         check(preferences.edit().putStringSet(STATES, next).commit()) { "自动整理预留状态无法写入本机。" }
     }
@@ -86,6 +89,7 @@ class AndroidHistoryKnowledgeCurationCheckpointStore(context: Context) : History
     private enum class CheckpointState { AVAILABLE, RUNNING, PROCESSED, RETRYABLE_FAILED, UNKNOWN }
 
     private companion object {
+        val LOCK = Any()
         const val FILE = "history_knowledge_auto_curation_v1"
         const val ENTRIES = "processed_source_hashes"
         const val STATES = "source_states_v2"
@@ -103,7 +107,7 @@ class AndroidHistoryKnowledgeAutoCurationRunStore(context: Context) : HistoryKno
         val priorIndex = records.indexOfLast { it.runId == runId }
         if (priorIndex >= 0) {
             val prior = records[priorIndex]
-            return when {
+            when {
                 prior.status == HistoryKnowledgeAutoCurationRunStatus.RUNNING -> {
                     records[priorIndex] = prior.copy(
                         status = HistoryKnowledgeAutoCurationRunStatus.UNKNOWN,
@@ -112,14 +116,17 @@ class AndroidHistoryKnowledgeAutoCurationRunStore(context: Context) : HistoryKno
                         completedAt = startedAt,
                     )
                     write(records)
-                    HistoryKnowledgeAutoCurationBeginResult.INTERRUPTED
+                    return HistoryKnowledgeAutoCurationBeginResult.INTERRUPTED
                 }
                 prior.status == HistoryKnowledgeAutoCurationRunStatus.FAILED && prior.retryable -> {
                     records[priorIndex] = prior.copy(status = HistoryKnowledgeAutoCurationRunStatus.RUNNING, reasonCode = null, retryable = false, startedAt = startedAt, completedAt = null)
                     write(records)
-                    HistoryKnowledgeAutoCurationBeginResult.RETRY_STARTED
+                    return HistoryKnowledgeAutoCurationBeginResult.RETRY_STARTED
                 }
-                else -> HistoryKnowledgeAutoCurationBeginResult.ALREADY_FINISHED
+                // WorkManager deliberately reuses a periodic WorkSpec id for every period.
+                // Deduplicate source checkpoints, not all future executions of that WorkSpec.
+                trigger == HistoryKnowledgeAutoCurationTrigger.PERIODIC -> Unit
+                else -> return HistoryKnowledgeAutoCurationBeginResult.ALREADY_FINISHED
             }
         }
         if (records.lastOrNull()?.status == HistoryKnowledgeAutoCurationRunStatus.RUNNING) {
@@ -195,17 +202,19 @@ class AndroidHistoryKnowledgeAutoCurationScheduler(context: Context, private val
             ensurePeriodic()
         } else {
             manager().cancelUniqueWork(scoped(ONCE_WORK))
+            manager().cancelAllWorkByTag(scoped(ONCE_WORK))
             manager().cancelUniqueWork(scoped(PERIODIC_WORK))
         }
     }
 
     fun enqueueConversation(conversationId: ConversationId) {
         val request = OneTimeWorkRequestBuilder<HistoryKnowledgeAutoCurationWorker>()
+            .addTag(scoped(ONCE_WORK))
             .setConstraints(network)
             .setInputData(workDataOf("dataArea" to dataArea.name, CONVERSATION_ID to conversationId.value, TRIGGER to HistoryKnowledgeAutoCurationTrigger.CONVERSATION_IDLE.name))
             .setInitialDelay(30, TimeUnit.MINUTES)
             .build()
-        manager().enqueueUniqueWork(scoped(ONCE_WORK), ExistingWorkPolicy.REPLACE, request)
+        manager().enqueueUniqueWork(scoped("$ONCE_WORK-${conversationId.value}"), ExistingWorkPolicy.KEEP, request)
     }
 
     private fun enqueueBackfill() {
@@ -239,20 +248,38 @@ class AndroidHistoryKnowledgeAutoCurationScheduler(context: Context, private val
 
 class HistoryKnowledgeAutoCurationWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val container = com.nanzhufeng.ai.app.AppContainer(applicationContext, dataArea = com.nanzhufeng.ai.domain.ConversationSurface.valueOf(inputData.getString("dataArea") ?: "CHAT"))
+        runMutex.withLock {
+        val area = com.nanzhufeng.ai.domain.ConversationSurface.valueOf(inputData.getString("dataArea") ?: "CHAT")
+        val container = com.nanzhufeng.ai.app.AppContainer(applicationContext, dataArea = area, scheduleHistoryCuration = false)
         val owner = container.automaticHistoryKnowledgeCurationOwner
         val runStore = container.historyKnowledgeAutoCurationRunStore
         val trigger = inputData.getString("trigger")
             ?.let { runCatching { HistoryKnowledgeAutoCurationTrigger.valueOf(it) }.getOrNull() }
             ?: HistoryKnowledgeAutoCurationTrigger.PERIODIC
-        when (runStore.begin(id.toString(), trigger, Instant.now())) {
+        val startedAt = Instant.now()
+        val receipts = AndroidHistoryCurationReceipts(applicationContext, area)
+        fun receipt(phase: String) = JSONObject().apply {
+            put("runId", id.toString()); put("trigger", trigger.name); put("area", area.name); put("phase", phase)
+            put("version", com.nanzhufeng.ai.BuildConfig.VERSION_NAME); put("versionCode", com.nanzhufeng.ai.BuildConfig.VERSION_CODE)
+            put("startedAt", startedAt.toEpochMilli()); put("observedAt", Instant.now().toEpochMilli())
+        }
+        when (runStore.begin(id.toString(), trigger, startedAt)) {
             HistoryKnowledgeAutoCurationBeginResult.INTERRUPTED,
             HistoryKnowledgeAutoCurationBeginResult.ALREADY_FINISHED -> return@withContext Result.success()
             HistoryKnowledgeAutoCurationBeginResult.STARTED,
             HistoryKnowledgeAutoCurationBeginResult.RETRY_STARTED -> Unit
         }
+        val before = AndroidHistoryCurationReceipts.witness(container)
+        receipts.append(receipt("STARTED").put("witness", before))
         val conversationId = inputData.getString("conversationId")?.let(::ConversationId)
-        val result = conversationId?.let(owner::curate) ?: owner.curateNext()
+        val result = try { conversationId?.let(owner::curate) ?: owner.curateNext() }
+        catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            runStore.finish(id.toString(), HistoryKnowledgeAutoCurationRunStatus.UNKNOWN, "OWNER_EXECUTION_FAILED", false, Instant.now())
+            receipts.append(receipt("FINISHED").put("status", "UNKNOWN").put("reason", "OWNER_EXECUTION_FAILED")
+                .put("before", before).put("after", AndroidHistoryCurationReceipts.witness(container)).put("calls", AndroidHistoryCurationReceipts.calls(container, startedAt)))
+            return@withContext Result.failure()
+        }
         val transient = (result as? AutomaticHistoryKnowledgeCurationResult.Failed)?.safeCode?.isTransientAutoCurationFailure() == true
         val (status, reason) = when (result) {
             AutomaticHistoryKnowledgeCurationResult.Disabled -> HistoryKnowledgeAutoCurationRunStatus.DISABLED to "SETTING_DISABLED"
@@ -264,11 +291,14 @@ class HistoryKnowledgeAutoCurationWorker(context: Context, params: WorkerParamet
             is AutomaticHistoryKnowledgeCurationResult.Failed -> HistoryKnowledgeAutoCurationRunStatus.FAILED to result.safeCode
         }
         runStore.finish(id.toString(), status, reason, transient, Instant.now())
+        receipts.append(receipt("FINISHED").put("status", status.name).put("reason", reason)
+            .put("before", before).put("after", AndroidHistoryCurationReceipts.witness(container)).put("calls", AndroidHistoryCurationReceipts.calls(container, startedAt)))
         if (transient) Result.retry() else Result.success()
+        }
     }
+    private companion object { val runMutex = Mutex() }
 }
 
 /** Only transport conditions may retry. Auth, bad requests and malformed model output wait for a user/config/source change. */
-internal fun String.isTransientAutoCurationFailure(): Boolean = this == "TIMEOUT" || this == "NETWORK" ||
-    this == "HTTP_408" || this == "HTTP_429" ||
-    (startsWith("HTTP_") && substringAfter("HTTP_").toIntOrNull()?.let { it in 500..599 } == true)
+internal fun String.isTransientAutoCurationFailure(): Boolean = this == "CONNECT_FAILED" || this == "HTTP_429" ||
+    this == "HTTP_502" || this == "HTTP_503"

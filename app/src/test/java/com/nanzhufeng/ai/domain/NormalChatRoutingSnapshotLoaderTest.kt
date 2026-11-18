@@ -6,12 +6,12 @@ import org.junit.Test
 
 class NormalChatRoutingSnapshotLoaderTest {
     @Test fun `Auto respects the active search interface rather than offline image capability`() {
-        val ids=setOf(ModelPresetId.QWEN_3_7_PLUS,ModelPresetId.DEEPSEEK_V4_FLASH,ModelPresetId.GEMINI_3_8_FLASH)
+        val ids=setOf(ModelPresetId.QWEN_3_7_PLUS,ModelPresetId.DEEPSEEK_V4_FLASH,ModelPresetId.GEMINI_4_HYDROGEN)
         val models=ids.associateWith {model(it).copy(capabilities=model(it).capabilities.copy(supportsVision=true))}
         val image=ConversationAttachmentReference(AttachmentId("public-image"),"image/png","public.png",1,"a".repeat(64))
         val draft=ConversationDraft(text="分析报告",attachments=listOf(image),updatedAt=Instant.EPOCH)
         val search=NormalChatRoutingSnapshot(models,ids,true,webSearchEnabled=true)
-        assertEquals(listOf(ModelPresetId.GEMINI_3_8_FLASH),search.presets(draft,null))
+        assertEquals(listOf(ModelPresetId.GEMINI_4_HYDROGEN),search.presets(draft,null))
         assertEquals(listOf(ModelPresetId.QWEN_3_7_PLUS),search.copy(webSearchEnabled=false).presets(draft,null))
     }
     private fun model(preset: ModelPresetId) = ResolvedModel(

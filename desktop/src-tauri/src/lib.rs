@@ -21,6 +21,7 @@ static GENERATION_EXIT_DRAIN: generation_continuity_v1::ExitDrainEpoch = generat
 mod auto_chat_routing_v1;
 pub mod answer_language_v1;
 mod relaycore_web_search_v1;
+mod question_web_research_v1;
 mod attachment_web_search_v1;
 mod independent_web_search_v1;
 mod attachment_web_search_execution_v1;
@@ -1287,6 +1288,7 @@ struct DesktopHistoryKnowledgePrepared {
     endpoint: String,
     provider_id: String,
     model_id: String,
+    trigger: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -2125,7 +2127,6 @@ fn is_temporary_model_override_id(value: &str) -> bool {
 fn canonical_desktop_model_choice(value: &str) -> &str {
     match value {
         "deepseek-v4-flash" | "deepseek-v4-flash-vision-exp" => "DEEPSEEK_V4_FLASH",
-        "GEMINI_3_7_FLASH" | "google/gemini-3.7-flash" => "GEMINI_3_8_FLASH",
         _ => desktop_model_service_v1::current_preset_id(value),
     }
 }
@@ -12844,7 +12845,11 @@ impl DesktopWorkspaceStore {
     fn p6g_composer_default(&self, connection: &Connection) -> Result<(u64, Option<String>), String> {
         connection.query_row("SELECT revision,model_id FROM p6g_composer_default WHERE id=1", [],
             |row| Ok((row.get(0)?, row.get(1)?))).optional()
-            .map(|row| row.unwrap_or((0, None))).map_err(|_| json_error("新对话默认模型不可读"))
+            .map(|row| {
+                let (revision, model_id): (u64, Option<String>) = row.unwrap_or((0, None));
+                (revision, model_id.map(|id| canonical_desktop_model_choice(&id).to_owned()))
+            })
+            .map_err(|_| json_error("新对话默认模型不可读"))
     }
 
     fn save_p6g_composer_default(&self, connection: &Connection, model_id: Option<&str>) -> Result<u64, String> {
@@ -12917,7 +12922,9 @@ impl DesktopWorkspaceStore {
         conversation_id: &str,
     ) -> Result<ConversationOverride, String> {
         self.require_p6g_conversation(connection, workspace_id, conversation_id)?;
-        self.stored_conversation_override(connection, workspace_id, conversation_id)
+        let mut selection = self.stored_conversation_override(connection, workspace_id, conversation_id)?;
+        selection.model_id = selection.model_id.map(|id| canonical_desktop_model_choice(&id).to_owned());
+        Ok(selection)
     }
 
     fn p6g_last_route(
@@ -14011,7 +14018,7 @@ impl DesktopWorkspaceStore {
         let mut selected_sources = Vec::<DesktopOrdinaryChatSelectedSource>::new();
         if ordinary_chat_web_search_route(provider_id, model_id,
             self.ordinary_chat_web_search_enabled(connection, workspace_id, conversation_id)?, false) == "RELAYCORE_COMPANION" {
-            selected_sources.push(DesktopOrdinaryChatSelectedSource { kind:"联网检索模型".into(), source_id:"relay-web-search".into(), title:"GPT-6.1 Sol · Pro3（问题、必要上下文与附件核验要点）".into() });
+            selected_sources.push(DesktopOrdinaryChatSelectedSource { kind:"联网检索模型".into(), source_id:"relay-web-search".into(), title:"GPT-6 Luna · OpenRouter（问题、必要上下文与附件核验要点）".into() });
         }
 
         // Trusted answer policy is separate from quoted memory / library evidence.
@@ -15737,6 +15744,55 @@ impl DesktopWorkspaceStore {
         Self::ordinary_chat_projection(&self.connection()?, attempt_id)
     }
 
+    /// Reuse an already persisted extraction, with no extra provider call. The ordinary
+    /// domain intent journal owns revisions and identifies any intervening user edit.
+    fn save_history_memory(&self, workspace_id: &str, conversation_id: &str, candidate_id: &str, title: &str, body: &str) -> Result<(), String> {
+        let connection = self.connection()?;
+        if !desktop_app_settings_v1::read(&connection)?.product.memory_enabled { return Ok(()); }
+        if desktop_history_knowledge_v1::contains_sensitive_memory(&format!("{title}\n{body}")) { return Err(json_error("HIGH_SENSITIVITY")); }
+        let origin = sha256(format!("{workspace_id}|{conversation_id}").as_bytes());
+        let create_intent = format!("hmem-c-{}", &origin[..32]);
+        let memory_id = generated_id("memory", &create_intent);
+        let encoded: String = connection.query_row("SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [workspace_id], |r| r.get(0)).map_err(|_| json_error("自动记忆来源工作区不可用"))?;
+        let exchange: Value = serde_json::from_str(&encoded).map_err(|_| json_error("自动记忆工作区无效"))?;
+        let current = exchange.get("memory").and_then(Value::as_array).and_then(|items| items.iter().find(|m| m["id"].as_str() == Some(&memory_id)));
+        let content = format!("{title}\n{body}");
+        let (intent_id, action, expected_revision) = if let Some(current) = current {
+            if current["status"].as_str() != Some("ACTIVE") { return Ok(()); }
+            let revision = current["revision"].as_u64().ok_or_else(|| json_error("自动记忆修订无效"))?;
+            let (automatic_revision, manual_count): (u64, u64) = connection.query_row(
+                "SELECT COALESCE(MAX(CASE WHEN intent_id LIKE 'hmem-%' THEN result_revision ELSE 0 END),0), COALESCE(SUM(CASE WHEN intent_id NOT LIKE 'hmem-%' THEN 1 ELSE 0 END),0) FROM domain_intents WHERE workspace_id=?1 AND entity='memory' AND object_id=?2",
+                params![workspace_id,memory_id], |r| Ok((r.get(0)?,r.get(1)?))) .map_err(|_| json_error("自动记忆修订来源无法核对"))?;
+            if manual_count > 0 || automatic_revision != revision || current["body"].as_str() == Some(&content) { return Ok(()); }
+            (format!("hmem-u-{}", &sha256(candidate_id.as_bytes())[..32]), "update", Some(revision))
+        } else { (create_intent, "create", None) };
+        drop(connection);
+        self.mutate_domain(DomainMutationArgs {
+            intent_id, workspace_id: workspace_id.into(), entity: "memory".into(), action: action.into(),
+            object_id: expected_revision.map(|_| memory_id), expected_revision,
+            fields: if action == "create" { json!({"body":content,"scope":"GLOBAL","scopeId":null,"classification":"NORMAL"}) } else { json!({"body":content}) },
+        })?;
+        Ok(())
+    }
+
+    fn commit_history_candidate_automatically(&self, candidate: &desktop_history_knowledge_v1::CandidateProjection) -> Result<(), String> {
+        if candidate.status != "PENDING_REVIEW" { return Ok(()); }
+        let connection = self.connection()?;
+        let schedule = desktop_history_knowledge_v1::read_projection(&connection)?;
+        if !schedule.enabled || schedule.paused { return Ok(()); }
+        let title = candidate.title.as_deref().ok_or_else(|| json_error("整理标题不可用"))?;
+        let body = candidate.body.as_deref().ok_or_else(|| json_error("整理正文不可用"))?;
+        self.save_history_memory(&candidate.workspace_id, &candidate.conversation_id, &candidate.candidate_id, title, body)?;
+        let plan = desktop_history_knowledge_v1::prepare_accept(&connection, &candidate.candidate_id, title, body, &candidate.tags, system_now_millis())?;
+        drop(connection);
+        let receipt = self.mutate_domain(DomainMutationArgs {
+            intent_id: plan.intent_id, workspace_id: plan.workspace_id, entity: "knowledge".into(), action: "create".into(), object_id: None, expected_revision: None,
+            fields: json!({"title":plan.title,"body":plan.body,"tags":plan.tags,"scope":"GLOBAL","projectId":null,"classification":"NORMAL"}),
+        })?;
+        desktop_history_knowledge_v1::mark_accepted(&self.connection()?, &candidate.candidate_id, &receipt.object_id, system_now_millis())?;
+        Ok(())
+    }
+
     fn history_knowledge_route(
         &self,
         mock_endpoint: Option<&str>,
@@ -15777,6 +15833,13 @@ impl DesktopWorkspaceStore {
         &self,
         mock_endpoint: Option<&str>,
     ) -> Result<Option<DesktopHistoryKnowledgePrepared>, String> {
+        // Complete local writes left pending after a crash before considering any new call.
+        let pending = desktop_history_knowledge_v1::read_projection(&self.connection()?)?;
+        if pending.enabled && !pending.paused {
+            for candidate in pending.candidates.iter().filter(|c| c.status == "PENDING_REVIEW") {
+                self.commit_history_candidate_automatically(candidate)?;
+            }
+        }
         let mut connection = self.connection()?;
         let selection =
             desktop_history_knowledge_v1::select_next(&connection, system_now_millis())?;
@@ -15785,7 +15848,7 @@ impl DesktopWorkspaceStore {
         };
         let (provider_id, model_id, endpoint) = self.history_knowledge_route(mock_endpoint)?;
         let reservation =
-            desktop_history_knowledge_v1::reserve(&mut connection, &source, system_now_millis())?;
+            desktop_history_knowledge_v1::reserve_due(&mut connection, &source, system_now_millis())?;
         desktop_history_knowledge_v1::mark_running(
             &connection,
             &reservation.candidate_id,
@@ -15798,6 +15861,7 @@ impl DesktopWorkspaceStore {
             endpoint,
             provider_id,
             model_id,
+            trigger: "AUTO_DUE",
         }))
     }
 
@@ -15825,7 +15889,37 @@ impl DesktopWorkspaceStore {
             endpoint,
             provider_id,
             model_id,
+            trigger: "MANUAL_RETRY",
         })
+    }
+
+    /// Best-effort content-free witness; the SQLite owner remains the sole business state.
+    fn record_history_execution(&self, prepared: &DesktopHistoryKnowledgePrepared, phase: &str) {
+        let _ = (|| -> Result<(), String> {
+            let connection = self.connection()?;
+            let encoded: String = connection.query_row("SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [&prepared.reservation.source.workspace_id], |r|r.get(0)).map_err(|_| "receipt unavailable")?;
+            let exchange: Value = serde_json::from_str(&encoded).map_err(|_| "receipt unavailable")?;
+            let mut statement = connection.prepare("SELECT object_id FROM domain_intents WHERE workspace_id=?1 AND entity='memory' GROUP BY object_id HAVING SUM(CASE WHEN intent_id NOT LIKE 'hmem-%' THEN 1 ELSE 0 END)=0").map_err(|_| "receipt unavailable")?;
+            let automatic_ids: BTreeSet<String> = statement.query_map([&prepared.reservation.source.workspace_id], |r|r.get(0)).map_err(|_| "receipt unavailable")?.collect::<Result<_,_>>().map_err(|_| "receipt unavailable")?;
+            let mut automatic = Vec::new(); let mut protected = Vec::new();
+            for memory in exchange["memory"].as_array().into_iter().flatten() {
+                if memory["id"].as_str().is_some_and(|id|automatic_ids.contains(id)) { automatic.push(memory.clone()); } else { protected.push(memory.clone()); }
+            }
+            automatic.sort_by_key(|m|m["id"].as_str().unwrap_or_default().to_owned());
+            protected.sort_by_key(|m|m["id"].as_str().unwrap_or_default().to_owned());
+            let projection = desktop_history_knowledge_v1::read_projection(&connection)?;
+            let candidate = projection.candidates.iter().find(|c|c.candidate_id == prepared.reservation.candidate_id).ok_or("receipt unavailable")?;
+            let entry = json!({"phase":phase,"trigger":prepared.trigger,"observedAt":system_now_millis(),"attemptId":prepared.reservation.attempt_id,
+                "candidateId":prepared.reservation.candidate_id,"sourceHash":prepared.reservation.source.source_hash,"status":candidate.status,"reason":candidate.safe_error_code,
+                "provider":prepared.provider_id,"requestedModel":prepared.model_id,"inputTokens":candidate.input_tokens,"outputTokens":candidate.output_tokens,
+                "witness":{"available":true,"memoryCount":automatic.len()+protected.len(),"automaticMemoryCount":automatic.len(),
+                "automaticRevisionTotal":automatic.iter().filter_map(|m|m["revision"].as_u64()).sum::<u64>(),
+                "automaticDigest":sha256(serde_json::to_string(&automatic).unwrap_or_default().as_bytes()),
+                "protectedMemoryCount":protected.len(),"protectedDigest":sha256(serde_json::to_string(&protected).unwrap_or_default().as_bytes()),
+                "knowledgeCount":exchange["knowledge"].as_array().map_or(0,Vec::len)}});
+            desktop_history_knowledge_v1::append_execution_receipt(&self.root, entry);
+            Ok(())
+        })();
     }
 
     fn complete_history_knowledge_usage(
@@ -18480,6 +18574,7 @@ async fn execute_desktop_history_knowledge_prepared(
     prepared: DesktopHistoryKnowledgePrepared,
 ) -> Result<desktop_history_knowledge_v1::Projection, String> {
     let state = app.area_state();
+    if let Ok(store) = state.store.lock() { store.record_history_execution(&prepared, "STARTED"); }
     let signal = Arc::new(AtomicBool::new(false));
     state
         .history_knowledge_cancellations
@@ -18525,8 +18620,8 @@ async fn execute_desktop_history_knowledge_prepared(
         idempotency_key: prepared.reservation.attempt_id.clone(),
         max_output_tokens: 768,
         web_search_route: "NONE".into(),
-        structured_json: false,
-        disable_thinking: false, grounded_answer:false,explicit_search_query:None,
+        structured_json: true,
+        disable_thinking: true, grounded_answer:false,explicit_search_query:None,
     };
     let worker_app = app.clone();
     let worker_prepared = prepared.clone();
@@ -18568,6 +18663,7 @@ async fn execute_desktop_history_knowledge_prepared(
                 // The review candidate remains durable even if the independent append-only
                 // ledger needs later repair; its own usage projection already records the fact.
                 let _ = store.complete_history_knowledge_usage(&worker_prepared, &completed);
+                store.commit_history_candidate_automatically(&candidate)?;
                 candidate
             }
             Err(failure) => {
@@ -18591,12 +18687,13 @@ async fn execute_desktop_history_knowledge_prepared(
         .lock()
         .ok()
         .map(|mut values| values.remove(&worker_prepared.reservation.candidate_id));
-    let connection = state
+    let store = state
         .store
         .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+        .map_err(|_| json_error("Desktop store 被锁定"))?;
+    let connection = store.connection()?;
     let _ = projection;
+    store.record_history_execution(&worker_prepared, "FINISHED");
     desktop_history_knowledge_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
@@ -25599,12 +25696,12 @@ mod tests {
     fn ordinary_auto_prefers_relay_over_configured_domestic_and_openrouter() {
         let (_directory,store,imported)=imported_store();
         let conversation=store.mutate_domain(DomainMutationArgs {intent_id:"auto-priority-fixture".into(),workspace_id:imported.summary.id.clone(),entity:"conversation".into(),action:"create".into(),object_id:None,expected_revision:None,fields:json!({"title":"Auto","projectId":null,"firstMessage":"local only"})}).unwrap();
-        for (provider,preset) in [("OPENROUTER","CLAUDE_SONNET_5_5"),("DEEPSEEK","DEEPSEEK_V4_FLASH"),("RELAYCORE_GPT","RELAYCORE_GPT_6_1_SOL")] {
+        for (provider,preset) in [("OPENROUTER","CLAUDE_SONNET_5_5"),("DEEPSEEK","DEEPSEEK_V4_FLASH"),("RELAYCORE_GPT","RELAYCORE_GPT_6_2_SOL")] {
             store.save_desktop_model_service_setting_record(provider,true,preset,0).unwrap();
             desktop_model_service_v1::ProviderCredentialStore::save_user_provided_secret(&store.credentials,provider,b"fixture-credential-only").unwrap();
         }
         let route=store.ordinary_chat_route(&store.connection().unwrap(),&imported.summary.id,&conversation.object_id,None).unwrap();
-        assert_eq!(route.0,"RELAYCORE_GPT");assert_eq!(route.1,"gpt-6.1-sol");
+        assert_eq!(route.0,"RELAYCORE_GPT");assert_eq!(route.1,"gpt-6.2-sol");
         let connection=store.connection().unwrap();
         let deep=store.ordinary_chat_route_for_task(&connection,&imported.summary.id,&conversation.object_id,None,"架构设计与权衡",&[],false).unwrap();
         assert_eq!(deep.1,"gpt-6-astra");
@@ -25623,6 +25720,43 @@ mod tests {
     }
 
     #[test]
+    fn legacy_gemini_choices_reopen_as_hydrogen_and_prepare_the_exact_route() {
+        let (directory, store, imported) = imported_store();
+        let workspace = &imported.summary.id;
+        let conversation = store.mutate_domain(DomainMutationArgs {
+            intent_id: "legacy-gemini-fixture".into(),
+            workspace_id: workspace.clone(),
+            entity: "conversation".into(),
+            action: "create".into(),
+            object_id: None,
+            expected_revision: None,
+            fields: json!({"title":"Gemini fixture","projectId":null,"firstMessage":"local only"}),
+        }).unwrap();
+        let id = &conversation.object_id;
+        store.save_desktop_model_service_setting_record("OPENROUTER", true, "GEMINI_4_HYDROGEN", 0).unwrap();
+        {
+            let connection = store.connection().unwrap();
+            connection.execute("INSERT INTO p6g_conversation_override(workspace_id,conversation_id,revision,model_id) VALUES(?1,?2,1,'google/gemini-3.8-flash')", params![workspace,id]).unwrap();
+            connection.execute("INSERT INTO p6g_composer_default(id,revision,model_id) VALUES(1,1,'GEMINI_3_7_FLASH')", []).unwrap();
+        }
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        desktop_model_service_v1::ProviderCredentialStore::save_user_provided_secret(
+            &reopened.credentials, "OPENROUTER", b"fixture-credential-only",
+        ).unwrap();
+        let selection = reopened.p6g_selection(workspace, id).unwrap();
+        assert_eq!(selection.conversation_override.model_id.as_deref(), Some("GEMINI_4_HYDROGEN"));
+        assert_eq!(selection.global_default.model_id.as_deref(), Some("GEMINI_4_HYDROGEN"));
+        let connection = reopened.connection().unwrap();
+        let (provider, model, _, _) = reopened.ordinary_chat_route(&connection, workspace, id, None).unwrap();
+        assert_eq!(provider, "OPENROUTER");
+        assert_eq!(model, "google/gemini-4-hydrogen");
+        assert_eq!(canonical_desktop_model_choice("RELAYCORE_GEMINI_3_8_FLASH"), "RELAYCORE_GEMINI_3_8_FLASH");
+        assert_eq!(canonical_desktop_model_choice("gemini-3.8-flash"), "gemini-3.8-flash");
+    }
+
+    #[test]
     fn manual_opus_choice_survives_reopen_and_other_conversation_astra_choice() {
         let (directory,store,imported)=imported_store();
         let mut ids=vec![];
@@ -25638,7 +25772,7 @@ mod tests {
         assert_eq!(reopened.p6g_selection(&imported.summary.id,&ids[0]).unwrap().conversation_override.model_id.as_deref(),Some("CLAUDE_OPUS_5_5"));
         assert_eq!(reopened.p6g_selection(&imported.summary.id,&ids[1]).unwrap().conversation_override.model_id.as_deref(),Some("RELAYCORE_GPT_6_ASTRA"));
         reopened.p6g_set_conversation_override(P6gConversationOverrideArgs {workspace_id:imported.summary.id.clone(),conversation_id:ids[0].clone(),expected_revision:1,model_id:Some("GPT_6_1_SOL".into())}).unwrap();
-        assert_eq!(reopened.p6g_selection(&imported.summary.id,&ids[0]).unwrap().conversation_override.model_id.as_deref(),Some("GPT_6_1_SOL"));
+        assert_eq!(reopened.p6g_selection(&imported.summary.id,&ids[0]).unwrap().conversation_override.model_id.as_deref(),Some("GPT_6_2_SOL"));
     }
 
     #[test]
@@ -26932,7 +27066,7 @@ mod tests {
             .into_iter()
             .find(|item| item.provider_id == "OPENROUTER")
             .unwrap();
-        assert_eq!(openrouter.preset_id, "GEMINI_3_8_FLASH");
+        assert_eq!(openrouter.preset_id, "GEMINI_4_HYDROGEN");
         assert_eq!(openrouter.revision, 5);
         let table_sql: String = store
             .connection()
@@ -30201,6 +30335,121 @@ mod tests {
         assert_eq!(memories[1]["status"], "DELETED");
         assert_eq!(memories[2]["status"], "ACTIVE");
         assert_eq!(memories[2]["body"], "项目记忆");
+    }
+
+    #[test]
+    fn automatic_history_memory_updates_persist_and_manual_edits_take_ownership() {
+        let (_directory, store, imported) = imported_store();
+        let workspace = imported.summary.id.as_str();
+        store.save_history_memory(workspace, "conversation-test", "candidate-one", "长期规则", "先备份后更新").unwrap();
+        store.save_history_memory(workspace, "conversation-test", "candidate-two", "长期规则", "先本地验证再更新").unwrap();
+        let origin = sha256(format!("{workspace}|conversation-test").as_bytes());
+        let id = generated_id("memory", &format!("hmem-c-{}", &origin[..32]));
+        let read = |store: &DesktopWorkspaceStore| -> Value {
+            let encoded: String = store.connection().unwrap().query_row("SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [workspace], |r|r.get(0)).unwrap();
+            let value: Value = serde_json::from_str(&encoded).unwrap();
+            value["memory"].as_array().unwrap().iter().find(|m|m["id"] == id).unwrap().clone()
+        };
+        let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
+        assert_eq!(read(&reopened)["body"], "长期规则\n先本地验证再更新");
+        assert_eq!(read(&reopened)["revision"], 2);
+        reopened.connection().unwrap().execute("UPDATE desktop_app_settings SET memory_enabled=0", []).unwrap();
+        reopened.save_history_memory(workspace, "conversation-test", "candidate-disabled", "长期规则", "关闭期间不更新").unwrap();
+        assert_eq!(read(&reopened)["revision"], 2);
+        reopened.connection().unwrap().execute("UPDATE desktop_app_settings SET memory_enabled=1", []).unwrap();
+        reopened.mutate_domain(DomainMutationArgs { intent_id: "user-memory-edit".into(), workspace_id:workspace.into(), entity:"memory".into(), action:"update".into(), object_id:Some(id.clone()), expected_revision:Some(2), fields:json!({"body":"人工修订优先"}) }).unwrap();
+        reopened.save_history_memory(workspace, "conversation-test", "candidate-three", "长期规则", "后台新内容").unwrap();
+        assert_eq!(read(&reopened)["body"], "人工修订优先");
+        assert_eq!(read(&reopened)["revision"], 3);
+    }
+
+    #[test]
+    fn history_extraction_commits_knowledge_and_memory_then_reopens_without_network() {
+        let (_directory, store, imported) = imported_store();
+        let mut connection = store.connection().unwrap();
+        connection.execute("UPDATE desktop_app_settings SET history_library_enabled=1", []).unwrap();
+        let source = desktop_history_knowledge_v1::Source {
+            workspace_id: imported.summary.id.clone(), conversation_id: "history-integration".into(),
+            conversation_title: "项目长期约束".into(), current_leaf_message_id: "m4".into(),
+            source_message_ids: vec!["m1".into(),"m2".into(),"m3".into(),"m4".into()],
+            source_hash: sha256(b"history-source"), transcript: "synthetic source".repeat(50),
+        };
+        let reservation = desktop_history_knowledge_v1::reserve(&mut connection, &source, system_now_millis()).unwrap();
+        desktop_history_knowledge_v1::mark_running(&connection, &reservation.candidate_id, "DEEPSEEK", "deepseek-flash", system_now_millis()).unwrap();
+        let prepared = DesktopHistoryKnowledgePrepared { reservation: reservation.clone(), endpoint: "http://127.0.0.1/unused".into(), provider_id:"DEEPSEEK".into(), model_id:"deepseek-flash".into(), trigger:"AUTO_DUE" };
+        store.record_history_execution(&prepared, "STARTED");
+        let candidate = desktop_history_knowledge_v1::complete(&mut connection, &reservation.candidate_id,
+            desktop_history_knowledge_v1::Completion { provider_id:"DEEPSEEK", requested_model_id:"deepseek-flash", actual_model_id:Some("deepseek-flash"),
+                response_text:r#"{"eligible":true,"confidence":0.95,"title":"项目长期约束","body":"始终先本地验证和备份，再更新现有软件，保留资料来源。","tags":["长期规则"],"type":"methodology"}"#,
+                input_tokens:Some(100), output_tokens:Some(50), cached_input_tokens:None, reasoning_tokens:None, charge_micros:None }, system_now_millis()).unwrap();
+        drop(connection);
+        store.connection().unwrap().execute("UPDATE desktop_history_knowledge_schedule_v1 SET paused=1", []).unwrap();
+        store.commit_history_candidate_automatically(&candidate).unwrap();
+        assert_eq!(desktop_history_knowledge_v1::read_projection(&store.connection().unwrap()).unwrap().candidates.iter().find(|c|c.candidate_id == candidate.candidate_id).unwrap().status, "PENDING_REVIEW");
+        store.connection().unwrap().execute("UPDATE desktop_history_knowledge_schedule_v1 SET paused=0", []).unwrap();
+        store.commit_history_candidate_automatically(&candidate).unwrap();
+        let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
+        let projection = desktop_history_knowledge_v1::read_projection(&reopened.connection().unwrap()).unwrap();
+        let saved = projection.candidates.iter().find(|c|c.candidate_id == candidate.candidate_id).unwrap();
+        assert_eq!(saved.status, "ACCEPTED");
+        assert!(saved.knowledge_id.is_some());
+        let encoded: String = reopened.connection().unwrap().query_row("SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [&source.workspace_id], |r|r.get(0)).unwrap();
+        let value: Value = serde_json::from_str(&encoded).unwrap();
+        assert!(value["memory"].as_array().unwrap().iter().any(|m|m["body"].as_str().is_some_and(|body|body.contains("始终先本地验证和备份"))));
+        reopened.commit_history_candidate_automatically(saved).unwrap();
+        reopened.record_history_execution(&prepared, "FINISHED");
+        let raw_receipts = fs::read_to_string(reopened.root.join("history-curation-receipts-v1.json")).unwrap();
+        assert!(!raw_receipts.contains("始终先本地验证和备份"));
+        let receipts: Vec<Value> = serde_json::from_str(&raw_receipts).unwrap();
+        assert_eq!(receipts.len(), 2);
+        assert_eq!(receipts[0]["trigger"], "AUTO_DUE");
+        assert_eq!(receipts[1]["status"], "ACCEPTED");
+        assert_eq!(receipts[0]["witness"]["protectedDigest"], receipts[1]["witness"]["protectedDigest"]);
+        assert_eq!(receipts[1]["witness"]["automaticMemoryCount"], 1);
+    }
+
+    #[test]
+    #[ignore = "authorized single synthetic DeepSeek extraction; writes a reservation before networking"]
+    fn authorized_history_extraction_live_and_local_reopen() {
+        use desktop_model_service_v1::ProviderCredentialStore;
+        assert_eq!(std::env::var("NFAI_HISTORY_LIVE").as_deref(), Ok("1"));
+        let output = PathBuf::from(std::env::var("NFAI_HISTORY_LIVE_OUTPUT").unwrap());
+        let mut reservation_file = fs::OpenOptions::new().write(true).create_new(true).open(&output).expect("never resend an existing or unknown receipt");
+        use std::io::Write;
+        reservation_file.write_all(b"{\"status\":\"IN_FLIGHT\",\"reserved_cny\":0.10,\"calls\":1}").unwrap();
+        reservation_file.sync_all().unwrap();
+        let (_directory, store, imported) = imported_store();
+        let source = desktop_history_knowledge_v1::Source {
+            workspace_id:imported.summary.id.clone(), conversation_id:"synthetic-history-live".into(), conversation_title:"合成测试的长期开发规则".into(),
+            current_leaf_message_id:"m4".into(), source_message_ids:vec!["m1".into(),"m2".into(),"m3".into(),"m4".into()], source_hash:sha256(b"synthetic-history-live-v1"),
+            transcript:"用户：这是我的长期开发规则，请持续记住：所有项目修改前先确认数据备份；每次交付要区分本地测试、构建和真实服务验收；长期优先低维护成本。\n南枫AI：请确认这些规则长期有效。\n用户：确认长期有效，以后所有项目都遵守；不要把单次失败猜成长期结论，保留来源。\n南枫AI：已理解并会按规则执行。".into(),
+        };
+        let mut connection = store.connection().unwrap();
+        desktop_history_knowledge_v1::set_enabled(&connection, true, system_now_millis()).unwrap();
+        let reservation = desktop_history_knowledge_v1::reserve(&mut connection, &source, system_now_millis()).unwrap();
+        desktop_history_knowledge_v1::mark_running(&connection, &reservation.candidate_id, "DEEPSEEK", "deepseek-flash", system_now_millis()).unwrap();
+        let credentials = desktop_model_service_v1::AppPrivateProviderCredentialStore::at(std::env::var("NFAI_CREDENTIAL_ROOT").unwrap());
+        let secret = credentials.with_secret("DEEPSEEK", |bytes| Ok(Zeroizing::new(bytes.to_vec()))).expect("configured credential");
+        let result = tokio::runtime::Runtime::new().unwrap().block_on(desktop_ordinary_chat_v1::execute_streaming(
+            desktop_ordinary_chat_v1::TransportRequest { endpoint:"https://api.deepseek.com/chat/completions".into(), provider_id:"DEEPSEEK".into(), model_id:"deepseek-flash".into(),
+                messages:desktop_history_knowledge_v1::prompt(&source), idempotency_key:reservation.attempt_id.clone(), max_output_tokens:768, web_search_route:"NONE".into(), structured_json:true, disable_thinking:true, grounded_answer:false, explicit_search_query:None },
+            secret, Arc::new(AtomicBool::new(false)), |_| Ok(())));
+        let completed = match result {
+            Ok(value) => value,
+            Err(_) => { fs::write(&output, r#"{"status":"FAILED_OR_UNKNOWN","reserved_cny":0.10,"calls":1}"#).unwrap(); panic!("live extraction did not complete; reservation retained, no retry"); }
+        };
+        let candidate = desktop_history_knowledge_v1::complete(&mut connection, &reservation.candidate_id, desktop_history_knowledge_v1::Completion {
+            provider_id:"DEEPSEEK", requested_model_id:"deepseek-flash", actual_model_id:completed.actual_model_id.as_deref(), response_text:&completed.text,
+            input_tokens:completed.usage.input_tokens, output_tokens:completed.usage.output_tokens, cached_input_tokens:completed.usage.cached_input_tokens, reasoning_tokens:completed.usage.reasoning_tokens, charge_micros:completed.reported_cost_micros }, system_now_millis()).unwrap();
+        assert_eq!(candidate.status, "PENDING_REVIEW");
+        drop(connection);
+        store.commit_history_candidate_automatically(&candidate).unwrap();
+        let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
+        let projection = desktop_history_knowledge_v1::read_projection(&reopened.connection().unwrap()).unwrap();
+        assert_eq!(projection.candidates.iter().find(|c|c.candidate_id == candidate.candidate_id).unwrap().status, "ACCEPTED");
+        let input = completed.usage.input_tokens.unwrap_or(0);
+        let output_tokens = completed.usage.output_tokens.unwrap_or(0);
+        fs::write(&output, serde_json::to_vec_pretty(&json!({"status":"COMPLETED_AND_REOPENED","calls":1,"provider":"DEEPSEEK","requested_model":"deepseek-flash","actual_model":completed.actual_model_id,"input_tokens":completed.usage.input_tokens,"output_tokens":completed.usage.output_tokens,"cached_input_tokens":completed.usage.cached_input_tokens,"reasoning_tokens":completed.usage.reasoning_tokens,"provider_reported_cost_micros":completed.reported_cost_micros,"conservative_estimate_cny":(input as f64*2.0+output_tokens as f64*8.0)/1_000_000.0,"knowledge_accepted":true,"synthetic_only":true})).unwrap()).unwrap();
     }
 
     #[test]

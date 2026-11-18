@@ -62,6 +62,7 @@ data class KnowledgeIntent(
     val generatedModelId: String? = null,
     /** The user has explicitly enabled background history curation for this generated item. */
     val generatedAutomatically: Boolean = false,
+    val generatedSourceHash: String? = null,
 )
 
 data class KnowledgeSearchFilter(
@@ -148,7 +149,7 @@ class KnowledgeDomain(private val clock: Clock) {
 class ManageKnowledgeUseCase(private val domain: KnowledgeDomain, private val repository: KnowledgeManagementRepository) {
     fun execute(intent: KnowledgeIntent): KnowledgeMutationResult {
         domain.mutate(repository.findSnapshot(intent.knowledgeId), intent)?.let { return it }
-        return repository.mutate(intent, MemoryDomain.sha256(listOf(intent.id.value, intent.action.name, intent.knowledgeId.value, intent.title.orEmpty(), intent.body.orEmpty(), intent.tags.sorted().joinToString(","), intent.scope.name, intent.projectId?.value.orEmpty(), intent.importReference.orEmpty(), intent.generatedProviderId?.name.orEmpty(), intent.generatedModelId.orEmpty(), intent.generatedAutomatically).joinToString("|")))
+        return repository.mutate(intent, MemoryDomain.sha256(listOf(intent.id.value, intent.action.name, intent.knowledgeId.value, intent.title.orEmpty(), intent.body.orEmpty(), intent.tags.sorted().joinToString(","), intent.scope.name, intent.projectId?.value.orEmpty(), intent.importReference.orEmpty(), intent.generatedProviderId?.name.orEmpty(), intent.generatedModelId.orEmpty(), intent.generatedAutomatically, intent.generatedSourceHash.orEmpty()).joinToString("|")))
     }
     fun search(filter: KnowledgeSearchFilter): List<KnowledgeSearchResult> = domain.search(repository.listSnapshots(filter), filter)
     fun detail(id: KnowledgeItemId): KnowledgeSnapshot? = repository.findSnapshot(id)

@@ -20,13 +20,15 @@
 - 当前手动菜单与部署身份唯一读取 `ComposerModelRoutingCatalog`、Desktop选择器及[生成维护矩阵](model-service/MODEL_SERVICE_MATRIX.md)；本合同不再维护第二份完整名单。深度档对应顺序为DeepSeek Pro → Muse Wonder → Gemini 4 Argon → 智谱GLM，Muse与Argon均经OpenRouter；RelayCore六项独立二级菜单。Muse与Argon只新增手动入口，既有Auto计划不变；Qwen3.6 Flash仍为Auto专用。退役选择保留精确历史识别，不能静默转Auto或改历史归因。
 - 日常档 GPT-6.1 Terra 紧接在 GPT-6 Luna 之前；独立预设 `GPT_6_1_TERRA`、选择 ID `logical:daily:gpt-6.1-terra`，OpenRouter API ID `openai/gpt-6.1-terra`。复用现有聊天、附件、联网与计量 owner；不改变 Luna 默认、Auto／后台计划或旧 `logical:daily:gpt-terra` → Luna 的历史升级映射。能力档案与价格核验／未验范围见[接入记录](verification/2026-10-27-gpt-terra/REPORT.md)。
 - 日常档 Mercury 3 紧接 GPT-6 Luna，固定 `MERCURY_3`／`inception/mercury-3`，复用 OpenRouter 配置、Adapter、联网与计量；仅增加手动选择，不改变 Auto／后台默认或历史模型身份。原生输入能力依当前目录，文本文件／可读 PDF 等本机提取沿用材料 owner，不能把不支持的媒体冒充已读取。
+- 日常档原OpenRouter Gemini位置使用 `GEMINI_4_HYDROGEN`／`google/gemini-4-hydrogen`。Android沿用 `logical:daily:gemini-flash`，双端将旧OpenRouter 3.7／3.8的当前模型设置迁移为Hydrogen，Mac重开时也在当前会话／新会话选择投影迁移。已保存的消息、Attempt身份和历史账本按原值读取。RelayCore Gemini Flash继续使用独立Key与模型。
+- OpenRouter 和 RelayCore 的 Sol 深度入口及 Auto 原位置升级至 GPT-6.2 Sol。OpenRouter 使用 `openai/gpt-6.2-sol`，RelayCore GPT 独立凭据组使用 `gpt-6.2-sol`。旧 Sol 当前设置与会话选模迁移至对应服务商的新预设，已保存的消息、Attempt 和用量按原身份读取。
 - OpenRouter冷启动使用已验证seed的固定API身份；缓存profile只能贡献同一ID的健康／时效信息，不得以错误或旧ID覆盖所选模型。已有官方直连的显式别名刷新语义保持原owner，不将此规则推广为猜测近似型号。
 - `Grok 4.1 Fast`（`x-ai/grok-4.1-fast`）在既有目录核验阶段被标为不可发送；当前产品按已维护目录保持退役：保留其逻辑 ID 仅用于旧会话识别与归因，不出现在选择器、Auto 候选或重试发送中。旧选择必须在读取 Key、外发正文前以“模型已不在服务商目录”失败，绝不静默替换。
 - `Grok 4.5`（`x-ai/grok-4.5`）与 `Grok 4.6 High`（`x-ai/grok-4.6`）都已从产品模型列表与 Auto 候选移除；持久化旧选择只能失败关闭，不能回退、近似替换或继续外发。历史消息仍保留当时实际模型归因。
-- 普通聊天 Auto 使用 `protocol/fixtures/auto-routing-rc-domestic-20261010.json` 的版本化顺序，独立于模型选择列表顺序：日常文本优先 RC Sol、RC Gemini Flash、国内 DeepSeek Flash；显式深度任务优先 RC Astra、RC Opus、RC Sol，再选国内强模型。附件任务优先国内模型；RC 原始多媒体路径未实现，不进入附件计划。OpenRouter 在全部 RC／国内候选之后，仅在前者未启用、缺少凭据、健康不可用或不能处理对应材料时才可在发送前选中。失败后不自动换模型重发。
+- 普通聊天 Auto 在原OpenRouter Gemini位置采用Hydrogen，使用 `protocol/fixtures/auto-routing-rc-domestic-20261118.json` 的版本化顺序，独立于模型选择列表顺序：日常文本优先 RC Sol、RC Gemini Flash、国内 DeepSeek Flash；显式深度任务优先 RC Astra、RC Opus、RC Sol，再选国内强模型。附件任务优先国内模型；RC 原始多媒体路径未实现，不进入附件计划。OpenRouter 在全部 RC／国内候选之后，仅在前者未启用、缺少凭据、健康不可用或不能处理对应材料时才可在发送前选中。失败后不自动换模型重发。
 - Android继续检查实际解析能力/健康；Mac检查启用状态、对应凭据和已实现材料投影。RC文字Sol/Astra自身联网；其他RC文字与全部RC附件需要OpenRouter Luna配置，具体接收方与接口只遵从[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)。RC原始媒体不因列表或Luna存在而新增能力；文本搜索接口不能借离线视觉能力发送媒体。Auto接收方发送前冻结，配置变化造成预测不一致须重新披露；失败不换模型重发，重试使用原Attempt身份。
 - 显式选择 Auto 的会话保持 Auto，不继承其他会话后续手动选择。关闭任务分类时 Android 使用日常 Auto 顺序；手动模型不受候选计划、任务类型、能力筛选影响，不能使用时明确失败。
-- 当前OpenRouter Claude Opus 5.5默认reasoning.effort=medium；Claude Sonnet 5.5与GPT-6.1 Sol默认high，联网不能清除该字段。Haiku／Luna／其他型号不按“深度”标签强加High。旧型号的历史参数不构成当前菜单或默认。Domain稳定层级与catalog真实ID／能力／价格／上下文分开；无法精确映射的部署不可发送。
+- 当前OpenRouter Claude Opus 5.5默认reasoning.effort=medium；Claude Sonnet 5.5与GPT-6.2 Sol默认high，联网不能清除该字段。Haiku／Luna／其他型号不按“深度”标签强加High。旧型号的历史参数不构成当前菜单或默认。Domain稳定层级与catalog真实ID／能力／价格／上下文分开；无法精确映射的部署不可发送。
 
 ## P6-G实验编排规划（不替代普通发送当前路由）
 

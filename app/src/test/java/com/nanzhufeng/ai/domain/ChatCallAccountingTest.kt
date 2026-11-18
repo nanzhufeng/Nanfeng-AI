@@ -3,6 +3,19 @@ import java.time.Instant
 import org.junit.Assert.*
 import org.junit.Test
 class ChatCallAccountingTest {
+ @Test fun `every RC footer preserves nominal CNY beside actual OpenRouter USD and deduplicates calls`() {
+  for(spec in RelayCoreModels.specs) {
+   val rc=call("answer",cost=1000000).copy(providerId=spec.provider,requestedModelId=spec.apiId,actualModelId=spec.apiId,
+    cost=ProviderCost("relaycore-verified-group-2026-10-10-${spec.channel}","USD",1000000))
+   val search=call("search","RETRIEVAL",100000,"USD").copy(providerId=ProviderId.OPENROUTER,
+    requestedModelId="openai/gpt-6-luna",actualModelId="openai/gpt-6-luna")
+   val answer=AssistantResponseModelAttribution(MessageNodeId("mixed-message"),NormalChatSendAttemptId("attempt"),spec.provider,spec.provider,
+    spec.apiId,spec.compactName,Instant.EPOCH,accountingCalls=listOf(rc,search,search))
+   assertEquals(spec.apiId,"¥1.672031",answer.footerCostLabel())
+   assertEquals("USD",search.cost.currencyCode)
+   assertEquals("USD",rc.cost.currencyCode)
+  }
+ }
  private fun call(id:String,role:String="ANSWER",cost:Long?=10,currency:String="USD")=ChatCallAccounting(id,"attempt","conversation",role,ProviderId.RELAYCORE_GPT,"gpt-6.1-sol","gpt-6.1-sol","GPT-6.1 Sol · Pro3",Instant.EPOCH,Instant.ofEpochMilli(20),"COMPLETED",ProviderUsage(100,20,120,10,5),if(cost==null) ProviderCost() else ProviderCost("fixture",currency,cost),if(cost==null) null else ConversationCostSource.LOCAL_ESTIMATE)
  @Test fun `zero is known unknown and mixed currencies never become combined totals`() {
   assertEquals(0L,combinedAccountingCost(listOf(call("a",cost=0),call("r","RETRIEVAL",0))).first.totalMicros)

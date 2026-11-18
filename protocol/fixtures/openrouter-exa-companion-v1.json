@@ -1,0 +1,44 @@
+{
+  "provenance": "SYNTHETIC protocol fixture; not a live Exa receipt or real financial claim",
+  "question": "某上市公司跌幅23%是否准确？业绩为什么恶化？目前估值是否合理？",
+  "parameters": {
+    "engine": "exa",
+    "mode": "fast",
+    "max_uses": 2,
+    "max_results": 3,
+    "max_total_results": 6,
+    "max_characters": 1500
+  },
+  "response": {
+    "id": "synthetic-exa-companion",
+    "model": "openai/gpt-6-luna",
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": "[A1] 已核实\n上市公司跌幅20%，日期2026年11月2日，口径为收盘。来源：https://example.test/filing\n[A2] 已核实\n上市公司23%是盘中跌幅，收盘为20%。来源：https://example.test/filing\n[A3] 已核实\n上市公司财报成本同比增加10%，利润同比下降8%。来源：https://example.test/filing\n[A4] 已核实\n上市公司市值100亿元，最近年度自由现金流10亿元。来源：https://example.test/filing\n[A5] 已核实\n上市公司净债务20亿元，财报日期2026年10月31日。来源：https://example.test/filing",
+          "annotations": [
+            {
+              "type": "url_citation",
+              "url_citation": {
+                "url": "https://example.test/filing",
+                "title": "合成公开财报"
+              }
+            }
+          ]
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 200,
+      "completion_tokens": 100,
+      "total_tokens": 300,
+      "cost": 0.0085,
+      "server_tool_use_details": {
+        "web_search_requests": 1,
+        "tool_calls_executed": 1
+      }
+    }
+  }
+}

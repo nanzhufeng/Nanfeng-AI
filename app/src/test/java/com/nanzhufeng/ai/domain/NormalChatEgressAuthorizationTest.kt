@@ -60,7 +60,8 @@ class NormalChatEgressAuthorizationTest {
         assertFalse(approval.allowsRecipient(ComposerModelRoutingCatalog.deep.first().routes.first(), ProviderId.OPENROUTER, "other-model"))
         assertThrows(IllegalArgumentException::class.java) { approval.copy(disclosureVersion = NormalChatEgressAuthorization.LEGACY_DISCLOSURE_VERSION) }
         assertThrows(IllegalArgumentException::class.java) { approval.copy(disclosureVersion = "normal-chat-egress-v2") }
-        assertThrows(IllegalArgumentException::class.java) { approval.copy(disclosureVersion = "normal-chat-egress-v4") }
+        assertEquals("normal-chat-egress-v4",approval.disclosureVersion)
+        assertThrows(IllegalArgumentException::class.java) { approval.copy(disclosureVersion = "normal-chat-egress-v3") }
         assertThrows(IllegalArgumentException::class.java) { approval.copy(recipientPresets = emptyList()) }
     }
 

@@ -5,6 +5,7 @@ import { RELAYCORE_MODELS, relayCoreEgressVersion, relayCoreNeedsCompanion, crea
 import { usesIndependentSearch, createSearchServiceGrant, retrySearchMaterial } from './independent-web-search.mjs';
 import { WORKSPACES_VISIBLE, canOpenDataArea } from './product-scope.mjs';
 import { DesktopAppEntry } from './desktop-app-entry.mjs';
+import { createHistoryKnowledgeWakeup } from './history-knowledge-wakeup.mjs';
 import { generationRefreshInterval, hasRunningGeneration } from './generation-continuity.mjs';
 import { createUtilityPageNavigation } from './utility-page-navigation.mjs';
 import { commitRetainedChatShell, commitRuntimeChatShell, installRuntimeChatScrolling } from './runtime-chat-commit.mjs';
@@ -1227,6 +1228,18 @@ async function loadDesktopHistoryKnowledge({ runDue = false } = {}) {
   state.historyKnowledge = await invoke(runDue ? 'run_desktop_history_knowledge_due' : 'read_desktop_history_knowledge');
   return state.historyKnowledge;
 }
+const historyKnowledgeWakeup = createHistoryKnowledgeWakeup({
+  isEnabled: () => native && state.productSettings.historyLibraryEnabled && !state.historyKnowledge.paused
+    && !state.runtimeInfo?.automaticWorkSuppressed
+    && (!state.historyKnowledge.nextEligibleAtMs || state.historyKnowledge.nextEligibleAtMs <= Date.now()),
+  runDue: async () => {
+    const before = JSON.stringify(state.historyKnowledge);
+    await loadDesktopHistoryKnowledge({ runDue: true });
+    if (JSON.stringify(state.historyKnowledge) !== before) await refresh();
+  },
+  setTimer: (callback, delay) => window.setTimeout(callback, delay),
+  clearTimer: timer => window.clearTimeout(timer),
+});
 async function loadDesktopReminders() {
   if (!native) return state.reminders;
   state.reminders = await invoke('read_desktop_reminders');
@@ -6903,6 +6916,7 @@ async function bootDesktopShell() {
       globalThis.__nanfengV2CommittedExchanges = state.v2CommittedExchanges;
       applyC16Preview('Tauri 原生');
       render();
+      historyKnowledgeWakeup.start();
     }
   } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     console.error('Desktop startup readback failed', startupStage, error);
@@ -6941,6 +6955,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) check
 window.addEventListener('blur', rememberDesktopExit);
 window.addEventListener('pagehide', rememberDesktopExit);
 window.addEventListener('focus', resumeDesktopEntry);
+window.addEventListener('focus', () => { void historyKnowledgeWakeup.wake(); });
+window.addEventListener('beforeunload', () => historyKnowledgeWakeup.stop());
 document.addEventListener('visibilitychange', () => { if (document.hidden) rememberDesktopExit(); else resumeDesktopEntry(); });
 app.addEventListener('click', event => {
   const action = event.target.closest?.('[data-action]')?.dataset.action;

@@ -1,4 +1,4 @@
-import { RELAYCORE_MODELS } from './relaycore-models.mjs';
+import { RELAYCORE_KNOWN_MODELS } from './relaycore-models.mjs';
 // Read-only Desktop projection of the Android ConversationCostEstimator. Provider-reported
 // amounts remain authoritative; this table only fills a visible estimate when that fact is absent.
 const USD_TO_CNY = 6.720309145556033;
@@ -18,6 +18,8 @@ const flatPrices = new Map([
   ['anthropic/claude-sonnet-5', price('openrouter-public-prices-2026-08-v1', 2, 10)],
   ['anthropic/claude-haiku-4.5', price('openrouter-public-prices-2026-08-v1', 1, 5)],
   ['google/gemini-3.7-flash', price('openrouter-public-prices-2026-08-v1', 0.375, 1.875)],
+  ['openai/gpt-6.2-sol', price('openrouter-gpt-6.2-sol-standard-2026-11-18-v1', 2, 10, 0.1)],
+  ['google/gemini-4-hydrogen', price('openrouter-gemini-4-hydrogen-2026-11-14-v1', 1.50, 7.50, 0.075)],
   ['google/gemini-3.8-flash', price('openrouter-gemini-3.8-flash-intro-2026-09-v1', 0.75, 3.75, 0.075)],
   ['moonshotai/kimi-k3', price('openrouter-public-prices-2026-08-v1', 2.55, 12.75, 0.256)],
   ['qwen3.8-max', price('qwen-cn-beijing-standard-2026-08-v2', 12, 36, 1.5, 'CNY')],
@@ -62,9 +64,13 @@ function scheduledPrice(modelId, occurredAtMs) {
     : price('zhipu-glm-5.3-flash-standard-2026-08-v1', 0.8, 2.8, 0.23, 'CNY');
 }
 
+const relayPricingModel = modelId => RELAYCORE_KNOWN_MODELS.find(item => item.modelId === (
+  { 'claude-opus-5-5': 'claude-opus-5.5', 'claude-sonnet-5.5': 'claude-sonnet-5-5' }[modelId] || modelId
+));
+
 function relayPrice(modelId, displayName, occurredAtMs) {
-  const model=RELAYCORE_MODELS.find(item=>item.modelId===modelId);
-  if (!model || (!displayName && occurredAtMs < Date.UTC(2026,9,10))) return null;
+  const model=relayPricingModel(modelId);
+  if (!model || model.inputPerMillion == null || (!displayName && occurredAtMs < Date.UTC(2026,9,10))) return null;
   const channel=displayName?.split(' · ')[1] || model.channel;
   const multiplier={Kiro:0.08,'Kiro正价':0.35,Pro1:0.12,Pro2:0.18,Pro3:0.25,Gemini:0.28}[channel];
   if (!multiplier) return null;
@@ -90,7 +96,7 @@ export function projectedCost({ modelId, inputTokens, outputTokens, cachedInputT
   if (Number.isSafeInteger(chargeMicros) && chargeMicros >= 0 && currencyCode) {
     // Read-only correction of the old nominal Relay estimate; genuine USD facts stay USD.
     const legacyRelay = costSource === 'LOCAL_ESTIMATE' && currencyCode === 'USD'
-      && (priceVersion?.startsWith('relaycore-verified-group-') || RELAYCORE_MODELS.some(model => model.modelId === modelId));
+      && (priceVersion?.startsWith('relaycore-verified-group-') || relayPricingModel(modelId));
     return { chargeMicros, currencyCode: legacyRelay ? 'CNY' : currencyCode, costSource: costSource === 'LOCAL_ESTIMATE' ? 'LOCAL_ESTIMATE' : 'PROVIDER_RESPONSE' };
   }
   if (!Number.isSafeInteger(inputTokens) || inputTokens < 0 || !Number.isSafeInteger(outputTokens) || outputTokens < 0 || !Number.isSafeInteger(occurredAtMs) || occurredAtMs < 0) return null;

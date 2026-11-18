@@ -2317,7 +2317,7 @@ private fun AssistantPersonalizationSettingsCard(
     )
     Spacer(Modifier.height(6.dp))
     Text(
-        "开启后，低频整理有价值的历史对话，并在后续对话优先调用少量相关资料。原对话、附件和工具内容不会发送；可随时编辑或删除已沉淀资料。",
+        "开启后，将单条历史对话的有限文字交给 DeepSeek Flash（替补 GLM Flash、Qwen Flash）提取资料并更新自动记忆；附件和工具内容不发送。手动修改、暂停或删除的记忆不会被后台覆盖。",
         modifier = Modifier.padding(horizontal = 4.dp),
         color = SecondaryText,
         style = MaterialTheme.typography.bodySmall,
@@ -2965,15 +2965,18 @@ private fun FeatureReviewSettingsCard() {
     if (!com.nanzhufeng.ai.domain.ProductScope.workspacesVisible) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("功能审阅", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("已确认：历史资料自动整理并更新自动记忆，保留手动内容。入口：个性化 → 历史资料库；沿用记忆摘要页，无新增常驻按键。理由：复用同次提取，减少费用；后续回答仍受启用记忆开关控制。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text("已确认：定位为多模型聊天 AI，默认只显示对话区。", color = SecondaryText)
             Text("已确认：南枫岛仅在后台生成时显示；前台不显示灵动岛，设置反馈沿用页面内提示，无新增常驻按钮。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text("真实阶段、模型与已保存文字量帮助确认后台任务；语音、Agent步骤及跨App任务中心待评估，暂不新增入口。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
             Text("已确认：附件联网核验覆盖文本、表格、Office正文、可读PDF及ZIP文档；单附件、多附件和混合类型共同取要点，沿用原入口。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Text("已确认保留：OpenRouter／官方模型和 RC 普通文字 Sol／Astra 使用自身联网；其余 RC 普通文字及全部 RC 附件由 OpenRouter GPT-6 Luna 搜索，再交回原选 RC 模型回答。入口：原发送与显式重试，不新增常驻按钮。",color=SecondaryText,style=MaterialTheme.typography.bodySmall)
-            Text("理由：按渠道与材料选择稳定路径；发送流程核验 Luna 接收方和当前材料；对话界面去掉重复说明，逐事项保留真实来源，原模型、原渠道及费用分别记录。",color=SecondaryText,style=MaterialTheme.typography.labelSmall)
+            Text("已确认保留：OpenRouter／官方模型和 RC 普通文字 Sol／Astra 使用自身联网；其余 RC 普通文字及全部 RC 附件由 OpenRouter GPT-6 Luna 协作 Exa Fast 搜索，再交回原选 RC 模型回答。入口：原发送与显式重试，不新增常驻按钮。",color=SecondaryText,style=MaterialTheme.typography.bodySmall)
+            Text("理由：按渠道与材料限制检索次数、结果和摘录长度；发送流程核验 Luna／Exa 接收方和当前材料；对话界面去掉重复说明，逐事项保留真实来源，原模型、原渠道及费用分别记录。",color=SecondaryText,style=MaterialTheme.typography.labelSmall)
             Text("理由：避免只搜报告写法或遗漏后面的文件；来源对应事项。扫描件和媒体按模型能力或转写结果处理，不以截取或目录代替全文，无新增常驻按钮。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
             Text("建议保留：所有当前模型共用附件处理流程；原生支持的原件直接交原模型，本机无法完整读取的图片／PDF由已披露的 Haiku 5.5 · OpenRouter 识读，音视频由 Gemini 4 Argon · OpenRouter 识读，原选模型回答，按实际调用分别计费。沿用附件与发送入口，不新增常驻按钮；理由：避免文字接口拒收或混合附件遗漏，识读失败须停止，未知结果不自动重发。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text("已确认：日常档加入 Mercury 3，经 OpenRouter，紧接 Luna；深度档 Gemini 4 Argon 在 Android 输入框显示为 4 Argon，沿用原选模入口。理由：便于日常调用与外屏辨认；设置和历史归因保留完整身份，无新增常驻按键。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("保留 Sol 深度入口。OpenRouter 与 RelayCore 使用 GPT-6.2 Sol，沿用现有模型选择和设置。理由是让原 Sol 选择接续新版本，历史回答仍显示原模型。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("保留 Gemini 日常入口。OpenRouter 使用 Gemini 4 Hydrogen，沿用日常选模和模型设置。理由：接续原有 Gemini 选择与多模态任务，历史账目按原模型显示。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
             Text("已确认：深度档加入 Muse Wonder，经 OpenRouter，位于智谱 GLM 上方；沿用原模型选择入口。已确认：新对话沿用上一次最后选择的模型；重启后保留，只有最后选择自动才沿用自动。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text("已确认：模型选择弹窗默认字号缩小一档；小、标准、大仅轻微变化，保持辨认稳定。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text("已确认：所有模型选择入口的具体模型项显示所属平台图标，便于辨认；沿用原入口，不新增按钮。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)

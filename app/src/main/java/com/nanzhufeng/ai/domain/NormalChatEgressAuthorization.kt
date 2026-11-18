@@ -44,7 +44,9 @@ data class NormalChatEgressAuthorization(
     }
 
     companion object {
-        const val DISCLOSURE_VERSION = "normal-chat-egress-v3"
+        // v4 adds Exa as the search recipient behind the disclosed OpenRouter Luna stage.
+        // Historical v3 receipts remain audit data, never authorization for this new egress.
+        const val DISCLOSURE_VERSION = "normal-chat-egress-v4"
         const val LEGACY_DISCLOSURE_VERSION = "normal-chat-egress-v1"
 
         fun forUserSend(draft: ConversationDraft, approvedAtEpochMs: Long, selectedModelId: String?, routing: NormalChatRoutingSnapshot): NormalChatEgressAuthorization {

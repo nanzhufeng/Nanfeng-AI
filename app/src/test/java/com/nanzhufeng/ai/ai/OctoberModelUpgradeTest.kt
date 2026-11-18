@@ -20,12 +20,25 @@ class OctoberModelUpgradeTest {
         assertTrue(AutoModelRouter.candidates(AutoRoutingFacts()).none { it == preset })
     }
 
-    @Test fun `current standard selections reject alternate cached API identities`() {
+    @Test fun `standard selections reject alternate cached API identities`() {
         val catalog = com.nanzhufeng.ai.data.OpenRouterCatalogJsonParser.parse(java.io.File("../protocol/fixtures/model-upgrade-20261009.json").readBytes())
-        val snapshot = OpenRouterRegistrySnapshotVerifier().verify(OpenRouterCatalogResponse(catalog, null), java.time.Instant.parse("2026-10-09T00:00:00Z"))!!
+        val oldGemini = catalog.single { it.id == "google/gemini-3.8-flash" }
+        val hydrogenId = "google/gemini-4-hydrogen"
+        val hydrogen = oldGemini.copy(id = hydrogenId, displayName = "Gemini 4 Hydrogen")
+        val withoutFlash = catalog - oldGemini
+        val verifier = OpenRouterRegistrySnapshotVerifier()
+        val now = java.time.Instant.parse("2026-11-14T00:00:00Z")
+        val alternateOnly = verifier.verify(OpenRouterCatalogResponse(withoutFlash + hydrogen.copy(id = "$hydrogenId:priority"), null), now)!!
+        assertNull(alternateOnly.modelFor(ModelPresetId.GEMINI_4_HYDROGEN))
+        assertNotNull(alternateOnly.modelFor(ModelPresetId.GPT_6_1_SOL))
+        val snapshot = verifier.verify(OpenRouterCatalogResponse(withoutFlash + hydrogen + catalog.single { it.id == "openai/gpt-6.1-sol" }.copy(id = "openai/gpt-6.2-sol"), null), now)!!
+        assertEquals(hydrogenId, snapshot.modelFor(ModelPresetId.GEMINI_4_HYDROGEN)?.id)
+        assertNull(snapshot.modelFor(ModelPresetId.GEMINI_3_8_FLASH))
         for ((preset, original, alternate) in listOf(
+            Triple(ModelPresetId.GPT_6_2_SOL, "openai/gpt-6.2-sol", "openai/gpt-6.2-sol-pro"),
             Triple(ModelPresetId.GPT_6_1_SOL, "openai/gpt-6.1-sol", "openai/gpt-6.1-sol-pro"),
-            Triple(ModelPresetId.GEMINI_3_8_FLASH, "google/gemini-3.8-flash", "google/gemini-3.8-flash:priority"),
+            Triple(ModelPresetId.GEMINI_4_HYDROGEN, hydrogenId, "$hydrogenId:priority"),
+            Triple(ModelPresetId.GEMINI_4_HYDROGEN, hydrogenId, "$hydrogenId:batch"),
         )) {
             val corrupted = snapshot.copy(
                 models = snapshot.models.map { if (it.id == original) it.copy(id = alternate) else it },
@@ -53,10 +66,12 @@ class OctoberModelUpgradeTest {
     }
     @Test fun `current menus contain new daily models and Sol immediately before DeepSeek Pro`() {
         val daily = ComposerModelRoutingCatalog.daily.flatMap { it.routes }.map { it.name }
-        assertTrue(daily.containsAll(listOf("CLAUDE_SONNET_5_5", "CLAUDE_HAIKU_5_5", "GPT_6_LUNA", "GEMINI_3_8_FLASH")))
+        assertTrue(daily.containsAll(listOf("CLAUDE_SONNET_5_5", "CLAUDE_HAIKU_5_5", "GPT_6_LUNA", "GEMINI_4_HYDROGEN")))
+        assertFalse(daily.contains("GEMINI_3_8_FLASH"))
+        assertEquals("Gemini 3.8", composerModelShortNameForUser("Gemini 3.8 Flash"))
         assertFalse(daily.contains("GPT_5_6_TERRA"))
         val deep = ComposerModelRoutingCatalog.deep.flatMap { it.routes }.map { it.name }
-        assertEquals(deep.indexOf("DEEPSEEK_V4_PRO") - 1, deep.indexOf("GPT_6_1_SOL"))
+        assertEquals(deep.indexOf("DEEPSEEK_V4_PRO") - 1, deep.indexOf("GPT_6_2_SOL"))
         assertFalse(deep.contains("GPT_5_6_SOL"))
         assertTrue(deep.contains("CLAUDE_OPUS_5_5"))
     }

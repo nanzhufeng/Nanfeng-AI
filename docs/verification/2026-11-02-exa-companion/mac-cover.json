@@ -1,0 +1,31 @@
+{
+  "version": "1.0.39",
+  "previous_version": "1.0.38",
+  "same_leaf_certificate": true,
+  "signature_verified": true,
+  "normal_quit": true,
+  "normal_launch_running": true,
+  "executable_sha256": "72ec6873967ae68ca76137b323668643b66892c6664593c65c6054fc95b4618d",
+  "data_semantic_before": {
+    "CHAT": {
+      "exchangeRows": 8,
+      "exchangeChars": 7804087,
+      "exchangeSha256": "7023a91ed1cefe3ede95d48b0f5052bbf43debae819cab10b5a0328279407211",
+      "attemptRows": 26
+    },
+    "WORK": {
+      "exchangeRows": 1,
+      "exchangeChars": 393,
+      "exchangeSha256": "b7f99044eb7f0416f496eff405327b3ebde72d597d88b622059a5429824a0b99",
+      "attemptRows": 0
+    }
+  },
+  "backup_retained": true,
+  "installed_at_local": "2026-11-02 19:34:33",
+  "notarized": false,
+  "data_semantics_unchanged": true,
+  "areas_checked": [
+    "CHAT",
+    "WORK"
+  ]
+}

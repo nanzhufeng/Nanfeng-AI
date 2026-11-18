@@ -96,13 +96,15 @@ data class ChatRequestOptions(
     /** OpenRouter's supported cross-provider reasoning control, selected by product policy. */
     val reasoningEffort: ReasoningEffort? = null,
     val groundedAnswer:Boolean=false,
-    val openRouterNativeSearchOnly:Boolean=false,
+    val openRouterExaSearchOnly:Boolean=false,
     val openRouterResponsesSearch:Boolean=false,
     val explicitSearchQuery:String?=null,
     /** Opaque identity for this one retrieval task; never derived from user material. */
     val relayTaskRoutingKey:String?=null,
     /** Explicit short-title task; ordinary chat never enables this flag. */
     val shortTitle: Boolean = false,
+    /** Bounded background JSON extraction, independent of the normal chat reasoning policy. */
+    val historyExtraction: Boolean = false,
 ) {
     init { require(relayTaskRoutingKey==null || relayTaskRoutingKey.matches(Regex("[0-9a-f]{64}"))) }
     val liveWebSearch: Boolean get() = webSearchRoute != OfficialWebSearchRoute.NONE
@@ -123,7 +125,7 @@ enum class ReasoningEffort(val wireValue: String) {
  */
 internal fun openRouterDefaultReasoningEffort(modelId: String): ReasoningEffort? = when (modelId) {
     "anthropic/claude-opus-5.5" -> ReasoningEffort.MEDIUM
-    "anthropic/claude-sonnet-5.5", "openai/gpt-6.1-sol" -> ReasoningEffort.HIGH
+    "anthropic/claude-sonnet-5.5", "openai/gpt-6.1-sol", "openai/gpt-6.2-sol" -> ReasoningEffort.HIGH
     else -> null
 }
 
@@ -132,6 +134,7 @@ internal object OpenRouterDeepReasoningPolicy {
         ModelPresetId.CLAUDE_FABLE_5_1,
         ModelPresetId.CLAUDE_SONNET_5_5,
         ModelPresetId.GPT_6_1_SOL,
+        ModelPresetId.GPT_6_2_SOL,
         ModelPresetId.CLAUDE_OPUS_5,
         ModelPresetId.GPT_6_ASTRA,
         ModelPresetId.GPT_5_6_SOL,
@@ -488,7 +491,7 @@ class QwenChatAdapter : OpenAiCompatibleChatAdapter() {
     }
 
     protected override fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel, options: ChatRequestOptions) {
-        if (options.shortTitle) {
+        if (options.shortTitle || options.historyExtraction) {
             append(",\"enable_thinking\":false,\"response_format\":{\"type\":\"json_object\"}")
         }
         if (model.modelId == QWEN_3_8_MAX_MODEL_ID) {
@@ -549,7 +552,7 @@ class DeepSeekChatAdapter : OpenAiCompatibleChatAdapter() {
     override val providerId = ProviderId.DEEPSEEK
 
     protected override fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel, options: ChatRequestOptions) {
-        if (options.shortTitle) {
+        if (options.shortTitle || options.historyExtraction) {
             append(",\"thinking\":{\"type\":\"disabled\"},\"response_format\":{\"type\":\"json_object\"}")
         }
     }
@@ -606,7 +609,9 @@ class ZhipuChatAdapter : OpenAiCompatibleChatAdapter() {
     override val providerId = ProviderId.ZHIPU
 
     protected override fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel, options: ChatRequestOptions) {
-        if (model.modelId == "glm-5.3" || model.modelId == "glm-5.3-flash") {
+        if (options.historyExtraction) {
+            append(",\"thinking\":{\"type\":\"disabled\"},\"response_format\":{\"type\":\"json_object\"}")
+        } else if (model.modelId == "glm-5.3" || model.modelId == "glm-5.3-flash") {
             append(",\"thinking\":{\"type\":\"enabled\"},\"reasoning_effort\":\"")
                 .append(if(options.webSearchRoute == OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS && options.explicitSearchQuery != null && !options.groundedAnswer) "low" else "max")
                 .append("\"")
@@ -757,10 +762,10 @@ private fun StringBuilder.appendZhipuWebSearch(query: String? = null, count: Int
 private fun StringBuilder.appendOpenRouterSearch(options: ChatRequestOptions, model: ResolvedModel?) {
     if(model?.providerId==ProviderId.OPENROUTER && model.modelId=="anthropic/claude-haiku-5.5") {
         if(!options.groundedAnswer) append(",\"plugins\":[{\"id\":\"web\",\"engine\":\"exa\",\"max_results\":5}]")
-    } else if(model?.providerId==ProviderId.OPENROUTER && model.modelId in setOf("google/gemini-3.8-flash", "google/gemini-4-argon")) {
+    } else if(model?.providerId==ProviderId.OPENROUTER && model.modelId in setOf("google/gemini-3.8-flash", "google/gemini-4-hydrogen", "google/gemini-4-argon")) {
         if(!options.groundedAnswer) append(",\"plugins\":[{\"id\":\"web\",\"engine\":\"native\",\"max_results\":5}]")
-    } else if(options.openRouterNativeSearchOnly) {
-        append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"engine\":\"native\"}}],\"tool_choice\":\"required\",\"provider\":{\"only\":[\"OpenAI\"],\"allow_fallbacks\":false}")
+    } else if(options.openRouterExaSearchOnly) {
+        append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"engine\":\"exa\",\"mode\":\"fast\",\"max_uses\":2,\"max_results\":3,\"max_total_results\":6,\"max_characters\":1500}}],\"tool_choice\":\"required\",\"provider\":{\"only\":[\"OpenAI\"],\"allow_fallbacks\":false}")
     } else {
         append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"max_results\":5,\"max_total_results\":10}}]")
     }
@@ -925,7 +930,7 @@ private fun relayGptResponsesWebSearchBody(model: ResolvedModel, messages: List<
         append("{\"role\":\"").append((if (role == "system") "developer" else role).escapeJson()).append("\",\"content\":[{\"type\":\"input_text\",\"text\":\"")
         append(content.escapeJson()).append("\"}]}")
     }
-    val nativeGpt = model.modelId in setOf("gpt-6.1-sol", "gpt-6-astra")
+    val nativeGpt = model.modelId in setOf("gpt-6.1-sol", "gpt-6.2-sol", "gpt-6-astra")
     val complex = nativeGpt && com.nanzhufeng.ai.domain.AutoRoutingTaskClassifier.requiresComplexReasoning(messages.lastOrNull { it.first == "user" }?.second.orEmpty())
     append(']')
     if(search) {

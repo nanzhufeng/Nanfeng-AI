@@ -239,7 +239,9 @@ internal object AttachmentWebSearchPlan {
         }.getOrElse { material }
     }
     /** Source presence alone is insufficient: every planned item must have its own result. */
-    fun evidence(plan: Plan, raw: String, sourceUrls: List<String>, allowUnverified:Boolean=false,onItem:(String,String)->Unit={_,_->}): String? = runCatching {
+    fun evidence(plan: Plan, raw: String, sourceUrls: List<String>, allowUnverified:Boolean=false,onItem:(String,String)->Unit={_,_->}): String? =
+        evidenceWithLimit(plan,raw,sourceUrls,allowUnverified,500,onItem)
+    fun evidenceWithLimit(plan: Plan, raw: String, sourceUrls: List<String>, allowUnverified:Boolean,summaryLimit:Int,onItem:(String,String)->Unit={_,_->}): String? = runCatching {
         if (plan.items.isEmpty()) return raw
         val sources = sourceUrls.mapNotNull(::publicUrl).toSet()
         val clean = raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
@@ -254,7 +256,8 @@ internal object AttachmentWebSearchPlan {
             val array=org.json.JSONArray()
             headers.forEachIndexed {index,header ->
                 val body=clean.substring(header.range.last+1,headers.getOrNull(index+1)?.range?.first ?: clean.length).trim()
-                val status=Regex("与材料矛盾|部分(?:已)?(?:核实|属实)|已核实|未核实|已检索").find(clip(body,350))?.value ?: if(allowUnverified && plan.items.size==1 && sources.isNotEmpty() && mentionsTopic) "未核实" else return null
+                val explicitGap=sources.isNotEmpty() && mentionsTopic && Regex("""^(?:\*{1,2})?(?:缺口|资料充分[，,、]?[ \t]*无关键缺口|证据不足|资料不足)(?:\*{1,2})?[ \t]*[：:]?""").containsMatchIn(body)
+                val status=Regex("与材料矛盾|部分(?:已)?(?:核实|属实)|已核实|未核实|已检索").find(clip(body,350))?.value ?: if(explicitGap || allowUnverified && plan.items.size==1 && sources.isNotEmpty() && mentionsTopic) "未核实" else return null
                 val qualified = status == "已核实" && body.lineSequence().firstOrNull { it.contains(status) }?.let { Regex("部分|未核实|未证实|未确认|未核验").containsMatchIn(it) } == true
                 val withoutCitations=body.replace(Regex("cite[^]*")," ")
                 val urls=Regex("""(?i)https?://[^\s<>"'`\[\]（），。；]+""").findAll(withoutCitations).map {evidenceUrl(it.value,it.range.first>0 && withoutCitations[it.range.first-1]=='(',sources)}.toList()
@@ -286,7 +289,7 @@ internal object AttachmentWebSearchPlan {
             var summary = row.getString("summary").replace(Regex("cite[^]*"),"").replace(Regex("""(?i)https?://[^\s<>"']+"""),"").trim()
             var status = row.getString("status")
             if (summary.isEmpty()) return null
-            if (summary.codePointCount(0, summary.length) > 500) {
+            if (summary.codePointCount(0, summary.length) > summaryLimit) {
                 // Keep proof of the sole completed query, never truncate its facts or
                 // promote an overlong conclusion to verified evidence.
                 if (!allowUnverified || plan.items.size!=1 || sources.isEmpty() || !mentionsTopic ||

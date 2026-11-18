@@ -71,7 +71,7 @@
       "providerId": "RELAYCORE_GPT",
       "platform": "RelayCore",
       "endpoint": "https://api.relaycore.cn/v1",
-      "defaultPresetId": "RELAYCORE_GPT_6_1_SOL",
+      "defaultPresetId": "RELAYCORE_GPT_6_2_SOL",
       "credentialGroup": "RELAYCORE_GPT",
       "offlineProtocol": "CHAT_COMPLETIONS",
       "webProtocol": "RESPONSES",
@@ -129,10 +129,10 @@
       ]
     },
     {
-      "presetId": "GPT_6_1_SOL",
+      "presetId": "GPT_6_2_SOL",
       "providerId": "OPENROUTER",
-      "modelId": "openai/gpt-6.1-sol",
-      "displayName": "GPT-6.1 Sol",
+      "modelId": "openai/gpt-6.2-sol",
+      "displayName": "GPT-6.2 Sol",
       "selection": "深度",
       "exceptionIds": [
         "OR_HIGH",
@@ -170,10 +170,10 @@
       ]
     },
     {
-      "presetId": "GEMINI_3_8_FLASH",
+      "presetId": "GEMINI_4_HYDROGEN",
       "providerId": "OPENROUTER",
-      "modelId": "google/gemini-3.8-flash",
-      "displayName": "Gemini 3.8 Flash",
+      "modelId": "google/gemini-4-hydrogen",
+      "displayName": "Gemini 4 Hydrogen",
       "selection": "日常",
       "exceptionIds": [
         "OR_GEMINI_SEARCH_INTENT",
@@ -300,10 +300,10 @@
       ]
     },
     {
-      "presetId": "RELAYCORE_GPT_6_1_SOL",
+      "presetId": "RELAYCORE_GPT_6_2_SOL",
       "providerId": "RELAYCORE_GPT",
-      "modelId": "gpt-6.1-sol",
-      "displayName": "GPT-6.1 Sol · Pro3",
+      "modelId": "gpt-6.2-sol",
+      "displayName": "GPT-6.2 Sol · Pro3",
       "selection": "RelayCore/DEEP",
       "exceptionIds": [
         "RC_REQUIRED",
@@ -537,11 +537,11 @@
         "CLAUDE_OPUS_5_5",
         "CLAUDE_SONNET_5_5",
         "CLAUDE_HAIKU_5_5",
-        "GPT_6_1_SOL",
+        "GPT_6_2_SOL",
         "GPT_6_1_TERRA",
         "GPT_6_LUNA",
         "MERCURY_3",
-        "GEMINI_3_8_FLASH",
+        "GEMINI_4_HYDROGEN",
         "DEEPSEEK_V4_PRO",
         "DEEPSEEK_V4_FLASH",
         "MUSE_WONDER",
@@ -552,7 +552,7 @@
         "QWEN_3_8_MAX",
         "RELAYCORE_OPUS_5_5",
         "RELAYCORE_SONNET_5_5",
-        "RELAYCORE_GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_2_SOL",
         "RELAYCORE_GPT_6_ASTRA",
         "RELAYCORE_GEMINI_3_8_FLASH",
         "RELAYCORE_GEMINI_3_1_PRO",
@@ -564,7 +564,7 @@
     {
       "id": "RC_REQUIRED",
       "appliesTo": [
-        "RELAYCORE_GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_2_SOL",
         "RELAYCORE_GPT_6_ASTRA"
       ],
       "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
@@ -575,13 +575,13 @@
       "appliesTo": [
         "RELAYCORE_OPUS_5_5",
         "RELAYCORE_SONNET_5_5",
-        "RELAYCORE_GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_2_SOL",
         "RELAYCORE_GPT_6_ASTRA",
         "RELAYCORE_GEMINI_3_8_FLASH",
         "RELAYCORE_GEMINI_3_1_PRO"
       ],
       "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
-      "rule": "普通文字Sol/Astra自身Responses，其余四款及RC六款联网附件由固定OpenRouter Luna原生检索后交回原模型；准确接收方／材料授权，来源、不同币种用量及失败分别保留。"
+      "rule": "普通文字Sol/Astra自身Responses，其余四款及RC六款联网附件由固定OpenRouter Luna协作Exa Fast限量检索后交回原模型；准确接收方／材料授权，来源、不同币种用量及失败分别保留。"
     },
     {
       "id": "RC_CLAUDE_EFFORT",
@@ -620,7 +620,7 @@
       "id": "OR_HIGH",
       "appliesTo": [
         "CLAUDE_SONNET_5_5",
-        "GPT_6_1_SOL"
+        "GPT_6_2_SOL"
       ],
       "contract": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
       "rule": "当前OpenRouter默认high；联网不能删除reasoning字段。"
@@ -665,7 +665,7 @@
       "appliesTo": [
         "RELAYCORE_OPUS_5_5",
         "RELAYCORE_SONNET_5_5",
-        "RELAYCORE_GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_2_SOL",
         "RELAYCORE_GPT_6_ASTRA",
         "RELAYCORE_GEMINI_3_8_FLASH",
         "RELAYCORE_GEMINI_3_1_PRO"
@@ -703,7 +703,7 @@
     {
       "id": "OR_GEMINI_SEARCH_INTENT",
       "appliesTo": [
-        "GEMINI_3_8_FLASH",
+        "GEMINI_4_HYDROGEN",
         "GEMINI_4_ARGON"
       ],
       "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
@@ -726,6 +726,6 @@
       "rule": "同一服务正式目录发布claude-sonnet-5-5与claude-sonnet-5.5，真实请求前者返回后者。只规范响应身份等价；请求ID、原始返回ID、Provider/渠道/版本/倍率保持，不作自动fallback。"
     }
   ],
-  "autoPolicy": "protocol/fixtures/auto-routing-rc-domestic-20261010.json",
+  "autoPolicy": "protocol/fixtures/auto-routing-rc-domestic-20261118.json",
   "historicalPolicy": "保留各平台历史身份与授权原值；读取兼容不授予新发送权限。新默认、目录映射、同组API别名、精确冻结重试是不同规则，不做全局静默替换。"
 }

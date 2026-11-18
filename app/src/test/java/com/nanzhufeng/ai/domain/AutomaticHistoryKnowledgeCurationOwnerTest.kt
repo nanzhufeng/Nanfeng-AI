@@ -101,6 +101,21 @@ class AutomaticHistoryKnowledgeCurationOwnerTest {
         assertEquals(Checkpoint.PROCESSED, checkpoints.current)
     }
 
+    @Test fun `failed and partial assistant messages cannot enter history extraction`() {
+        val full = snapshot("incomplete", 4, 180)
+        val unsafe = full.copy(nodes = full.nodes.map { if (it.role == MessageRole.ASSISTANT) it.copy(deliveryState = MessageDeliveryState.FAILED) else it })
+        val result = ReadHistoryKnowledgeCurationSourceUseCase(Conversations(listOf(unsafe))).execute(unsafe.conversation.id) as ReadHistoryKnowledgeCurationSourceResult.Available
+        assertEquals(2, result.source.messageCount)
+        assertTrue(!result.source.transcript.contains("整理回应"))
+    }
+
+    @Test fun `unknown provider result ends the window without sending another conversation`() {
+        val conversations = Conversations(listOf(snapshot("first", 4, 180), snapshot("second", 4, 180)))
+        val refiner = Refiner { HistoryKnowledgeCurationResult.Failed("UNKNOWN_TIMEOUT") }
+        assertTrue(owner(conversations, refiner, Checkpoints()).curateNext() is AutomaticHistoryKnowledgeCurationResult.Unknown)
+        assertEquals(1, refiner.calls)
+    }
+
     private fun owner(
         conversations: Conversations,
         refiner: Refiner,

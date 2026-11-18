@@ -17,10 +17,10 @@
 
 ## 下载
 
-当前发布：[v1.0.33](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.33)
+当前发布：[v1.0.41](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.41)
 
-- Android：[APK](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.33/Nanfeng-AI-Android-1.0.33.apk)
-- macOS：[DMG](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.33/Nanfeng-AI-macOS-1.0.33.dmg)（开发签名，未公证）
+- Android：[APK](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.41/Nanfeng-AI-Android-1.0.41.apk)
+- macOS：[DMG](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.41/Nanfeng-AI-macOS-1.0.41.dmg)（开发签名，未公证）
 
 ## 预览
 
@@ -28,15 +28,15 @@
 
 | 对话 | 设置 |
 | --- | --- |
-| ![Android 对话](docs/preview/android-conversation-1.0.33.png) | ![Android 设置界面](docs/preview/android-settings-1.0.33.png) |
+| ![Android 对话](docs/preview/android-conversation-1.0.41.jpg) | ![Android 设置界面](docs/preview/android-settings-1.0.41.jpg) |
 
 ### macOS
 
-| 对话 | 模型与联网 |
+| 对话 | 个性化设置 |
 | --- | --- |
-| ![macOS 正常对话界面](docs/preview/macos-conversation-1.0.33.png) | ![macOS 模型与联网](docs/preview/macos-settings-1.0.33.png) |
+| ![macOS 正常对话界面](docs/preview/macos-conversation-1.0.41.jpg) | ![macOS 个性化设置](docs/preview/macos-settings-1.0.41.jpg) |
 
-以上为 v1.0.33 正式包在隔离空数据环境中的实际界面：Android 使用独立模拟器，macOS 使用原生应用独立数据目录，均未配置 API Key。图片对应已验签、冻结的上传包，仅证明所示界面；Release 提供 APK、DMG 和 SHA256SUMS 校验文件。
+v1.0.41 签名安装包隔离运行截图。Android 使用 Pixel 7 模拟器（1080 × 2400），macOS 使用 Apple Silicon 原生应用（3456 × 2182）。
 
 ## 源码
 

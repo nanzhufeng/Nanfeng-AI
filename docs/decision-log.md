@@ -1,3 +1,15 @@
+## 2026-11-02：Luna协作检索改用限量Exa，原回答与账本保持独立
+
+- 用户已明确授权Exa，要求最终联网对话正常。固定原Luna模型／OpenRouter Key整理资料，检索引擎为Exa Fast；每物理请求至多2搜索、3结果／搜索、6累计结果、1500字符／结果。避免native忽略结果／长度参数而无法控制检索量；不改其他正常自身联网路线，也不静默切原选回答模型。
+- 官方参数于2026-11-02核验；参数限量不等于固定人民币总费用，服务回报与实际扣费分开。Android v4与Mac Luna／Exa v2授权拒绝旧native版本；缓存绑定引擎版本，旧记录原值保留。
+- 源码与离线完整链路先验，真实层独立验收；候选构建不等于线上可用。后续在用户明确的一次¥1预算内完成代表短题，既定授权内直接推进，不复发未知请求；完整矩阵与主设备UI边界按报告保留。行为正文归[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)／[P3J](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md)，动态证据归[本轮报告](verification/2026-11-02-exa-companion/REPORT.md)。
+
+## 2026-11-02：历史整理与自动记忆共用一次提取，人工内容保留
+
+- 用户明确选择“自动更新提取内容，保留手动记忆”。同一历史来源的提取结果同时进入Knowledge与自动Memory，复用持久化结果，不为摘要再发一次模型请求；关闭记忆或暂停整理时服从对应开关。
+- 自动Memory使用来源稳定身份。人工编辑、停用、删除或无法证明自动来源时保守保留，避免后台替换人工成果。Android沿Room事务与revision，Desktop沿既有domain intent journal与expected revision，不新增第二套存储owner。
+- 固定DeepSeek Flash优先、GLM-5.3 Flash次选、Qwen3.6 Flash第三；后台关闭思考并要求严格JSON，真实输出预算768。明确失败可有界恢复，UNKNOWN不自动重发。规则见[Desktop历史合同](DESKTOP_HISTORY_KNOWLEDGE_CONTRACT.md)、[Memory治理](P4C_MEMORY_GOVERNANCE_CONTRACT.md)，证据见[本轮报告](verification/2026-11-02-history-memory/REPORT.md)。
+
 ## 2026-10-21：附件准备按实际接口统一，保持原选模型与材料授权
 
 - 单模型特例无法覆盖其他文字接口、联网切换及混合材料；统一原生、本机完整正文、已披露辅助读取。原生能力声明保持真实，辅助调用不改原选回答模型，不借用其他Provider Key。

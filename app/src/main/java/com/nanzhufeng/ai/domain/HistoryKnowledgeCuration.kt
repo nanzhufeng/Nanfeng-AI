@@ -57,6 +57,7 @@ class ReadHistoryKnowledgeCurationSourceUseCase(
         val allMessages = MessageTree(snapshot.conversation, snapshot.nodes).contextPath()
             .asSequence()
             .filter { it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT }
+            .filter { it.deliveryState == MessageDeliveryState.COMPLETE }
             .mapNotNull { node ->
                 node.content.filterIsInstance<ContentBlock.Text>()
                     .joinToString("\n") { it.text.trim() }
@@ -131,13 +132,13 @@ class AutomaticHistoryKnowledgeCurationOwner(
     private val checkpoint: HistoryKnowledgeCurationCheckpointStore,
     private val readKnowledge: ReadKnowledgeLibraryUseCase,
     private val manageKnowledge: ManageKnowledgeUseCase,
+    private val saveAutomaticMemory: (ConversationId, HistoryKnowledgeCurationDraft) -> Unit = { _, _ -> },
 ) {
     /** One window handles one conversation; its bounded provider fallback uses the shared refinement route. */
     fun curateNext(): AutomaticHistoryKnowledgeCurationResult {
         var interruptedSourceSeen = false
         conversations.listActive()
             .sortedByDescending(Conversation::updatedAt)
-            .take(MAX_CANDIDATE_SCAN)
             .forEach { conversation ->
                 when (val result = curate(conversation.id)) {
                     AutomaticHistoryKnowledgeCurationResult.Disabled -> return result
@@ -154,7 +155,10 @@ class AutomaticHistoryKnowledgeCurationOwner(
                         HistoryKnowledgeCurationReason.SOURCE_TOO_LONG -> Unit
                         else -> return result
                     }
-                    is AutomaticHistoryKnowledgeCurationResult.Unknown -> interruptedSourceSeen = true
+                    is AutomaticHistoryKnowledgeCurationResult.Unknown -> {
+                        if (result.safeCode.startsWith("UNKNOWN_")) return result
+                        interruptedSourceSeen = true
+                    }
                     else -> return result
                 }
             }
@@ -173,24 +177,39 @@ class AutomaticHistoryKnowledgeCurationOwner(
         if (source.transcript.length < MIN_CHARS) return AutomaticHistoryKnowledgeCurationResult.NotEligible(HistoryKnowledgeCurationReason.SOURCE_TOO_SHORT)
         if (source.transcript.length > MAX_SOURCE_CHARS) return AutomaticHistoryKnowledgeCurationResult.NotEligible(HistoryKnowledgeCurationReason.SOURCE_TOO_LONG)
         val sourceHash = MemoryDomain.sha256("${source.conversationTitle}\n${source.transcript}")
-        if (readKnowledge.list().any { item -> item.sourceEvidence.any { it.sourceReference == "conversation:${conversationId.value}" } }) {
+        val sourceItems = readKnowledge.list().filter { item -> item.sourceEvidence.any {
+            it.sourceReference == "conversation:${conversationId.value}" && "history-auto-curation" in it.contributedFields
+        } }
+        val savedSource = sourceItems.firstOrNull { item -> item.sourceEvidence.any { "history-source-sha256:$sourceHash" in it.contributedFields } }
+        if (savedSource != null) {
+            restoreMemory(conversationId, savedSource.id)
             checkpoint.markProcessed(conversationId, sourceHash)
-            return AutomaticHistoryKnowledgeCurationResult.Duplicate(HistoryKnowledgeCurationReason.EXISTING_SOURCE)
+            return AutomaticHistoryKnowledgeCurationResult.Duplicate(HistoryKnowledgeCurationReason.ALREADY_PROCESSED)
         }
+        // A conversation can gain durable facts after its first extraction. The source hash,
+        // rather than the mere presence of any older Knowledge item, owns deduplication.
         when (checkpoint.reserve(conversationId, sourceHash)) {
-            HistoryKnowledgeCurationReservation.ALREADY_PROCESSED -> return AutomaticHistoryKnowledgeCurationResult.Duplicate(HistoryKnowledgeCurationReason.ALREADY_PROCESSED)
+            HistoryKnowledgeCurationReservation.ALREADY_PROCESSED -> {
+                sourceItems.maxByOrNull { it.savedAt }?.let { restoreMemory(conversationId, it.id) }
+                return AutomaticHistoryKnowledgeCurationResult.Duplicate(HistoryKnowledgeCurationReason.ALREADY_PROCESSED)
+            }
             HistoryKnowledgeCurationReservation.UNKNOWN -> return AutomaticHistoryKnowledgeCurationResult.Unknown("INTERRUPTED_AFTER_RESERVATION")
             HistoryKnowledgeCurationReservation.RESERVED -> Unit
         }
         val compact = source.compactForAutomatic()
         return when (val curated = refiner.refine(compact)) {
             HistoryKnowledgeCurationResult.NotEligible -> AutomaticHistoryKnowledgeCurationResult.NotEligible(HistoryKnowledgeCurationReason.MODEL_NOT_ELIGIBLE).also { checkpoint.markProcessed(conversationId, sourceHash) }
-            is HistoryKnowledgeCurationResult.Failed -> AutomaticHistoryKnowledgeCurationResult.Failed(curated.safeCode).also { checkpoint.markRetryableFailure(conversationId, sourceHash) }
+            is HistoryKnowledgeCurationResult.Failed -> if (curated.safeCode.startsWith("UNKNOWN_")) {
+                AutomaticHistoryKnowledgeCurationResult.Unknown(curated.safeCode)
+            } else AutomaticHistoryKnowledgeCurationResult.Failed(curated.safeCode).also { checkpoint.markRetryableFailure(conversationId, sourceHash) }
             is HistoryKnowledgeCurationResult.Draft -> {
                 val draft = curated.value
                 if (draft.confidence < MIN_CONFIDENCE) return AutomaticHistoryKnowledgeCurationResult.NotConfident().also { checkpoint.markProcessed(conversationId, sourceHash) }
+                // Reuse this extraction locally; never issue a second model call for Memory.
+                if (!settings().historyLibraryEnabled) return AutomaticHistoryKnowledgeCurationResult.Disabled
                 val canonicalDraft = canonicalContent(draft.title, draft.body)
                 if (readKnowledge.list().any { canonicalContent(it.title, it.summary) == canonicalDraft }) {
+                    saveAutomaticMemory(conversationId, draft)
                     return AutomaticHistoryKnowledgeCurationResult.Duplicate(HistoryKnowledgeCurationReason.DUPLICATE_CONTENT).also { checkpoint.markProcessed(conversationId, sourceHash) }
                 }
                 val similarExisting = readKnowledge.list().any { item ->
@@ -203,8 +222,10 @@ class AutomaticHistoryKnowledgeCurationOwner(
                     tags = draft.tags + if (similarExisting) setOf("可能重复") else emptySet(),
                     scope = KnowledgeScope.GLOBAL, importReference = "conversation:${conversationId.value}",
                     generatedProviderId = draft.providerId, generatedModelId = draft.modelId, generatedAutomatically = true,
+                    generatedSourceHash = sourceHash,
                 ))) {
                     is KnowledgeMutationResult.Applied, is KnowledgeMutationResult.Replayed -> {
+                        saveAutomaticMemory(conversationId, draft)
                         checkpoint.markProcessed(conversationId, sourceHash)
                         AutomaticHistoryKnowledgeCurationResult.Saved((saved as? KnowledgeMutationResult.Applied)?.snapshot?.item?.id ?: (saved as KnowledgeMutationResult.Replayed).snapshot.item.id)
                     }
@@ -212,6 +233,13 @@ class AutomaticHistoryKnowledgeCurationOwner(
                 }
             }
         }
+    }
+
+    private fun restoreMemory(conversationId: ConversationId, id: KnowledgeItemId) {
+        val saved = manageKnowledge.detail(id) ?: return
+        if (saved.lifecycle.status != KnowledgeStatus.ACTIVE || saved.revisions.size != 1) return
+        saveAutomaticMemory(conversationId, HistoryKnowledgeCurationDraft(saved.item.title, saved.item.body,
+            saved.lifecycle.tags, saved.item.provenance.providerId, saved.item.provenance.modelId))
     }
 
     private fun HistoryKnowledgeCurationSource.compactForAutomatic(): HistoryKnowledgeCurationSource {
@@ -240,6 +268,5 @@ class AutomaticHistoryKnowledgeCurationOwner(
         const val AUTO_HEAD_CHARS = 2_000
         const val MIN_CONFIDENCE = 0.86
         const val SIMILARITY_REVIEW_THRESHOLD = 0.92
-        const val MAX_CANDIDATE_SCAN = 96
     }
 }

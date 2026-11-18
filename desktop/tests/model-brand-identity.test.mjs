@@ -4,7 +4,7 @@ import { composerModelBrand } from '../src/model-settings-browser.mjs';
 
 test('a known RelayCore preset retains its model vendor when optional provider metadata is absent', () => {
   assert.equal(composerModelBrand('RELAYCORE_OPUS_5_5'), 'claude');
-  assert.equal(composerModelBrand('RELAYCORE_GPT_6_1_SOL'), 'gpt');
+  assert.equal(composerModelBrand('RELAYCORE_GPT_6_2_SOL'), 'gpt');
   assert.equal(composerModelBrand('RELAYCORE_GEMINI_3_1_PRO'), 'gemini');
 });
 

@@ -59,6 +59,8 @@ object ConversationCostEstimator {
         "anthropic/claude-sonnet-5" to price(OPENROUTER_PRICE_VERSION, "2", "10"),
         "anthropic/claude-haiku-4.5" to price(OPENROUTER_PRICE_VERSION, "1", "5"),
         "google/gemini-3.7-flash" to price(OPENROUTER_PRICE_VERSION, "0.375", "1.875"),
+        "openai/gpt-6.2-sol" to price("openrouter-gpt-6.2-sol-standard-2026-11-18-v1", "2", "10", "0.1"),
+        "google/gemini-4-hydrogen" to price("openrouter-gemini-4-hydrogen-2026-11-14-v1", "1.50", "7.50", "0.075"),
         "google/gemini-3.8-flash" to price(GEMINI_3_8_OPENROUTER_PRICE_VERSION, "0.75", "3.75", "0.075"),
         "moonshotai/kimi-k3" to price(OPENROUTER_PRICE_VERSION, "2.55", "12.75", "0.256"),
         "qwen3.8-max" to price(QWEN_PRICE_VERSION, "12", "36", "1.5", "CNY"),
@@ -160,11 +162,11 @@ object ConversationCostEstimator {
     )
 
     private fun relayPrice(modelId: String, displayName: String?, at: Instant): Price? {
-        val model = RelayCoreModels.specs.firstOrNull { RelayCoreModels.sameApiModel(it.provider,it.apiId,modelId) } ?: return null
+        val model = RelayCoreModels.knownSpecs.firstOrNull { RelayCoreModels.sameApiModel(it.provider,it.apiId,modelId) } ?: return null
         if (displayName == null && at.isBefore(Instant.parse("2026-10-10T00:00:00Z"))) return null
         val channel = displayName?.split(" · ")?.getOrNull(1) ?: model.channel
         val multiplier = when (channel) { "Kiro" -> "0.08"; "Kiro正价" -> "0.35"; "Pro1" -> "0.12"; "Pro2" -> "0.18"; "Pro3" -> "0.25"; "Gemini" -> "0.28"; else -> return null }.toBigDecimal()
-        val base = when(modelId) {
+        val base = when(model.apiId) {
             "claude-opus-5-5", "claude-opus-5.5" -> listOf("4","20","0.2")
             "claude-sonnet-5-5" -> listOf("2","10","0.2")
             "gpt-6.1-sol" -> listOf("2","10","0.1")

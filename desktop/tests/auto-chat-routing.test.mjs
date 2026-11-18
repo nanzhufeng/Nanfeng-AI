@@ -2,16 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {AUTO_PLANS,autoCandidate,autoTask,conversationAutoMimeTypes} from '../src/auto-chat-routing.mjs';
-const policy=JSON.parse(readFileSync(new URL('../../protocol/fixtures/auto-routing-rc-domestic-20261010.json',import.meta.url)));
+const policy=JSON.parse(readFileSync(new URL('../../protocol/fixtures/auto-routing-rc-domestic-20261118.json',import.meta.url)));
 const profiles=JSON.parse(readFileSync(new URL('../../app/src/main/assets/model_profiles.json',import.meta.url))).profiles;
 const service=(providerId,ids,enabled=true,credentialStored=true)=>({providerId,enabled,credentialStored,presets:ids.map(id=>({id,displayName:id,chatSelectable:true,modelId:profiles.find(p=>p.presetId===id)?.modelId,nativeInputTypes:Object.entries(profiles.find(p=>p.presetId===id)?.capabilities||{}).filter(([k,v])=>v && ["image","pdf","audio","video"].includes(k)).map(([k])=>k==="pdf"?"file":k)}))});
-const services=[service('RELAYCORE_GPT',['RELAYCORE_GPT_6_1_SOL','RELAYCORE_GPT_6_ASTRA']),service('RELAYCORE_GEMINI',['RELAYCORE_GEMINI_3_8_FLASH']),service('DEEPSEEK',['DEEPSEEK_V4_FLASH','DEEPSEEK_V4_PRO']),service('QWEN',['QWEN_3_7_PLUS']),service('OPENROUTER',policy.openRouter)];
+const services=[service('RELAYCORE_GPT',['RELAYCORE_GPT_6_2_SOL','RELAYCORE_GPT_6_ASTRA']),service('RELAYCORE_GEMINI',['RELAYCORE_GEMINI_3_8_FLASH']),service('DEEPSEEK',['DEEPSEEK_V4_FLASH','DEEPSEEK_V4_PRO']),service('QWEN',['QWEN_3_7_PLUS']),service('OPENROUTER',policy.openRouter)];
 test('shared Auto plans keep OpenRouter behind RC and domestic candidates',()=>{
  assert.deepEqual(AUTO_PLANS,policy.plans);
  for(const plan of Object.values(AUTO_PLANS)){let fallback=false;for(const id of plan){if(policy.openRouter.includes(id))fallback=true;else assert.equal(fallback,false);}}
 });
 test('actual available Auto model depends on task and complete credentials',()=>{
- assert.equal(autoCandidate(services).id,'RELAYCORE_GPT_6_1_SOL');
+ assert.equal(autoCandidate(services).id,'RELAYCORE_GPT_6_2_SOL');
  assert.equal(autoCandidate(services,{text:'架构设计与权衡'}).id,'RELAYCORE_GPT_6_ASTRA');
  assert.equal(autoCandidate(services,{mimeTypes:['image/png']}).id,'QWEN_3_7_PLUS');
  assert.equal(autoCandidate(services,{mimeTypes:['image/png'],webSearchEnabled:true}).providerId,'OPENROUTER');

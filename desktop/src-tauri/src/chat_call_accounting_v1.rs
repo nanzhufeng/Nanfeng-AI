@@ -45,12 +45,15 @@ pub fn pricing_model_id(requested:&str, actual:Option<&str>)->String {
 }
 
 pub fn estimate(id:&str, display:&str, input:Option<i64>, output:Option<i64>, cached:Option<i64>, at:i64) -> Option<Cost> {
+    let id=match id {"claude-sonnet-5.5"=>"claude-sonnet-5-5",_=>id};
     let (input,output)=(input?,output?);
     if input<0 || output<0 || cached.is_some_and(|v|v<0) || at<0 {return None}
     let current=at>=1791590400000; // 2026-10-10 UTC. Historical tariff facts remain untouched.
     let long=input>256000;
     let large=input>271999;
     let (a,b,c,currency,version):(f64,f64,Option<f64>,&str,String)=match id {
+        "openai/gpt-6.2-sol" => (2., 10., Some(0.1), "USD", "openrouter-gpt-6.2-sol-standard-2026-11-18-v1".into()),
+        "google/gemini-4-hydrogen" => (1.50, 7.50, Some(0.075), "USD", "openrouter-gemini-4-hydrogen-2026-11-14-v1".into()),
         "claude-opus-5-5"|"claude-opus-5.5"|"claude-sonnet-5-5"|"gpt-6.1-sol"|"gpt-6-astra"|"gemini-3.8-flash"|"gemini-3.1-pro" => {
             let channel=display.split(" · ").nth(1).or_else(||current.then_some(match id {"claude-opus-5-5"|"claude-opus-5.5"|"claude-sonnet-5-5"=>"Kiro正价","gpt-6.1-sol"|"gpt-6-astra"=>"Pro3",_=>"Gemini"}))?;
             let m=match channel {"Kiro"=>0.08,"Kiro正价"=>0.35,"Pro1"=>0.12,"Pro2"=>0.18,"Pro3"=>0.25,"Gemini"=>0.28,_=>return None};
@@ -102,12 +105,36 @@ pub fn estimate(id:&str, display:&str, input:Option<i64>, output:Option<i64>, ca
     Some(Cost{micros:amount as i64,currency:currency.into(),version})
 }
 #[cfg(test)] mod tests {
+    #[test] fn all_rc_models_and_returned_aliases_retain_nominal_cny_with_cache_pricing() {
+        for (id,uncached,cached) in [
+            ("claude-opus-5.5",2100,1435),("claude-opus-5-5",2100,1435),
+            ("claude-sonnet-5-5",1050,735),("claude-sonnet-5.5",1050,735),
+            ("gpt-6.1-sol",750,513),("gpt-6-astra",3750,2625),
+            ("gemini-3.8-flash",315,221),("gemini-3.1-pro",896,644),
+        ] {
+            for (cache,expected) in [(0,uncached),(500,cached)] {
+                let cost=super::estimate(id,"",Some(1000),Some(100),Some(cache),1793577600000)
+                    .unwrap_or_else(||panic!("missing RC price: {id}"));
+                assert_eq!(cost.currency,"CNY","{id}");
+                assert_eq!(cost.micros,expected,"{id}");
+            }
+        }
+    }
+
     #[test] fn current_terra_and_observed_gemini_keep_exact_price_boundaries() {
         let cost=super::estimate("openai/gpt-6.1-terra","",Some(1000),Some(100),Some(500),1793350322077).unwrap();
         assert_eq!(cost.micros,1025);
         assert_eq!(super::estimate("openai/gpt-6.1-terra","",Some(272000),Some(100),None,1793350322077).unwrap().micros,544750);
         let before=super::estimate("google/gemini-3.8-flash","",Some(1000),Some(100),Some(500),1793350322076).unwrap();
         let after=super::estimate("google/gemini-3.8-flash","",Some(1000),Some(100),Some(500),1793350322077).unwrap();
+        let sol = super::estimate("openai/gpt-6.2-sol", "", Some(300000), Some(100), Some(500), 1794960000000).unwrap();
+        assert_eq!((sol.micros, sol.currency.as_str()), (600050, "USD"));
+        assert_eq!(sol.version, "openrouter-gpt-6.2-sol-standard-2026-11-18-v1");
+        assert!(super::estimate("gpt-6.2-sol", "GPT-6.2 Sol · Pro3", Some(300000), Some(100), Some(500), 1794960000000).is_none());
+        let hydrogen = super::estimate("google/gemini-4-hydrogen", "", Some(1000), Some(100), Some(500), 1794614400000).unwrap();
+        assert_eq!(hydrogen.micros, 1538);
+        assert_eq!(hydrogen.currency, "USD");
+        assert_eq!(hydrogen.version, "openrouter-gemini-4-hydrogen-2026-11-14-v1");
         assert_eq!(before.micros,788);assert_eq!(after.micros,866);
         assert_eq!(after.version,"openrouter-gemini-3.8-flash-observed-2026-10-30-v1");
     }

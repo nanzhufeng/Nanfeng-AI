@@ -123,6 +123,7 @@ enum class ModelPresetId {
     RELAYCORE_OPUS_5_5,
     RELAYCORE_SONNET_5_5,
     RELAYCORE_GPT_6_1_SOL,
+    RELAYCORE_GPT_6_2_SOL,
     RELAYCORE_GPT_6_ASTRA,
     RELAYCORE_GEMINI_3_8_FLASH,
     RELAYCORE_GEMINI_3_1_PRO,
@@ -131,6 +132,7 @@ enum class ModelPresetId {
     CLAUDE_SONNET_5_5,
     CLAUDE_HAIKU_5_5,
     GPT_6_1_SOL,
+    GPT_6_2_SOL,
     GPT_6_1_TERRA,
     GPT_6_LUNA,
     MERCURY_3,
@@ -152,6 +154,7 @@ enum class ModelPresetId {
     /** Historical identity retained only so old local records remain readable. */
     GEMINI_3_7_FLASH,
     GEMINI_3_8_FLASH,
+    GEMINI_4_HYDROGEN,
     KIMI_K3,
     QWEN_3_7_PLUS,
     QWEN_3_8_MAX,

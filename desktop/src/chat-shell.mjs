@@ -1,6 +1,6 @@
 import { composerModelBrand } from './model-settings-browser.mjs';
 import { autoCandidate, conversationAutoMimeTypes } from "./auto-chat-routing.mjs";
-import { RELAYCORE_MODELS, relayCoreUiModelName, relayCoreFooterName, relayCoreShortModelName, relayCoreModel, relayCoreCompactName, relayCorePickerName, relayCoreNeedsCompanion } from "./relaycore-models.mjs";
+import { RELAYCORE_MODELS, RELAYCORE_KNOWN_MODELS, relayCoreUiModelName, relayCoreFooterName, relayCoreShortModelName, relayCoreModel, relayCoreCompactName, relayCorePickerName, relayCoreNeedsCompanion } from "./relaycore-models.mjs";
 import { WORKSPACES_VISIBLE } from './product-scope.mjs';
 import { icon, icons, settingsIcons } from './icon-source.mjs';
 import { renderSafeMarkdown } from './safe-markdown.mjs';
@@ -216,7 +216,7 @@ export function transcriptMetadata(message) {
   const relayResponse = String(snapshot?.providerId || '').startsWith('RELAYCORE_');
   const modelVerification = relayResponse ? (actual ? (actual === snapshot?.modelId ? 'matched' : 'mismatch') : 'not_returned') : null;
   if (relayResponse) {
-    const returned = RELAYCORE_MODELS.find(item => item.modelId === actual);
+    const returned = RELAYCORE_KNOWN_MODELS.find(item => item.modelId === actual);
     model = `${returned?.modelName || actual || '返回模型未验证'} · RC`;
   } else if (model) {
     // Portable historical labels retain channel evidence even without a local route snapshot.
@@ -238,31 +238,32 @@ export function transcriptMetadata(message) {
 export function compactModelName(value) {
   if (String(value || '').endsWith(' · RC')) {
     const name=String(value).trim().slice(0,-5);
-    const model=RELAYCORE_MODELS.find(item=>name===item.modelName || name===item.modelId || name===relayCoreShortModelName(item) || name==='Astra' && item.presetId==='RELAYCORE_GPT_6_ASTRA');
+    const model=RELAYCORE_KNOWN_MODELS.find(item=>name===item.modelName || name===item.modelId || name===relayCoreShortModelName(item) || name==='Astra' && item.presetId==='RELAYCORE_GPT_6_ASTRA');
     return model ? relayCoreFooterName(model) : String(value).trim();
   }
-  if (/^(?:GPT-6\.1 Sol|GPT-6 Astra) · Pro[123](?: · [0-9.]+×)?$/u.test(String(value || ''))) return compactModelName(`${String(value).split(' · ')[0]} · RC`);
+  if (/^(?:GPT-6\.[12] Sol|GPT-6 Astra) · Pro[123](?: · [0-9.]+×)?$/u.test(String(value || ''))) return compactModelName(`${String(value).split(' · ')[0]} · RC`);
   if (/^(?:Opus 5\.5|Sonnet 5\.5) · Kiro(?:正价)?(?: · [0-9.]+×)?$/u.test(String(value || ''))) return compactModelName(`${String(value).split(' · ')[0]} · RC`);
-  const relay = RELAYCORE_MODELS.find(model => value === relayCoreCompactName(model) || value === relayCorePickerName(model) || value === `${model.modelName} · ${model.channel}` || value === `${model.modelName} · ${model.channel} · ${model.multiplier}×`);
+  const relay = RELAYCORE_KNOWN_MODELS.find(model => value === relayCoreCompactName(model) || value === relayCorePickerName(model) || value === `${model.modelName} · ${model.channel}` || value === `${model.modelName} · ${model.channel} · ${model.multiplier}×`);
   if (relay && String(value).includes(' · ')) return relayCoreFooterName(relay);
   const normalized = String(value || '').replace(/^(?:OpenRouter|Google|通义千问|Qwen 官方直连|DeepSeek 官方直连|智谱 BigModel 官方直连|智谱官方直连)\s*(?:[·:：]\s*)/u, '').split(' · ')[0].trim();
   return ({
     'Claude Opus 5.5': 'Opus 5.5', 'anthropic/claude-opus-5.5': 'Opus 5.5',
     'Claude Sonnet 5.5': 'Sonnet 5.5', 'anthropic/claude-sonnet-5.5': 'Sonnet 5.5',
     'Claude Haiku 5.5': 'Haiku 5.5', 'anthropic/claude-haiku-5.5': 'Haiku 5.5',
+    'GPT-6.2 Sol': '6.2 Sol', 'openai/gpt-6.2-sol': '6.2 Sol',
     'GPT-6.1 Sol': '6.1 Sol', 'openai/gpt-6.1-sol': '6.1 Sol',
     'GPT-6 Astra': '6 Astra', 'openai/gpt-6-astra': '6 Astra', 'Astra': '6 Astra',
     'GPT-6 Luna': '6 Luna', 'openai/gpt-6-luna': '6 Luna',
     'Claude Fable 5': 'Fable 5', 'Claude Opus 5': 'Opus 5', 'Claude Sonnet 5': 'Sonnet 5', 'Claude Haiku 4.5': 'Haiku 4.5',
     'GPT-5.6 Sol': '5.6 Sol', 'GPT-5.6 Terra': '5.6 Terra', 'GPT-5.6 Luna': '5.6 Luna',
-    'Grok 4.1 Fast': '4.1 Fast', 'Grok 4.6 High': '4.6 High', 'Gemini 3.7 Flash': 'Gemini 3.7', 'Gemini 3.8 Flash': 'Gemini 3.8',
+    'Grok 4.1 Fast': '4.1 Fast', 'Grok 4.6 High': '4.6 High', 'Gemini 3.7 Flash': 'Gemini 3.7', 'Gemini 3.8 Flash': 'Gemini 3.8', 'Gemini 4 Hydrogen': '4 Hydrogen',
     'Qwen3.7-Plus': 'Qwen 3.7', 'Qwen3.8-Max': 'Qwen 3.8', 'Qwen3.6 Flash': 'Qwen 3.6',
     'DeepSeek V4 Pro': 'DS V4', 'DeepSeek V4 Flash': 'DS V4', 'DeepSeek V4.1 Flash': 'DS V4.1', 'GLM-5.3': 'GLM 5.3', 'GLM-5.3 Flash': 'GLM 5.3', 'GLM-OCR': 'GLM-OCR',
     // A legacy/imported message can lack its frozen display label.  Keep this
     // fallback aligned with Android's compact catalog names; never expose a
     // raw provider route in the reading footer.
     'anthropic/claude-fable-5': 'Fable 5', 'anthropic/claude-opus-5': 'Opus 5', 'anthropic/claude-opus-5-fast': 'Opus 5', 'anthropic/claude-sonnet-5': 'Sonnet 5',
-    'openai/gpt-5.6-sol': '5.6 Sol', 'openai/gpt-5.6-terra': '5.6 Terra', 'google/gemini-3.7-flash': 'Gemini 3.7', 'google/gemini-3.8-flash': 'Gemini 3.8',
+    'openai/gpt-5.6-sol': '5.6 Sol', 'openai/gpt-5.6-terra': '5.6 Terra', 'google/gemini-3.7-flash': 'Gemini 3.7', 'google/gemini-3.8-flash': 'Gemini 3.8', 'google/gemini-4-hydrogen': '4 Hydrogen',
     'deepseek-v4-pro': 'DS V4', 'deepseek-v4-flash': 'DS V4', 'deepseek-flash': 'DS V4.1',
     'inception/mercury-3': 'Mercury 3',
     'meta/muse-wonder': 'Muse Wonder',
@@ -273,10 +274,10 @@ export function compactModelName(value) {
 
 const DAILY_COMPOSER_MODEL_IDS = Object.freeze([
   'CLAUDE_SONNET_5_5', 'CLAUDE_HAIKU_5_5', 'DEEPSEEK_V4_FLASH', 'GPT_6_1_TERRA', 'GPT_6_LUNA', 'MERCURY_3',
-  'GLM_5_3_FLASH', 'QWEN_3_7_PLUS', 'GEMINI_3_8_FLASH',
+  'GLM_5_3_FLASH', 'QWEN_3_7_PLUS', 'GEMINI_4_HYDROGEN',
 ]);
 const DEEP_COMPOSER_MODEL_IDS = Object.freeze([
-  'CLAUDE_OPUS_5_5', 'GPT_6_1_SOL', 'DEEPSEEK_V4_PRO',
+  'CLAUDE_OPUS_5_5', 'GPT_6_2_SOL', 'DEEPSEEK_V4_PRO',
   'MUSE_WONDER', 'GEMINI_4_ARGON', 'GLM_5_3', 'QWEN_3_8_MAX',
 ]);
 
@@ -355,9 +356,22 @@ function renderComposerAddSheetFrame({ page = 'root', body }) {
  * The model-service catalog is the product catalog. P6-G may carry historical selections, but
  * its local acceptance fixture is never a user-selectable Composer model.
  */
-const upgradedModelIds = Object.freeze({"claude-opus-5": "CLAUDE_OPUS_5_5", "claude-sonnet-5": "CLAUDE_SONNET_5_5", "claude-haiku-4.5": "CLAUDE_HAIKU_5_5", "gpt-5.6-sol": "GPT_6_1_SOL", "gpt-5.6-terra": "GPT_6_LUNA", "gpt-5.6-luna": "GPT_6_LUNA", "anthropic/claude-opus-5": "CLAUDE_OPUS_5_5", "anthropic/claude-sonnet-5": "CLAUDE_SONNET_5_5", "anthropic/claude-haiku-4.5": "CLAUDE_HAIKU_5_5", "openai/gpt-5.6-sol": "GPT_6_1_SOL", "openai/gpt-5.6-terra": "GPT_6_LUNA", "openai/gpt-5.6-luna": "GPT_6_LUNA", "CLAUDE_OPUS_5": "CLAUDE_OPUS_5_5", "CLAUDE_SONNET_5": "CLAUDE_SONNET_5_5", "CLAUDE_HAIKU_4_5": "CLAUDE_HAIKU_5_5", "GPT_5_6_SOL": "GPT_6_1_SOL", "GPT_5_6_TERRA": "GPT_6_LUNA", "GPT_5_6_LUNA": "GPT_6_LUNA"});
+const upgradedModelIds = Object.freeze({
+  GPT_6_1_SOL: "GPT_6_2_SOL",
+  RELAYCORE_GPT_6_1_SOL: "RELAYCORE_GPT_6_2_SOL",
+  "gpt-6.1-sol": "RELAYCORE_GPT_6_2_SOL",
+  "openai/gpt-6.1-sol": "GPT_6_2_SOL",
+  GEMINI_3_7_FLASH: "GEMINI_4_HYDROGEN",
+  GEMINI_3_8_FLASH: "GEMINI_4_HYDROGEN",
+  "google/gemini-3.7-flash": "GEMINI_4_HYDROGEN",
+  "google/gemini-3.8-flash": "GEMINI_4_HYDROGEN",
+  "claude-opus-5": "CLAUDE_OPUS_5_5", "claude-sonnet-5": "CLAUDE_SONNET_5_5", "claude-haiku-4.5": "CLAUDE_HAIKU_5_5", "gpt-5.6-sol": "GPT_6_2_SOL", "gpt-5.6-terra": "GPT_6_LUNA", "gpt-5.6-luna": "GPT_6_LUNA", "anthropic/claude-opus-5": "CLAUDE_OPUS_5_5", "anthropic/claude-sonnet-5": "CLAUDE_SONNET_5_5", "anthropic/claude-haiku-4.5": "CLAUDE_HAIKU_5_5", "openai/gpt-5.6-sol": "GPT_6_2_SOL", "openai/gpt-5.6-terra": "GPT_6_LUNA", "openai/gpt-5.6-luna": "GPT_6_LUNA", "CLAUDE_OPUS_5": "CLAUDE_OPUS_5_5", "CLAUDE_SONNET_5": "CLAUDE_SONNET_5_5", "CLAUDE_HAIKU_4_5": "CLAUDE_HAIKU_5_5", "GPT_5_6_SOL": "GPT_6_2_SOL", "GPT_5_6_TERRA": "GPT_6_LUNA", "GPT_5_6_LUNA": "GPT_6_LUNA"});
 const currentComposerModelId = value => upgradedModelIds[value] || (['deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'deepseek-flash'].includes(value) ? 'DEEPSEEK_V4_FLASH' : value);
-const currentComposerModelName = value => value === 'DeepSeek V4 Flash' ? 'DeepSeek V4.1 Flash' : value;
+const currentComposerModelName = (value, modelId) => {
+  if (modelId === 'GPT_6_2_SOL') return 'GPT-6.2 Sol';
+  if (modelId === 'GEMINI_4_HYDROGEN') return 'Gemini 4 Hydrogen';
+  return value === 'DeepSeek V4 Flash' ? 'DeepSeek V4.1 Flash' : value;
+};
 
 export function desktopComposerModelCandidates(modelServiceSettings = [], p6gCandidates = [], includeDisabled = false) {
   const enabledProviders = new Set(modelServiceSettings.filter(service => service.enabled === true).map(service => service.providerId));
@@ -383,7 +397,10 @@ export function desktopComposerModelCandidates(modelServiceSettings = [], p6gCan
     } : null;
   }).filter(Boolean);
   const reviewedIds = new Set(reviewed.map(item => item.modelId));
-  const extras = (p6gCandidates || []).map(item => ({ ...item, modelId: currentComposerModelId(item?.modelId), displayName: currentComposerModelName(item?.displayName) })).filter(item => item?.modelId
+  const extras = (p6gCandidates || []).map(item => {
+    const modelId = currentComposerModelId(item?.modelId);
+    return { ...item, modelId, displayName: currentComposerModelName(item?.displayName, modelId) };
+  }).filter(item => item?.modelId
     && !reviewedIds.has(item.modelId)
     && item.modelId !== 'KIMI_K3'
     && !['CLAUDE_FABLE_5_1', 'GPT_6_ASTRA'].includes(item.modelId)
@@ -988,7 +1005,7 @@ export function renderChatFirstShell({
     root: !pickerTier,
     body: pickerTier ? p6gTier : p6gRoot,
   });
-  const temporaryModelId = temporaryConversation?.modelOverrideId || null;
+  const temporaryModelId = currentComposerModelId(temporaryConversation?.modelOverrideId) || null;
   const temporaryCandidate = p6gCandidates.find(item => item.modelId === temporaryModelId);
   const temporaryModelLabel = temporaryModelId ? (relayCoreModel(temporaryModelId) ? relayCorePickerName(relayCoreModel(temporaryModelId)) : temporaryCandidate?.displayName || temporaryModelId) : '自动';
   const relayComposerMark = relayCoreModel(manualModelId || automaticCandidate?.id) ? '<sup class="composer-provider-mark" aria-hidden="true">RC</sup>' : '';

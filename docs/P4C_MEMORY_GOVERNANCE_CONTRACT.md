@@ -50,3 +50,7 @@ P4-C 不读取、解析、写入或迁移既有 `ConversationSettings.memorySour
 - 定向测试覆盖 CRUD/revision、scope、状态、搜索、重复、冲突、批量删除、Repository 重建、高敏正文拒绝无落库、Project/Conversation scope 合法性、Schema 9→10 以及 P4-B Memory 仍未进入 Context。全量回归、Lint、正式签名 Debug/Release、v2/v3 与 API 35 emulator 分层报告；均不替代真实 Provider、费用、OPPO、图标或发布验收。
 
 达到上述本地治理闭环即停止。P4-C 不是 P4 或总方案终点；L0–L3 正文选择、检索、摘要/压缩、Knowledge 完整管理、文件/网页 Adapter、Eval、真实成本和真实 P3 债务仍独立后续推进。
+
+## 自动历史摘要的当前接入边界（2026-11-02）
+
+用户已确认历史提取自动更新Memory并保留手动记忆；本节是现行接入，前述P4-C仅本地手工治理是历史模块边界。Android ManageMemoryUseCase.saveAutomaticSummary复用MemoryDomain敏感信息门与Room事务；来源为auto-history-v1:conversation，固定ID，不新增交换格式枚举。USER_CONFIRMED表示用户开启能力的授权，sourceSummary明确为自动提取，不能宣称逐条人工确认。任何人工修订/暂停/删除后，自动owner不再覆盖该来源条目。资料保存、模型顺序、恢复与调用规则由[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)拥有；Desktop由[历史资料合同](DESKTOP_HISTORY_KNOWLEDGE_CONTRACT.md)拥有。

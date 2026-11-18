@@ -68,6 +68,8 @@ interface ModelHealthStore {
     fun record(providerId: ProviderId, presetId: ModelPresetId, observation: ModelHealthObservation)
 }
 
+internal const val GEMINI_HYDROGEN_SYNC_OUTPUT_LIMIT = 65_536L
+
 interface ModelHealthReporter {
     fun recordSuccess(presetId: ModelPresetId)
     fun recordFailure(presetId: ModelPresetId, error: ProviderDiagnosticErrorClass)
@@ -85,6 +87,9 @@ class UnifiedModelResolver(
             ?: ResolvedModelResult.Unavailable("模型档案不存在或已失效。")
         return when (val value = registry.resolve(provider, presetId)) {
             is ModelRegistryResolution.Resolved -> ResolvedModelResult.Resolved(value.model.let { descriptor ->
+                val maxOutputTokens = if (presetId == ModelPresetId.GEMINI_4_HYDROGEN) {
+                    (descriptor.maxOutputTokens ?: GEMINI_HYDROGEN_SYNC_OUTPUT_LIMIT).coerceAtMost(GEMINI_HYDROGEN_SYNC_OUTPUT_LIMIT)
+                } else descriptor.maxOutputTokens
                 withObservedHealth(ResolvedModel(provider, descriptor.id, NanfengModelServiceCatalog.preset(presetId).displayName, descriptor.capabilities.copy(
                     supportsPdf = "pdf" in descriptor.inputModalities || "file" in descriptor.inputModalities,
                     supportsVideo = "video" in descriptor.inputModalities,
@@ -92,7 +97,7 @@ class UnifiedModelResolver(
                     supportsTools = "tools" in descriptor.supportedParameters || "tool_choice" in descriptor.supportedParameters,
                     supportsReasoning = "reasoning" in descriptor.supportedParameters || "reasoning_effort" in descriptor.supportedParameters,
                 ), descriptor.contextWindowTokens,
-                    ModelHealth.UNKNOWN, null, null, descriptor.maxOutputTokens, "openrouter-catalog-v1"), presetId)
+                    ModelHealth.UNKNOWN, null, null, maxOutputTokens, "openrouter-catalog-v1"), presetId)
             })
             is ModelRegistryResolution.Rejected -> {
                 // The public catalog is authoritative once present. On a true cold start only,
@@ -143,6 +148,7 @@ private object OpenRouterColdStartTextFallback {
         ModelPresetId.CLAUDE_SONNET_5_5 to "anthropic/claude-sonnet-5.5",
         ModelPresetId.CLAUDE_HAIKU_5_5 to "anthropic/claude-haiku-5.5",
         ModelPresetId.GPT_6_1_SOL to "openai/gpt-6.1-sol",
+        ModelPresetId.GPT_6_2_SOL to "openai/gpt-6.2-sol",
         ModelPresetId.GPT_6_1_TERRA to "openai/gpt-6.1-terra",
         ModelPresetId.GPT_6_LUNA to "openai/gpt-6-luna",
         ModelPresetId.MERCURY_3 to "inception/mercury-3",
@@ -161,6 +167,7 @@ private object OpenRouterColdStartTextFallback {
         ModelPresetId.GROK_4_1_FAST to "x-ai/grok-4.1-fast",
         ModelPresetId.GROK_4_6_HIGH to "x-ai/grok-4.6",
         ModelPresetId.GEMINI_3_8_FLASH to "google/gemini-3.8-flash",
+        ModelPresetId.GEMINI_4_HYDROGEN to "google/gemini-4-hydrogen",
         ModelPresetId.KIMI_K3 to "moonshotai/kimi-k3",
     )
 

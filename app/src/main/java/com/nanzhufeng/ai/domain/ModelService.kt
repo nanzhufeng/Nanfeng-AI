@@ -6,8 +6,10 @@ object NanfengModelServiceCatalog {
         ModelPresetId.CLAUDE_OPUS_5 -> ModelPresetId.CLAUDE_OPUS_5_5
         ModelPresetId.CLAUDE_SONNET_5 -> ModelPresetId.CLAUDE_SONNET_5_5
         ModelPresetId.CLAUDE_HAIKU_4_5 -> ModelPresetId.CLAUDE_HAIKU_5_5
-        ModelPresetId.GPT_5_6_SOL -> ModelPresetId.GPT_6_1_SOL
+        ModelPresetId.GPT_5_6_SOL, ModelPresetId.GPT_6_1_SOL -> ModelPresetId.GPT_6_2_SOL
         ModelPresetId.GPT_5_6_TERRA, ModelPresetId.GPT_5_6_LUNA -> ModelPresetId.GPT_6_LUNA
+        ModelPresetId.GEMINI_3_7_FLASH, ModelPresetId.GEMINI_3_8_FLASH -> ModelPresetId.GEMINI_4_HYDROGEN
+        ModelPresetId.RELAYCORE_GPT_6_1_SOL -> ModelPresetId.RELAYCORE_GPT_6_2_SOL
         else -> preset
     }
 
@@ -37,6 +39,13 @@ object NanfengModelServiceCatalog {
 
     val presets = RelayCoreModels.specs.map { spec -> ModelPresetDescriptor(spec.preset, spec.compactName, "平台列出；调用身份以响应为准。", "RelayCore") } + listOf(
         ModelPresetDescriptor(
+            id = ModelPresetId.RELAYCORE_GPT_6_1_SOL,
+            displayName = "GPT-6.1 Sol · Pro3",
+            description = "历史模型。",
+            modelFamilyHint = "RelayCore",
+            usage = ModelPresetUsage.RETIRED,
+        ),
+        ModelPresetDescriptor(
             id = ModelPresetId.CLAUDE_OPUS_5_5,
             displayName = "Claude Opus 5.5",
             description = "适合复杂任务，默认 Medium effort。",
@@ -55,10 +64,17 @@ object NanfengModelServiceCatalog {
             modelFamilyHint = "Anthropic",
         ),
         ModelPresetDescriptor(
+            id = ModelPresetId.GPT_6_2_SOL,
+            displayName = "GPT-6.2 Sol",
+            description = "适合专业复杂任务和深度分析。",
+            modelFamilyHint = "OpenAI",
+        ),
+        ModelPresetDescriptor(
             id = ModelPresetId.GPT_6_1_SOL,
             displayName = "GPT-6.1 Sol",
             description = "适合专业复杂任务和深度分析。",
             modelFamilyHint = "OpenAI",
+            usage = ModelPresetUsage.RETIRED,
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.GPT_6_1_TERRA,
@@ -177,15 +193,22 @@ object NanfengModelServiceCatalog {
             usage = ModelPresetUsage.RETIRED,
         ),
         ModelPresetDescriptor(
-            id = ModelPresetId.GEMINI_3_8_FLASH,
-            displayName = "Gemini 3.8 Flash",
+            id = ModelPresetId.GEMINI_4_HYDROGEN,
+            displayName = "Gemini 4 Hydrogen",
             description = "快速处理文字、图片和文件任务。",
             modelFamilyHint = "Google · OpenRouter",
         ),
         ModelPresetDescriptor(
+            id = ModelPresetId.GEMINI_3_8_FLASH,
+            displayName = "Gemini 3.8 Flash",
+            description = "已由 Gemini 4 Hydrogen 替换；保留仅为识别历史记录。",
+            modelFamilyHint = "Google · OpenRouter",
+            usage = ModelPresetUsage.RETIRED,
+        ),
+        ModelPresetDescriptor(
             id = ModelPresetId.GEMINI_3_7_FLASH,
             displayName = "Gemini 3.7 Flash",
-            description = "已由 Gemini 3.8 Flash 替换；保留仅为识别历史记录。",
+            description = "已由 Gemini 4 Hydrogen 替换；保留仅为识别历史记录。",
             modelFamilyHint = "Google · OpenRouter",
             usage = ModelPresetUsage.RETIRED,
         ),
@@ -274,7 +297,7 @@ object NanfengModelServiceCatalog {
         ProviderId.DEEPSEEK -> ModelPresetId.DEEPSEEK_V4_PRO
         ProviderId.ZHIPU -> ModelPresetId.GLM_5_3_FLASH
         ProviderId.RELAYCORE_CLAUDE -> ModelPresetId.RELAYCORE_SONNET_5_5
-        ProviderId.RELAYCORE_GPT -> ModelPresetId.RELAYCORE_GPT_6_1_SOL
+        ProviderId.RELAYCORE_GPT -> ModelPresetId.RELAYCORE_GPT_6_2_SOL
         ProviderId.RELAYCORE_GEMINI -> ModelPresetId.RELAYCORE_GEMINI_3_8_FLASH
         ProviderId.MOCK -> ModelPresetId.GPT_6_LUNA
     }
@@ -287,7 +310,7 @@ object NanfengModelServiceCatalog {
     /** Product-owned Auto order. It is independent from picker/catalog display order. */
     private val autoPlans = mapOf(
         AutoTask.DEFAULT_TEXT to listOf(
-            ModelPresetId.RELAYCORE_GPT_6_1_SOL,
+            ModelPresetId.RELAYCORE_GPT_6_2_SOL,
             ModelPresetId.RELAYCORE_GEMINI_3_8_FLASH,
             ModelPresetId.DEEPSEEK_V4_FLASH,
             ModelPresetId.RELAYCORE_SONNET_5_5,
@@ -303,14 +326,14 @@ object NanfengModelServiceCatalog {
             ModelPresetId.CLAUDE_SONNET_5_5,
             ModelPresetId.GPT_6_LUNA,
             ModelPresetId.CLAUDE_HAIKU_5_5,
-            ModelPresetId.GPT_6_1_SOL,
+            ModelPresetId.GPT_6_2_SOL,
             ModelPresetId.CLAUDE_OPUS_5_5,
-            ModelPresetId.GEMINI_3_8_FLASH,
+            ModelPresetId.GEMINI_4_HYDROGEN,
         ),
         AutoTask.COMPLEX_REASONING to listOf(
             ModelPresetId.RELAYCORE_GPT_6_ASTRA,
             ModelPresetId.RELAYCORE_OPUS_5_5,
-            ModelPresetId.RELAYCORE_GPT_6_1_SOL,
+            ModelPresetId.RELAYCORE_GPT_6_2_SOL,
             ModelPresetId.DEEPSEEK_V4_PRO,
             ModelPresetId.QWEN_3_8_MAX,
             ModelPresetId.GLM_5_3,
@@ -322,11 +345,11 @@ object NanfengModelServiceCatalog {
             ModelPresetId.GLM_5_3_FLASH,
             ModelPresetId.QWEN_3_6_FLASH,
             ModelPresetId.CLAUDE_OPUS_5_5,
-            ModelPresetId.GPT_6_1_SOL,
+            ModelPresetId.GPT_6_2_SOL,
             ModelPresetId.CLAUDE_SONNET_5_5,
             ModelPresetId.GPT_6_LUNA,
             ModelPresetId.CLAUDE_HAIKU_5_5,
-            ModelPresetId.GEMINI_3_8_FLASH,
+            ModelPresetId.GEMINI_4_HYDROGEN,
         ),
         AutoTask.ATTACHMENT to listOf(
             ModelPresetId.QWEN_3_7_PLUS,
@@ -336,10 +359,10 @@ object NanfengModelServiceCatalog {
             ModelPresetId.GLM_5_3_FLASH,
             ModelPresetId.DEEPSEEK_V4_PRO,
             ModelPresetId.GLM_5_3,
-            ModelPresetId.GEMINI_3_8_FLASH,
+            ModelPresetId.GEMINI_4_HYDROGEN,
             ModelPresetId.GPT_6_LUNA,
             ModelPresetId.CLAUDE_SONNET_5_5,
-            ModelPresetId.GPT_6_1_SOL,
+            ModelPresetId.GPT_6_2_SOL,
             ModelPresetId.CLAUDE_OPUS_5_5,
             ModelPresetId.CLAUDE_HAIKU_5_5,
         ),
@@ -403,7 +426,7 @@ fun assistantResponseFooterNameForUser(displayName: String, provider: ProviderId
     } else if (raw.endsWith(" · RC")) "${relayCoreFooterModelName(raw.removeSuffix(" · RC"))} · RC" else modelDisplayNameForUser(raw)
 }
 
-private fun relayCoreFooterModelName(name: String): String = if (name == "Astra") "6 Astra" else RelayCoreModels.specs.firstOrNull {
+private fun relayCoreFooterModelName(name: String): String = if (name == "Astra") "6 Astra" else RelayCoreModels.knownSpecs.firstOrNull {
     name == it.modelName || name == it.composerName || name == it.apiId
 }?.composerName ?: name
 
@@ -412,8 +435,10 @@ fun composerModelShortNameForUser(displayName: String): String = if (displayName
     "Claude Sonnet 5.5" -> "Sonnet 5.5"
     "Claude Haiku 5.5" -> "Haiku 5.5"
     "GPT-6.1 Sol" -> "6.1 Sol"
+    "GPT-6.2 Sol" -> "6.2 Sol"
     "GPT-6 Luna" -> "6 Luna"
     "Gemini 4 Argon" -> "4 Argon"
+    "Gemini 4 Hydrogen" -> "4 Hydrogen"
     "Claude Fable 5" -> "Fable 5"
     "Claude Fable 5.1" -> "Fable 5.1"
     "Claude Opus 5" -> "Opus 5"

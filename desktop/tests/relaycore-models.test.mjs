@@ -7,7 +7,7 @@ import { MODEL_SERVICE_PREVIEW_SETTINGS, renderAndroidSettingsShell } from '../s
 import { compactModelName, desktopComposerModelCandidates, composerModelRuntimeDetail, transcriptMetadata } from '../src/chat-shell.mjs';
 
 test('Relay six entries preserve identity with model and rate selection labels', () => {
-  const fixture = JSON.parse(readFileSync(new URL('../../protocol/fixtures/relaycore-models-20261011.json', import.meta.url)));
+  const fixture = JSON.parse(readFileSync(new URL('../../protocol/fixtures/relaycore-models-20261118.json', import.meta.url)));
   assert.deepEqual(RELAYCORE_MODELS, fixture.models);
   const candidates = desktopComposerModelCandidates(MODEL_SERVICE_PREVIEW_SETTINGS, [], true);
   for (const model of RELAYCORE_MODELS) {
@@ -41,7 +41,7 @@ test('Relay six entries preserve identity with model and rate selection labels',
     assert.ok(temporary.includes(`<span>${relayCorePickerName(model)}</span>`));
   }
 
-  for (const modelId of [null, 'CLAUDE_SONNET_5_5', 'GPT_6_1_SOL', 'DEEPSEEK_V4_FLASH']) {
+  for (const modelId of [null, 'CLAUDE_SONNET_5_5', 'GPT_6_2_SOL', 'DEEPSEEK_V4_FLASH']) {
     const html = renderChatFirstShell({ data, native: true, pane: 'chat', connection: {}, pendingNewConversationModelId: modelId });
     assert.ok(!html.includes('composer-provider-mark'));
     const temporary = renderChatFirstShell({ data, native: true, pane: 'chat', connection: {}, temporaryConversation: { temporaryId: 'other-temporary', modelOverrideId: modelId, messages: [], attachments: [], draftAttachmentIds: [] } });
@@ -132,7 +132,7 @@ test('model settings keeps five platforms in one rail with RelayCore second and 
 
 test('search disclosure follows the selected recipient and preserves ordinary native authorization', () => {
   for (const preset of ['RELAYCORE_OPUS_5_5', 'RELAYCORE_SONNET_5_5', 'RELAYCORE_GEMINI_3_8_FLASH']) {
-    assert.equal(relayCoreEgressVersion(preset, true), 'normal-chat-luna-search-v1');
+    assert.equal(relayCoreEgressVersion(preset, true), 'normal-chat-luna-exa-search-v2');
     assert.equal(relayCoreEgressVersion(preset, false), 'normal-chat-egress-v1');
   }
   for (const preset of [null, 'CLAUDE_SONNET_5_5', 'RELAYCORE_GPT_6_1_SOL', 'RELAYCORE_GPT_6_ASTRA']) assert.equal(relayCoreEgressVersion(preset, true), 'normal-chat-egress-v1');
@@ -143,7 +143,7 @@ test('changing current GPT channel preserves historical frozen channel names', (
   assert.equal(compactModelName(transcriptMetadata(old).model),'6.1 Sol · RC');
   assert.equal(old.modelSnapshot.displayName,'GPT-6.1 Sol · Pro1');
   assert.equal(compactModelName('GPT-6.1 Sol · Pro1 · 0.12×'),'6.1 Sol · RC');
-  assert.equal(relayCoreCompactName(RELAYCORE_MODELS.find(model=>model.presetId==='RELAYCORE_GPT_6_1_SOL')),'GPT-6.1 Sol · Pro3');
+  assert.equal(relayCoreCompactName(RELAYCORE_MODELS.find(model=>model.presetId==='RELAYCORE_GPT_6_2_SOL')),'GPT-6.2 Sol · Pro3');
 });
 
 test('Claude previous channel stays frozen after switching current Key to standard Kiro', () => {
@@ -169,6 +169,7 @@ test('Luna consent fingerprint matches the Rust golden and changes with retry ma
   const fixture=JSON.parse(readFileSync(new URL('../../protocol/fixtures/luna-retrieval-grant-v1.json',import.meta.url)));
   const receipt=await createLunaRetrievalGrant(fixture.question,fixture.attachmentIds);
   assert.equal(receipt.materialFingerprint,fixture.fingerprint);
+  assert.equal(receipt.disclosureVersion,'normal-chat-luna-exa-search-v2');
   assert.equal(receipt.providerId,'OPENROUTER');assert.equal(receipt.modelId,'openai/gpt-6-luna');
   assert.notEqual((await createLunaRetrievalGrant('old retry question',fixture.attachmentIds)).materialFingerprint,receipt.materialFingerprint);
   assert.notEqual((await createLunaRetrievalGrant(fixture.question,['file-a'])).materialFingerprint,receipt.materialFingerprint);

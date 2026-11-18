@@ -51,7 +51,7 @@ class RelayCoreNativeSearchTest {
     }
     @Test fun `GPT native search streams before the final response and preserves verified terminal evidence`() {
         val adapter = RelayCoreChatAdapter(ProviderId.RELAYCORE_GPT)
-        for (id in listOf("gpt-6.1-sol", "gpt-6-astra")) {
+        for (id in listOf("gpt-6.1-sol", "gpt-6.2-sol", "gpt-6-astra")) {
             val m = model().copy(modelId = id)
             val options = ChatRequestOptions.Standard.copy(webSearchRoute = OfficialWebSearchRoute.RELAYCORE_GPT_RESPONSES)
             assertTrue(adapter.supportsStreaming(m, options))

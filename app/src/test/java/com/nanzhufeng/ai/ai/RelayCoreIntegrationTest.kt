@@ -75,7 +75,7 @@ class RelayCoreIntegrationTest {
     }
 
     @Test fun `six explicit platform entries preserve names and independent receivers`() {
-        val fixture = org.json.JSONObject(java.io.File("../protocol/fixtures/relaycore-models-20261011.json").readText()).getJSONArray("models")
+        val fixture = org.json.JSONObject(java.io.File("../protocol/fixtures/relaycore-models-20261118.json").readText()).getJSONArray("models")
         assertEquals(6, RelayCoreModels.specs.size)
         assertEquals(3, RelayCoreModels.providers.size)
         for (i in 0 until fixture.length()) {
@@ -105,7 +105,7 @@ class RelayCoreIntegrationTest {
         val names = mapOf(
             ModelPresetId.RELAYCORE_OPUS_5_5 to "Opus 5.5",
             ModelPresetId.RELAYCORE_SONNET_5_5 to "Sonnet 5.5",
-            ModelPresetId.RELAYCORE_GPT_6_1_SOL to "6.1 Sol",
+            ModelPresetId.RELAYCORE_GPT_6_2_SOL to "6.2 Sol",
             ModelPresetId.RELAYCORE_GPT_6_ASTRA to "6 Astra",
             ModelPresetId.RELAYCORE_GEMINI_3_8_FLASH to "Gemini 3.8",
             ModelPresetId.RELAYCORE_GEMINI_3_1_PRO to "Gemini 3.1",

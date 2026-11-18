@@ -139,22 +139,23 @@ class P6GModelRouterContractsTest {
 
     @Test fun `composer picker preserves the approved daily and deep ordering`() {
         assertEquals(
-            listOf("Claude Sonnet 5.5", "Claude Haiku 5.5", "DeepSeek V4.1 Flash", "GPT-6.1 Terra", "GPT-6 Luna", "Mercury 3", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 3.8 Flash"),
+            listOf("Claude Sonnet 5.5", "Claude Haiku 5.5", "DeepSeek V4.1 Flash", "GPT-6.1 Terra", "GPT-6 Luna", "Mercury 3", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 4 Hydrogen"),
             ComposerModelRoutingCatalog.daily.map { it.label },
         )
         assertEquals(
-            listOf("Claude Opus 5.5", "GPT-6.1 Sol", "DeepSeek V4 Pro", "Muse Wonder", "Gemini 4 Argon", "GLM-5.3", "Qwen3.8-Max"),
+            listOf("Claude Opus 5.5", "GPT-6.2 Sol", "DeepSeek V4 Pro", "Muse Wonder", "Gemini 4 Argon", "GLM-5.3", "Qwen3.8-Max"),
             ComposerModelRoutingCatalog.deep.map { it.label },
         )
     }
 
     @Test fun `composer uses compact labels while picker retains complete catalog names`() {
         assertEquals("Claude Opus 5.5", ComposerModelRoutingCatalog.deep[0].label)
-        assertEquals("GPT-6.1 Sol", ComposerModelRoutingCatalog.deep[1].label)
+        assertEquals("GPT-6.2 Sol", ComposerModelRoutingCatalog.deep[1].label)
         assertEquals("DeepSeek V4 Pro", ComposerModelRoutingCatalog.deep[2].label)
         assertEquals("Claude Sonnet 5.5", ComposerModelRoutingCatalog.daily[0].label)
         assertEquals("Opus 5.5", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[0].label))
-        assertEquals("6.1 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[1].label))
+        assertEquals("6.2 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[1].label))
+        assertEquals("6.1 Sol", composerModelShortNameForUser("GPT-6.1 Sol"))
         assertEquals("DS V4", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[2].label))
         assertEquals("Fable 5.1", composerModelShortNameForUser("Claude Fable 5.1"))
         assertEquals("6 Astra", composerModelShortNameForUser("GPT-6 Astra"))
@@ -178,7 +179,7 @@ class P6GModelRouterContractsTest {
     }
 
     @Test fun `automatic routing follows explicit default attachment and complex priorities`() {
-        assertEquals(ModelPresetId.RELAYCORE_GPT_6_1_SOL, AutoModelRouter.resolve(AutoRoutingFacts()))
+        assertEquals(ModelPresetId.RELAYCORE_GPT_6_2_SOL, AutoModelRouter.resolve(AutoRoutingFacts()))
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, AutoModelRouter.resolve(AutoRoutingFacts(hasAttachment = true, requiresComplexReasoning = true)))
         assertEquals(ModelPresetId.RELAYCORE_GPT_6_ASTRA, AutoModelRouter.resolve(AutoRoutingFacts(requiresComplexReasoning = true)))
         assertEquals(19, AutoModelRouter.candidates(AutoRoutingFacts()).toSet().size)

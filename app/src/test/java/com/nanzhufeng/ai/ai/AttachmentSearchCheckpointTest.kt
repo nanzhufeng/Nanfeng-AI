@@ -76,7 +76,7 @@ class AttachmentSearchCheckpointTest {
             val row=requireNotNull(cache.load(item));assertEquals("",row.actualModelId);assertEquals(IndependentSearchServiceGrant.SERVICE_ID,row.serviceId)
             assertNull(AttemptIndependentSearchCache(store,id,"b".repeat(64),clock,mapOf(call.callId to call)).load(item))
             assertNull(AttemptIndependentSearchCache(store,id,fp,clock,emptyMap()).load(item))
-            val grant=IndependentSearchServiceGrant("normal-chat-egress-v3",IndependentSearchServiceGrant.SERVICE_ID,IndependentSearchServiceGrant.ENGINE_ID,fp)
+            val grant=IndependentSearchServiceGrant(NormalChatEgressAuthorization.DISCLOSURE_VERSION,IndependentSearchServiceGrant.SERVICE_ID,IndependentSearchServiceGrant.ENGINE_ID,fp)
             var sends=0
             val client=IndependentWebSearchClient(object:ProviderChatTransport {override fun execute(r:ProviderChatRequest,c:CharArray):ProviderChatOutcome {sends++;error("cached source must not resend")}})
             val result=IndependentAttachmentWebSearch.run(AttachmentWebSearchPlan.Plan(listOf(item)),grant,fp,client,{error("no key needed")},null,clock,{}, {_,_,_->error("no accounting rewrite")},{_,_->},cache) as RelayCoreWebSearchCompanion.Result.Ready

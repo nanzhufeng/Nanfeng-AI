@@ -9,12 +9,13 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class IndependentWebSearchClientTest {
     private val fp="a".repeat(64)
-    private val grant=IndependentSearchServiceGrant("normal-chat-egress-v3",IndependentSearchServiceGrant.SERVICE_ID,IndependentSearchServiceGrant.ENGINE_ID,fp)
+    private val grant=IndependentSearchServiceGrant(NormalChatEgressAuthorization.DISCLOSURE_VERSION,IndependentSearchServiceGrant.SERVICE_ID,IndependentSearchServiceGrant.ENGINE_ID,fp)
     @Test fun `old grants changed materials and cancellation cannot issue a request`() {
         var requests=0
         val client=IndependentWebSearchClient(object:ProviderChatTransport {override fun execute(request:ProviderChatRequest,credential:CharArray):ProviderChatOutcome {requests++;error("not authorized")}})
         fun call(g:IndependentSearchServiceGrant,f:String,c:ProviderChatCancellation?=null)=client.search("public fact","public-1",g,f,{error("no secret read")},c)
         assertEquals(IndependentWebSearchClient.Result.Failed("EGRESS_AUTHORIZATION_REQUIRED"),call(grant.copy(disclosureVersion="normal-chat-relay-search-v2"),fp))
+        assertEquals(IndependentWebSearchClient.Result.Failed("EGRESS_AUTHORIZATION_REQUIRED"),call(grant.copy(disclosureVersion="normal-chat-egress-v3"),fp))
         assertEquals(IndependentWebSearchClient.Result.Failed("EGRESS_AUTHORIZATION_REQUIRED"),call(grant,"b".repeat(64)))
         assertEquals(IndependentWebSearchClient.Result.Failed("USER_CANCELLED"),call(grant,fp,ProviderChatCancellation().also {it.cancel()}))
         assertEquals(0,requests)

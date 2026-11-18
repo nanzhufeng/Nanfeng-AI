@@ -7,6 +7,27 @@ import org.junit.Test
 import java.time.Instant
 
 class ConversationCostEstimatorTest {
+    @Test fun `all RC models and returned aliases retain nominal CNY with cache pricing`() {
+        val cases = listOf(
+            Triple("claude-opus-5.5", 2100L, 1435L),
+            Triple("claude-opus-5-5", 2100L, 1435L),
+            Triple("claude-sonnet-5-5", 1050L, 735L),
+            Triple("claude-sonnet-5.5", 1050L, 735L),
+            Triple("gpt-6.1-sol", 750L, 513L),
+            Triple("gpt-6-astra", 3750L, 2625L),
+            Triple("gemini-3.8-flash", 315L, 221L),
+            Triple("gemini-3.1-pro", 896L, 644L),
+        )
+        for ((id, uncached, cached) in cases) {
+            for ((cacheTokens, expected) in listOf(0L to uncached, 500L to cached)) {
+                val cost = requireNotNull(ConversationCostEstimator.estimate(id,
+                    ProviderUsage(1000, 100, cachedInputTokens = cacheTokens), Instant.parse("2026-11-02T00:00:00Z"))) { id }
+                assertEquals(id, "CNY", cost.currencyCode)
+                assertEquals(id, expected, cost.totalMicros)
+            }
+        }
+    }
+
     @Test fun `GLM current official estimate does not invent historical pricing`() {
         val usage=ProviderUsage(1000,100,cachedInputTokens=500)
         assertNull(ConversationCostEstimator.estimate("glm-5.3",usage,Instant.ofEpochMilli(1793351789999L)))
@@ -19,10 +40,22 @@ class ConversationCostEstimatorTest {
         val usage=ProviderUsage(1_000,100,cachedInputTokens=500)
         val before=requireNotNull(ConversationCostEstimator.estimate("google/gemini-3.8-flash",usage,Instant.ofEpochMilli(1793350322076L)))
         val current=requireNotNull(ConversationCostEstimator.estimate("google/gemini-3.8-flash",usage,Instant.ofEpochMilli(1793350322077L)))
+        val hydrogen = requireNotNull(ConversationCostEstimator.estimate("google/gemini-4-hydrogen", usage, Instant.parse("2026-11-14T00:00:00Z")))
+        assertEquals(1538L, hydrogen.totalMicros)
+        assertEquals("USD", hydrogen.currencyCode)
+        assertEquals("openrouter-gemini-4-hydrogen-2026-11-14-v1", hydrogen.priceVersion)
         assertEquals(788L,before.totalMicros)
         assertEquals(866L,current.totalMicros)
         assertEquals("openrouter-gemini-3.8-flash-observed-2026-10-30-v1",current.priceVersion)
         assertEquals(ConversationCostEstimator.GEMINI_3_8_OPENROUTER_PRICE_VERSION,before.priceVersion)
+    }
+
+    @Test fun `Sol 6_2 uses a separate standard rate and RelayCore price stays unknown`() {
+        val usage = ProviderUsage(300_000, 100, cachedInputTokens = 500)
+        val current = requireNotNull(ConversationCostEstimator.estimate("openai/gpt-6.2-sol", usage))
+        assertEquals(600050L, current.totalMicros)
+        assertEquals("openrouter-gpt-6.2-sol-standard-2026-11-18-v1", current.priceVersion)
+        assertNull(ConversationCostEstimator.estimate("gpt-6.2-sol", usage))
     }
 
     @Test fun `Terra uses its current tariff and exact long context threshold`() {

@@ -41,7 +41,7 @@ object ComposerModelRoutingCatalog {
         ComposerModelChoice("${PREFIX}daily:mercury-3", ComposerModelSlot.DAILY, "Mercury 3", listOf(ModelPresetId.MERCURY_3)),
         ComposerModelChoice("${PREFIX}daily:glm-flash", ComposerModelSlot.DAILY, "GLM-5.3 Flash", listOf(ModelPresetId.GLM_5_3_FLASH)),
         ComposerModelChoice("${PREFIX}daily:qwen-plus", ComposerModelSlot.DAILY, "Qwen3.7-Plus", listOf(ModelPresetId.QWEN_3_7_PLUS)),
-        ComposerModelChoice("${PREFIX}daily:gemini-flash", ComposerModelSlot.DAILY, "Gemini 3.8 Flash", listOf(ModelPresetId.GEMINI_3_8_FLASH)),
+        ComposerModelChoice("${PREFIX}daily:gemini-flash", ComposerModelSlot.DAILY, "Gemini 4 Hydrogen", listOf(ModelPresetId.GEMINI_4_HYDROGEN)),
     )
     /** The canonical 日常 DeepSeek route.  Background title/history jobs consume this value
      * instead of carrying their own model preset, so a menu update follows automatically. */
@@ -49,7 +49,7 @@ object ComposerModelRoutingCatalog {
         get() = daily.single { it.id == "${PREFIX}daily:deepseek-flash" }
     val deep = listOf(
         ComposerModelChoice("${PREFIX}deep:claude-opus", ComposerModelSlot.DEEP, "Claude Opus 5.5", listOf(ModelPresetId.CLAUDE_OPUS_5_5)),
-        ComposerModelChoice("${PREFIX}deep:gpt-sol", ComposerModelSlot.DEEP, "GPT-6.1 Sol", listOf(ModelPresetId.GPT_6_1_SOL)),
+        ComposerModelChoice("${PREFIX}deep:gpt-sol", ComposerModelSlot.DEEP, "GPT-6.2 Sol", listOf(ModelPresetId.GPT_6_2_SOL)),
         ComposerModelChoice("${PREFIX}deep:deepseek-pro", ComposerModelSlot.DEEP, "DeepSeek V4 Pro", listOf(ModelPresetId.DEEPSEEK_V4_PRO)),
         ComposerModelChoice("${PREFIX}deep:muse-wonder", ComposerModelSlot.DEEP, "Muse Wonder", listOf(ModelPresetId.MUSE_WONDER)),
         ComposerModelChoice("${PREFIX}deep:gemini-4-argon", ComposerModelSlot.DEEP, "Gemini 4 Argon", listOf(ModelPresetId.GEMINI_4_ARGON)),
@@ -78,7 +78,11 @@ object ComposerModelRoutingCatalog {
     fun isRetired(id: String?): Boolean = retired.any { it.id == id }
 
     fun currentChoiceId(id: String?): String? =
-        if (id == "${PREFIX}daily:gpt-terra") "${PREFIX}daily:gpt-luna" else id
+        when (id) {
+            "${PREFIX}daily:gpt-terra" -> "${PREFIX}daily:gpt-luna"
+            "${PREFIX}relaycore:RELAYCORE_GPT_6_1_SOL" -> "${PREFIX}relaycore:RELAYCORE_GPT_6_2_SOL"
+            else -> id
+        }
 
     fun choice(id: String?): ComposerModelChoice {
         val currentId = currentChoiceId(id)

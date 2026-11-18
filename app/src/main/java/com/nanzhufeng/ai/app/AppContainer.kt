@@ -267,7 +267,7 @@ private object NormalChatProcessRecoveryGate {
     }
 }
 
-class AppContainer(baseContext: Context, private val clock: Clock = Clock.systemUTC(), val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT, normalChatTransport: com.nanzhufeng.ai.ai.ProviderChatTransport = OfficialProviderChatTransport()) {
+class AppContainer(baseContext: Context, private val clock: Clock = Clock.systemUTC(), val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT, normalChatTransport: com.nanzhufeng.ai.ai.ProviderChatTransport = OfficialProviderChatTransport(), scheduleHistoryCuration: Boolean = true) {
     private val dataStorageLocationOwner = AndroidDataStorageLocationOwner(baseContext.applicationContext)
     // Android framework and third-party initializers must always receive the real application
     // context.  The movable wrapper is deliberately limited to Room's database boundary.
@@ -599,7 +599,7 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     private val normalChatSendAttempts = RoomNormalChatSendAttemptStore(database)
     fun generationModelLabel(id: com.nanzhufeng.ai.domain.ConversationId, userMessageId: com.nanzhufeng.ai.domain.MessageNodeId): String {
         val attempt=normalChatSendAttempts.findLatestForConversation(id)?.takeIf {it.messageId==userMessageId} ?: return "模型连接中"
-        val relay=com.nanzhufeng.ai.domain.RelayCoreModels.specs.firstOrNull {it.provider==attempt.providerId && it.apiId==attempt.modelId}
+        val relay=com.nanzhufeng.ai.domain.RelayCoreModels.knownSpecs.firstOrNull {it.provider==attempt.providerId && it.apiId==attempt.modelId}
         return relay?.let {"${it.composerName} · RC"} ?: attempt.modelId.substringAfterLast('/')
     }
 
@@ -876,10 +876,16 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         checkpoint = historyKnowledgeAutoCurationCheckpointStore,
         readKnowledge = readKnowledgeLibrary,
         manageKnowledge = manageKnowledge,
+        saveAutomaticMemory = { conversationId, draft ->
+            if (loadAssistantExperienceSettings.execute().memoryRetrievalEnabled) {
+                val result = manageMemory.saveAutomaticSummary(conversationId, draft.title, draft.body)
+                check(result !is com.nanzhufeng.ai.domain.MemoryMutationResult.Rejected) { "MEMORY_SAVE_REJECTED" }
+            }
+        },
     )
 
     /** Reconcile any legacy queued work with the single effective history-library permission. */
-    init { historyKnowledgeAutoCurationScheduler.onSettingChanged(loadAssistantExperienceSettings.execute().historyLibraryEnabled) }
+    init { if (scheduleHistoryCuration) historyKnowledgeAutoCurationScheduler.onSettingChanged(loadAssistantExperienceSettings.execute().historyLibraryEnabled) }
 
     /** Seeds the user-confirmed baseline only before any global summary has ever existed. */
     fun ensureInitialMemorySummary(): Int {

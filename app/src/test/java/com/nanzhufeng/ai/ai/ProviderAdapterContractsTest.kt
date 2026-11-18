@@ -107,10 +107,12 @@ class ProviderAdapterContractsTest {
     }
 
     @Test fun `Relay wire USD label cannot create a second RMB conversion`() {
-        val body = """{"model":"claude-sonnet-5-5","usage":{"cost":1,"currency":"USD","prompt_tokens":1000,"completion_tokens":100},"choices":[{"message":{"content":"ok"}}]}"""
-        val reply = RelayCoreChatAdapter(com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_CLAUDE).decodeNonStreaming(body) as ChatAdapterDecodedResult.Text
-        assertNull(reply.reportedProviderCost)
-        assertEquals(1000L,reply.inputTokens)
+        for (spec in com.nanzhufeng.ai.domain.RelayCoreModels.specs) {
+            val body = """{"model":"${spec.apiId}","usage":{"cost":1,"currency":"USD","prompt_tokens":1000,"completion_tokens":100},"choices":[{"message":{"content":"ok"}}]}"""
+            val reply = RelayCoreChatAdapter(spec.provider).decodeNonStreaming(body) as ChatAdapterDecodedResult.Text
+            assertNull(spec.apiId,reply.reportedProviderCost)
+            assertEquals(1000L,reply.inputTokens)
+        }
     }
 
     @Test fun `incomplete replies keep usage while contradictory stream completion stays incomplete`() {
@@ -685,6 +687,7 @@ class ProviderAdapterContractsTest {
         for ((preset, apiId, effort) in listOf(
             Triple(com.nanzhufeng.ai.domain.ModelPresetId.CLAUDE_OPUS_5_5, "anthropic/claude-opus-5.5", "medium"),
             Triple(com.nanzhufeng.ai.domain.ModelPresetId.CLAUDE_SONNET_5_5, "anthropic/claude-sonnet-5.5", "high"),
+            Triple(com.nanzhufeng.ai.domain.ModelPresetId.GPT_6_2_SOL, "openai/gpt-6.2-sol", "high"),
         )) {
             val resolved = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER, modelId = apiId)
             for (route in listOf(OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)) {
@@ -699,7 +702,7 @@ class ProviderAdapterContractsTest {
     @Test fun `Claude and ChatGPT deep selections request High without adding a web tool`() {
         val adapter = OpenRouterChatAdapter()
         val deepChoices = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.deep.filter { choice ->
-            choice.label in setOf("Claude Fable 5.1", "GPT-6 Astra", "GPT-6.1 Sol")
+            choice.label in setOf("Claude Fable 5.1", "GPT-6 Astra", "GPT-6.2 Sol")
         }
 
         assertEquals(1, deepChoices.size)

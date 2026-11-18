@@ -8,7 +8,7 @@ import java.time.Instant
 @org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
 class CapabilityAwareAutoModelRouterTest {
     @Test fun `Auto plans prioritize Relay and domestic before OpenRouter without changing manual routes`() {
-        val fixture = org.json.JSONObject(java.io.File("../protocol/fixtures/auto-routing-rc-domestic-20261010.json").readText())
+        val fixture = org.json.JSONObject(java.io.File("../protocol/fixtures/auto-routing-rc-domestic-20261118.json").readText())
         for ((task, facts) in listOf("DEFAULT_TEXT" to AutoRoutingFacts(), "COMPLEX_REASONING" to AutoRoutingFacts(requiresComplexReasoning=true), "ATTACHMENT" to AutoRoutingFacts(hasAttachment=true))) {
             val expected=fixture.getJSONObject("plans").getJSONArray(task)
             assertEquals((0 until expected.length()).map { ModelPresetId.valueOf(expected.getString(it)) },AutoModelRouter.candidates(facts))
@@ -43,13 +43,13 @@ class CapabilityAwareAutoModelRouterTest {
 
     @Test fun `unavailable model is not selected even when it advertises the required capability`() {
         val resolver = fixtureResolver(
-            ModelPresetId.GEMINI_3_8_FLASH to profile(ModelPresetId.GEMINI_3_8_FLASH, ProviderId.OPENROUTER, video = true, health = ModelHealth.UNAVAILABLE),
+            ModelPresetId.GEMINI_4_HYDROGEN to profile(ModelPresetId.GEMINI_4_HYDROGEN, ProviderId.OPENROUTER, video = true, health = ModelHealth.UNAVAILABLE),
             ModelPresetId.QWEN_3_7_PLUS to profile(ModelPresetId.QWEN_3_7_PLUS, ProviderId.QWEN, video = true),
         )
 
         val result = CapabilityAwareAutoModelRouter(resolver).resolve(
             AutoRoutingFacts(hasAttachment = true, requiresVideo = true),
-        ) { it == ModelPresetId.GEMINI_3_8_FLASH || it == ModelPresetId.QWEN_3_7_PLUS }
+        ) { it == ModelPresetId.GEMINI_4_HYDROGEN || it == ModelPresetId.QWEN_3_7_PLUS }
 
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, result)
     }
@@ -101,11 +101,11 @@ class CapabilityAwareAutoModelRouterTest {
     }
 
     @Test fun `cached profile without usable provider cannot authorize send`() {
-        val preset=ModelPresetId.RELAYCORE_GPT_6_1_SOL
+        val preset=ModelPresetId.RELAYCORE_GPT_6_2_SOL
         val snapshot=NormalChatRoutingSnapshot(mapOf(preset to profile(preset,ProviderId.RELAYCORE_GPT)),emptySet(),true)
         assertEquals(false,snapshot.canAuthorize(ConversationDraft(updatedAt=Instant.EPOCH),null))
         assertEquals("Auto · 等待可用模型",snapshot.autoLabel(ConversationDraft(updatedAt=Instant.EPOCH)))
-        assertEquals(false,snapshot.canAuthorize(ConversationDraft(updatedAt=Instant.EPOCH),"logical:relaycore:RELAYCORE_GPT_6_1_SOL"))
+        assertEquals(false,snapshot.canAuthorize(ConversationDraft(updatedAt=Instant.EPOCH),"logical:relaycore:RELAYCORE_GPT_6_2_SOL"))
     }
 
     private fun fixtureResolver(vararg entries: Pair<ModelPresetId, ResolvedModel>) = ModelResolver { preset ->

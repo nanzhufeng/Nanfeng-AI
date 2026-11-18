@@ -228,6 +228,9 @@ impl Plan {
     pub fn evidence(&self,raw:&str,source_urls:&[String])->Option<String> {self.evidence_with_attempt(raw,source_urls,false)}
     pub fn evidence_with_attempt(&self,raw:&str,source_urls:&[String],allow_unverified:bool)->Option<String> {self.evidence_collect(raw,source_urls,allow_unverified,&mut BTreeMap::new())}
     pub fn evidence_collect(&self,raw:&str,source_urls:&[String],allow_unverified:bool,out:&mut BTreeMap<String,String>)->Option<String> {
+        self.evidence_collect_with_limit(raw,source_urls,allow_unverified,500,out)
+    }
+    pub fn evidence_collect_with_limit(&self,raw:&str,source_urls:&[String],allow_unverified:bool,summary_limit:usize,out:&mut BTreeMap<String,String>)->Option<String> {
         if self.items.is_empty() {return Some(raw.into());}
         let sources=source_urls.iter().filter_map(|s|public_url(s)).collect::<BTreeSet<_>>();
         let clean=raw.trim().strip_prefix("```json").or_else(||raw.trim().strip_prefix("```")).unwrap_or(raw.trim()).trim_end().trim_end_matches("```").trim();
@@ -246,7 +249,8 @@ impl Plan {
             let rows=headers.iter().enumerate().map(|(i,h)|{
                 let body=clean[h.get(0).unwrap().end()..headers.get(i+1).map(|n|n.get(0).unwrap().start()).unwrap_or(clean.len())].trim();
                 let prefix=body.chars().take(350).collect::<String>();
-                let status=Regex::new("与材料矛盾|部分(?:已)?(?:核实|属实)|已核实|未核实|已检索").unwrap().find(&prefix).map(|m|m.as_str()).unwrap_or(if allow_unverified && self.items.len()==1 && !sources.is_empty() && mentions_topic {"未核实"} else {"invalid"});
+                let explicit_gap=!sources.is_empty() && mentions_topic && Regex::new(r"^(?:\*{1,2})?(?:缺口|资料充分[，,、]?[ \t]*无关键缺口|证据不足|资料不足)(?:\*{1,2})?[ \t]*[：:]?").unwrap().is_match(body);
+                let status=Regex::new("与材料矛盾|部分(?:已)?(?:核实|属实)|已核实|未核实|已检索").unwrap().find(&prefix).map(|m|m.as_str()).unwrap_or(if explicit_gap || allow_unverified && self.items.len()==1 && !sources.is_empty() && mentions_topic {"未核实"} else {"invalid"});
                 let qualified=status=="已核实" && body.lines().find(|l|l.contains(status)).is_some_and(|l|Regex::new("部分|未核实|未证实|未确认|未核验").unwrap().is_match(l));
                 let without_citations=citation.replace_all(body," ");
                 let urls=token.find_iter(&without_citations).map(|m|evidence_url(m.as_str(),m.start()>0 && without_citations.as_bytes()[m.start()-1]==b'(',&sources)).collect::<Vec<_>>();
@@ -282,7 +286,7 @@ impl Plan {
             let summary=Regex::new(r"cite[^]*").unwrap().replace_all(summary_raw,"");
             let mut summary=Regex::new(r#"(?i)https?://[^\s<>"']+"#).unwrap().replace_all(&summary,"").trim().to_owned();if summary.is_empty() {return None;}
             let mut status=row["status"].as_str()?;
-            if summary.chars().count()>500 {
+            if summary.chars().count()>summary_limit {
                 // Preserve only execution proof; never truncate facts or mark an
                 // overlong provider conclusion as verified.
                 if !allow_unverified || self.items.len()!=1 || sources.is_empty() || !mentions_topic

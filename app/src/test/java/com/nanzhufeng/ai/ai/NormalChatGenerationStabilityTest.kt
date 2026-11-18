@@ -18,6 +18,96 @@ import java.util.concurrent.CancellationException
 /** Production executor + Room owners; only provider I/O and credentials are synthetic. */
 @RunWith(RobolectricTestRunner::class)
 class NormalChatGenerationStabilityTest {
+    @Test fun `authorized Exa live wire completes the Android owner and reopens persisted original answer`() {
+        val root=System.getenv("NFAI_EXA_ACCEPTANCE_ROOT")
+        org.junit.Assume.assumeTrue(System.getenv("NFAI_EXA_ANDROID_LIVE")=="cny-1-once" && root!=null)
+        val directory=java.io.File(root!!)
+        val offlineReplay=System.getenv("NFAI_EXA_OFFLINE_REPLAY")=="1"
+        val bridge=org.json.JSONObject(java.io.File(directory,"bridge.json").readText())
+        val port=bridge.getInt("port");val nonce=bridge.getString("nonce")
+        fun post(path:String,body:String):Pair<Int,String> {
+            val connection=java.net.URL("http://127.0.0.1:$port/$path").openConnection() as java.net.HttpURLConnection
+            connection.requestMethod="POST";connection.doOutput=true;connection.connectTimeout=5000;connection.readTimeout=240000
+            connection.setRequestProperty("X-NFAI-Nonce",nonce);val bytes=body.toByteArray();connection.setFixedLengthStreamingMode(bytes.size)
+            connection.outputStream.use {it.write(bytes)}
+            val status=connection.responseCode;val text=(if(status in 200..299) connection.inputStream else connection.errorStream).bufferedReader().use {it.readText()};connection.disconnect();return status to text
+        }
+        val name="exa-live-${java.util.UUID.randomUUID()}"
+        val f=Fixture(databaseName=name,presetId=ModelPresetId.RELAYCORE_OPUS_5_5,webSearch=true,currentProfile=true)
+        try {
+            var replayedSearches=0
+            f.providerFactory=execute@{request ->
+                if(offlineReplay && !request.endpoint.startsWith("https://openrouter.ai/")) return@execute ProviderChatOutcome.StreamedResponse(200,"Python 3.14.0 正式发布日期为2025年10月7日。来源：https://www.python.org/downloads/release/python-3140/",null,100,20,null,false,finishReason="end_turn",returnedModelId=f.model.modelId)
+                val (status,wire)=if(System.getenv("NFAI_EXA_REPLAY_SEARCH")=="1" && request.endpoint.startsWith("https://openrouter.ai/")) {
+                    replayedSearches++;check(replayedSearches<=2)
+                    200 to java.io.File(directory,"android-$replayedSearches-wire.sse").readText()
+                } else post("send",request.jsonBody)
+                if(status !in 200..299) ProviderChatOutcome.HttpResponse(status,wire)
+                else OfficialProviderChatTransport {InterruptedStreamConnection(wire)}.execute(request,"bridge-placeholder-never-upstream".toCharArray())
+            }
+            val (id,result)=f.send(text=bridge.getString("question"))
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            val attempt=f.attempts.findLatestForConversation(id)!!;val saved=f.conversations.findById(id)!!
+            assertEquals(NormalChatSendAttemptStatus.COMPLETED,attempt.status)
+            val answer=saved.nodes.single {it.role==MessageRole.ASSISTANT}
+            val text=answer.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text}
+            assertTrue(text.contains("Python"));assertTrue(text.contains("2025"));assertTrue(text.contains("来源"))
+            val calls=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value}
+            assertEquals(1,calls.count {it.role=="ANSWER"});assertTrue(calls.any {it.role=="RETRIEVAL" && it.cost.currencyCode=="USD" && it.cost.totalMicros!=null})
+            f.close();val reopened=Room.databaseBuilder(f.context,NanfengAiDatabase::class.java,name).allowMainThreadQueries().build()
+            try {assertEquals(saved,RoomConversationRepository(reopened).findById(id));assertEquals(attempt,RoomNormalChatSendAttemptStore(reopened).findLatestForConversation(id));assertEquals(calls,AndroidDirectChatCallAuditStore(f.context,reopened).listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value})} finally {reopened.close()}
+            val summary=org.json.JSONObject().put("state","COMPLETED").put("answerModel",f.model.modelId).put("calls",f.requestCount).put("replayedCompletedSearches",replayedSearches).put("answerChars",text.length).put("reopenVerified",true)
+            summary.put("liveAnswer",!offlineReplay)
+            java.io.File(directory,if(offlineReplay) "android-offline-replay-result.json" else "android-result.json").writeText(summary.toString(2))
+        } finally {runCatching {f.close()};if(!offlineReplay) runCatching {post("finish","{}")};f.context.deleteDatabase(name)}
+    }
+    @Test fun `bounded Exa wire reaches original answer and preserves search fee and history through Room reopen`() {
+        val fixture=org.json.JSONObject(java.io.File("../protocol/fixtures/openrouter-exa-companion-v1.json").readText())
+        val response=fixture.getJSONObject("response")
+        val message=response.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+        val frame=org.json.JSONObject().put("model",response.getString("model"))
+            .put("choices",org.json.JSONArray().put(org.json.JSONObject().put("delta",message).put("finish_reason","stop")))
+            .put("usage",response.getJSONObject("usage"))
+        val name="exa-wire-${java.util.UUID.randomUUID()}"
+        val f=Fixture(databaseName=name,presetId=ModelPresetId.RELAYCORE_OPUS_5_5,webSearch=true,currentProfile=true)
+        try {
+            f.retrievalFactory={request ->
+                val body=org.json.JSONObject(request.jsonBody)
+                val parameters=body.getJSONArray("tools").getJSONObject(0).getJSONObject("parameters")
+                val expected=fixture.getJSONObject("parameters")
+                expected.keys().forEach {key ->assertEquals(key,expected.get(key),parameters.get(key))}
+                OfficialProviderChatTransport {InterruptedStreamConnection("data: $frame\n\ndata: [DONE]\n\n")}
+                    .execute(request,"synthetic-openrouter-key".toCharArray())
+            }
+            f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"按合成财报分析：自由现金流10亿元，净债务20亿元。",null,100,20,null,false,finishReason="end_turn",returnedModelId=f.model.modelId)
+            val (id,result)=f.send(text=fixture.getString("question"))
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(2,f.requestCount)
+            val answerRequest=f.requests.last()
+            assertTrue(answerRequest.endpoint.startsWith("https://api.relaycore.cn/"))
+            assertTrue(answerRequest.jsonBody.contains(f.model.modelId))
+            assertTrue(answerRequest.jsonBody.contains("自由现金流10亿元"))
+            assertTrue(answerRequest.jsonBody.contains("净债务20亿元"))
+            assertFalse(answerRequest.jsonBody.contains("openrouter:web_search"))
+            val calls=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value}
+            val search=calls.single {it.role=="RETRIEVAL"}
+            assertEquals(8500L,search.cost.totalMicros)
+            assertEquals("USD",search.cost.currencyCode)
+            assertEquals(ConversationCostSource.PROVIDER_RESPONSE,search.costSource)
+            assertEquals("openai/gpt-6-luna",search.actualModelId)
+            assertEquals("CNY",calls.single {it.role=="ANSWER"}.cost.currencyCode)
+            val saved=f.conversations.findById(id)!!
+            val attempt=f.attempts.findLatestForConversation(id)!!
+            assertEquals(NormalChatSendAttemptStatus.COMPLETED,attempt.status)
+            f.close()
+            val reopened=Room.databaseBuilder(f.context,NanfengAiDatabase::class.java,name).allowMainThreadQueries().build()
+            try {
+                assertEquals(saved,RoomConversationRepository(reopened).findById(id))
+                assertEquals(attempt,RoomNormalChatSendAttemptStore(reopened).findLatestForConversation(id))
+                assertEquals(calls,AndroidDirectChatCallAuditStore(f.context,reopened).listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value})
+            } finally {reopened.close()}
+        } finally {runCatching {f.close()};f.context.deleteDatabase(name)}
+    }
     @Test fun `local accepted or text callback IO errors are not reported as network outages`() {
         for (phase in listOf("accepted", "text")) Fixture(presetId=ModelPresetId.CLAUDE_OPUS_5_5,currentProfile=true).use { f ->
             var opened=0
@@ -233,7 +323,7 @@ data: [DONE]
             },loadAssistantExperienceSettings={AssistantExperienceSettings(webSearchEnabled=webSearch,customInstructions=customInstructions)},
             onConversationCompleted={if(completedCallbackFails) throw IllegalStateException("synthetic completion callback")},
         )
-        fun send(withAttachment: Boolean = false, approveReader:Boolean=true): Pair<ConversationId,NormalChatOpenRouterExecutor.Result> {
+        fun send(withAttachment: Boolean = false, approveReader:Boolean=true,text:String?=null): Pair<ConversationId,NormalChatOpenRouterExecutor.Result> {
             val initial=tree.create(if(titlePending) ConversationAutoTitle.NEW_CONVERSATION_TITLE else "稳定性测试", autoTitlePending=titlePending); val snapshot=conversations.save(initial);val id=snapshot.conversation.id;lastConversationId=id
             val refs=if(imageOnlyInput) {
                 val bytes=java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aemkAAAAASUVORK5CYII=")
@@ -245,7 +335,7 @@ data: [DONE]
                     RoomPrivateAttachmentRepository(db).save(imported.attachment).toConversationReference()
                 }
             } else emptyList()
-            val draft=conversations.saveDraft(id,ConversationDraft(text=if(imageOnlyInput) "" else if(withAttachment) "分析报告" else "合成测试问题",attachments=refs,updatedAt=clock.instant()))
+            val draft=conversations.saveDraft(id,ConversationDraft(text=text ?: if(imageOnlyInput) "" else if(withAttachment) "分析报告" else "合成测试问题",attachments=refs,updatedAt=clock.instant()))
             val choice=ComposerModelRoutingCatalog.choices.first {it!=ComposerModelRoutingCatalog.auto && it.routes==listOf(preset)}
             val approval=NormalChatEgressAuthorization.forUserSend(draft,clock.millis(),choice.id,executor.routingSnapshot().copy(webSearchEnabled=webSearch))
             return id to executor.execute(id,if(approveReader) approval else approval.copy(auxiliaryRecipientModelIds=emptyMap()))
@@ -430,7 +520,7 @@ data: [DONE]
         for (verified in listOf(true, false)) {
             val databaseName="luna-billing-risk-$verified-${java.util.UUID.randomUUID()}.db"
             try { Fixture(databaseName=databaseName,webSearch=true).use { f ->
-            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(statusCode=200,text="公开事实摘要",reasoning=null,inputTokens=100,outputTokens=20,toolCallEncountered=false,
+            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(statusCode=200,text=(1..3).joinToString("\n") {"[A$it] 已检索\n合成测试问题的相关公开资料。来源：https://example.org/release"},reasoning=null,inputTokens=100,outputTokens=20,toolCallEncountered=false,
                 webSources=if(verified) listOf(ProviderWebSource("https://example.org/release")) else emptyList(),
                 webSearchPerformed=verified,returnedModelId="openai/gpt-6-luna",
                 reportedProviderCost=ProviderReportedCost(9001,"USD","synthetic-settlement-v1"),
@@ -438,8 +528,10 @@ data: [DONE]
             val (id,result)=f.send()
             if(verified) assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
             else assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
-            val call=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}
-                .single {it.conversationId==id.value && it.role=="RETRIEVAL"}
+            val calls=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}
+                .filter {it.conversationId==id.value && it.role=="RETRIEVAL"}
+            assertEquals(if(verified) 1 else 2,calls.size)
+            calls.forEach {call ->
             assertEquals("provider amount must survive verified=$verified",9001L,call.cost.totalMicros)
             assertEquals("USD",call.cost.currencyCode)
             assertEquals("synthetic-settlement-v1",call.cost.priceVersion)
@@ -447,14 +539,40 @@ data: [DONE]
             assertEquals(40L,call.usage.cachedInputTokens)
             assertEquals(5L,call.usage.reasoningTokens)
             assertEquals("openai/gpt-6-luna",call.actualModelId)
+            }
             f.db.close()
             val reopened=Room.databaseBuilder(f.context,NanfengAiDatabase::class.java,databaseName).allowMainThreadQueries().build()
             try {
                 val saved=AndroidDirectChatCallAuditStore(f.context,reopened).listNewestFirst().mapNotNull {it.accounting}
-                    .single {it.conversationId==id.value && it.role=="RETRIEVAL"}
-                assertEquals(call,saved)
+                    .filter {it.conversationId==id.value && it.role=="RETRIEVAL"}
+                assertEquals(calls,saved)
             } finally { reopened.close() }
             } } finally { ApplicationProvider.getApplicationContext<Context>().deleteDatabase(databaseName) }
+        }
+    }
+
+    @Test fun `ordinary multi question really searches missing data and keeps selected answer identity`() {
+        Fixture(presetId=ModelPresetId.RELAYCORE_OPUS_5_5,webSearch=true).use {f ->
+            var searches=0
+            f.retrievalFactory={request ->
+                searches++
+                assertTrue(request.jsonBody.contains("本轮是普通问题的完整资料研究"))
+                val body=when(searches) {
+                    1 -> "[A1] 已核实\n上市公司跌幅20%。来源：https://example.test/filing\n[A2] 已核实\n上市公司23%是盘中跌幅。来源：https://example.test/filing\n[A3] 未核实\n上市公司利润下降，尚缺成本数据。来源：https://example.test/filing\n[A4] 已检索\n上市公司估值需结合现金流。来源：https://example.test/filing\n[A5] 未核实\n上市公司仍缺最新净债务。来源：https://example.test/filing"
+                    2 -> "[A3] 已核实\n上市公司财报成本同比增加10%。来源：https://example.test/filing\n[A5] 未核实\n上市公司仍缺最新净债务。来源：https://example.test/filing"
+                    3,4 -> "[A5] 未核实\n上市公司仍缺最新净债务。来源：https://example.test/filing"
+                    else -> error("unverified evidence must not loop")
+                }
+                ProviderChatOutcome.StreamedResponse(200,body,null,100,20,ProviderReportedCost(100,"USD","fixture"),false,webSources=listOf(ProviderWebSource("https://example.test/filing","官方财报")),webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")
+            }
+            val (id,result)=f.send(text="某上市公司跌幅23%是否准确？业绩为什么恶化？目前估值是否合理？")
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(2,searches)
+            val answer=f.requests.last().jsonBody
+            assertTrue("selected identity",answer.contains(f.model.modelId));assertTrue("supplementary evidence",answer.contains("成本同比增加10%"));assertTrue("unresolved input",answer.contains("仍缺最新净债务"));assertTrue("coverage",answer.replace("\\/","/").contains("5 / 5"))
+            val retrievals=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value && it.role=="RETRIEVAL"}
+            assertEquals(2,retrievals.size)
+            assertTrue(retrievals.all {it.finishedAt!=null && it.requestedModelId=="openai/gpt-6-luna"})
         }
     }
 
@@ -508,7 +626,7 @@ data: [DONE]
     }
 
     @Test fun `Luna search final RC GPT uses the ordinary answer endpoint and its decoder`() {
-        Fixture(presetId=ModelPresetId.RELAYCORE_GPT_6_1_SOL,webSearch=true,independentSearch=true).use {f->
+        Fixture(presetId=ModelPresetId.RELAYCORE_GPT_6_2_SOL,webSearch=true,independentSearch=true).use {f->
             f.attachmentText="- Go 1.24.0正式发布，核验官方发布日期。"
             f.retrievalFactory={ProviderChatOutcome.StreamedResponse(200,(1..1).joinToString("\n\n") {"[A$it] 已核实\n公开发布事项的日期已确认。\n来源：https://example.org/release/$it"},null,100,20,null,false,webSources=(1..1).map {ProviderWebSource("https://example.org/release/$it","官方来源")},webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")}
             f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"Go 1.24.0于2025年2月11日发布。",null,100,20,null,false,finishReason="stop",returnedModelId=f.model.modelId)
@@ -1076,7 +1194,7 @@ data: [DONE]
         assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(f.lastConversationId!!)!!.status)
     }
     @Test fun `native and companion full attachment scopes keep each physical call and finish the original model`() {
-        for(preset in listOf(ModelPresetId.RELAYCORE_SONNET_5_5,ModelPresetId.RELAYCORE_GPT_6_1_SOL)) Fixture(presetId=preset,webSearch=true).use {f ->
+        for(preset in listOf(ModelPresetId.RELAYCORE_SONNET_5_5,ModelPresetId.RELAYCORE_GPT_6_2_SOL)) Fixture(presetId=preset,webSearch=true).use {f ->
             f.attachmentText=(1..20).joinToString("\n") {"- 公开事项${it}：公开机构在2026年发布第${it}项数据。"}
             f.retrievalFactory={request ->
                 val body=org.json.JSONObject(request.jsonBody)

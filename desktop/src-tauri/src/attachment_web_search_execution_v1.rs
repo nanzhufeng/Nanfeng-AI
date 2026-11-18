@@ -76,8 +76,9 @@ pub fn cache_fingerprint(parent: &TransportRequest) -> String {
         .cloned()
         .unwrap_or_default();
     checkpoint::fingerprint(&format!(
-        "attachment-fact-evidence-v7:{}:{}:{}:{}",
-        parent.provider_id, parent.model_id, parent.web_search_route, current
+        "attachment-fact-evidence-v7:{}:{}:{}:{}{}",
+        parent.provider_id, parent.model_id, parent.web_search_route, current,
+        if parent.web_search_route=="RELAYCORE_COMPANION" {format!(":{}",relay::DISCLOSURE_VERSION)} else {String::new()}
     ))
 }
 pub const IMAGE_READING_VERSION: &str = "normal-chat-image-reading-v1";
@@ -97,7 +98,7 @@ pub fn allows_image_reading(grant: Option<&relay::RetrievalGrant>, text: &str, i
     grant.is_some_and(|g|g.disclosure_version==IMAGE_READING_VERSION && g.provider_id=="OPENROUTER" && g.preset_id==IMAGE_READER_PRESET && g.model_id==IMAGE_READER_MODEL && g.material_fingerprint==relay::material_fingerprint(text,ids))
 }
 pub fn required(parent: &TransportRequest) -> bool {
-    visual_reading_required(parent) || parent.web_search_route != "NONE"
+    crate::question_web_research_v1::question(parent).is_some() || visual_reading_required(parent) || parent.web_search_route != "NONE"
         && (!scope::from_messages(&parent.messages).items.is_empty()
             || !native_parts(parent).is_empty() || !scope::current_material(&parent.messages).1.trim().is_empty())
 }
@@ -114,9 +115,10 @@ pub fn batch_request(
     } else {
         parent.clone()
     };
+    let query_text=if let Some(question)=crate::question_web_research_v1::question(parent) {format!("完整问题：{}\n{}",question.trim(),plan.query_text().replace(&format!("完整问题：{}\n",question.trim()),""))} else {plan.query_text()};
     request.messages = json!([
-        {"role":"system","content":format!("只核验本批次的公开事项，完成真实网页检索后返回逐项证据。{}{}",crate::answer_language_v1::RETRIEVAL_INSTRUCTION,scope::COVERAGE_INSTRUCTION)},
-        {"role":"user","content":[{"type":"text","text":"只返回以下检索批次的网页资料，不生成用户最终回答。"},{"type":"text","text":plan.query_text()}]}
+        {"role":"system","content":format!("只核验本批次的公开事项，完成真实网页检索后返回逐项证据。{}{}",crate::answer_language_v1::RETRIEVAL_INSTRUCTION,scope::COVERAGE_INSTRUCTION.to_owned()+&if crate::question_web_research_v1::question(parent).is_some() {format!("{}检索基准时刻（UTC）：{}；用户指定历史日期时以指定日期为准。",crate::question_web_research_v1::INSTRUCTION,chrono::Utc::now().to_rfc3339())} else {String::new()})},
+        {"role":"user","content":[{"type":"text","text":"只返回以下检索批次的网页资料，不生成用户最终回答。"},{"type":"text","text":query_text}]}
     ]);
     request.grounded_answer = false;
     request.explicit_search_query = Some(
@@ -127,14 +129,18 @@ pub fn batch_request(
             .join("；"),
     );
     request.idempotency_key = format!("{}-scope-{ordinal}", parent.idempotency_key);
-    request.max_output_tokens =
-        chat::ordinary_output_token_limit(&request.provider_id, &request.model_id)
-            .clamp(4096, 32768);
+    request.max_output_tokens = if crate::question_web_research_v1::question(parent).is_some() {8192} else {
+        chat::ordinary_output_token_limit(&request.provider_id, &request.model_id).clamp(4096, 32768)};
     Ok(request)
 }
 fn evidence(
     plan: &Plan,
     reply: &Completed,
+) -> Result<(String, String, BTreeMap<String, String>), Failure> { evidence_with_limit(plan,reply,500) }
+fn evidence_with_limit(
+    plan: &Plan,
+    reply: &Completed,
+    summary_limit:usize,
 ) -> Result<(String, String, BTreeMap<String, String>), Failure> {
     if !reply.web_search_verified {
         return Err(fail("WEB_SEARCH_NO_SOURCES"));
@@ -145,7 +151,7 @@ fn evidence(
     if urls.is_empty() {return Err(fail("WEB_SEARCH_NO_SOURCES"));}
     let mut entries = BTreeMap::new();
     let result = plan
-        .evidence_collect(body, &urls, plan.items.len() == 1, &mut entries)
+        .evidence_collect_with_limit(body, &urls, plan.items.len() == 1, summary_limit,&mut entries)
         .ok_or_else(|| fail("WEB_SEARCH_SCOPE_MISMATCH"))?;
     let selected=reply.native_sources.iter().filter_map(|(title,url)|scope::public_url(url).filter(|u|result.contains(&format!("\n来源：{u}"))).map(|url|(title.clone(),url))).collect::<Vec<_>>();
     let mut footer=String::new();chat::append_sources(&mut footer,&selected);
@@ -301,7 +307,8 @@ where
             }
         }
     }
-    let plan = scope::from_messages(&search_messages);
+    let ordinary_question=crate::question_web_research_v1::question(&parent);
+    let plan = ordinary_question.as_deref().map(crate::question_web_research_v1::plan).unwrap_or_else(||scope::from_messages(&search_messages));
     if plan.items.is_empty() && media_read && parent.web_search_route != "RELAYCORE_COMPANION" {
         // No public scope is different from a failed read. Keep original media and
         // enabled search, now with its actual textual context available to Exa.
@@ -319,6 +326,7 @@ where
     if plan.items.is_empty() {
         stop = Some("没有取得可核验的附件事项，未以泛化搜索代替");
     }
+    let mut followup_affordable=false;
     let mut reused = 0;
     let expected_model = if parent.web_search_route == "RELAYCORE_COMPANION" {
         relay::RETRIEVAL_MODEL
@@ -326,7 +334,7 @@ where
         &parent.model_id
     };
     for item in &plan.items {
-        if let Some(entry) = cache.get(&item.id)? {
+        if let Some(entry) = if ordinary_question.is_some() {None} else {cache.get(&item.id)?} {
             if checkpoint::fresh(
                 &entry,
                 expected_model,
@@ -352,10 +360,10 @@ where
         .filter(|item| !parts.contains_key(&item.id))
         .cloned()
         .collect::<Vec<_>>()
-        .chunks(match parent.web_search_route.as_str() {
+        .chunks(if ordinary_question.is_some() {32} else {match parent.web_search_route.as_str() {
             "ZHIPU_CHAT_COMPLETIONS" => 1,
             _ => BATCH_SIZE,
-        })
+        }})
         .map(|items| Plan {
             items: items.to_vec(),
             limited: false,
@@ -369,7 +377,7 @@ where
         if signal.load(Ordering::SeqCst) {
             return Err(Failure::Cancelled);
         }
-        if calls >= MAX_CALLS || start.elapsed() >= Duration::from_secs(600) {
+        if (ordinary_question.is_some() && calls>0 && !followup_affordable) || calls >= if ordinary_question.is_some() {2} else {MAX_CALLS} || start.elapsed() >= Duration::from_secs(600) {
             stop = Some("检索预算已用完");
             break;
         }
@@ -391,6 +399,10 @@ where
             answer_secret.clone()
         };
         let result = search(request.clone(), key, signal.clone()).await;
+        followup_affordable=match &result {
+            Ok(reply)=>reply.reported_cost_micros,
+            Err(failure)=>failure.quantified_reply().and_then(|reply|reply.reported_cost_micros),
+        }.is_some_and(|cost|(0..=10_000).contains(&cost));
         match result {
             Ok(reply) => {
                 audit(&request, Some(&reply))?;
@@ -411,7 +423,7 @@ where
                     stop = Some("服务返回模型身份不一致");
                     break;
                 }
-                match evidence(&batch, &reply) {
+                match evidence_with_limit(&batch, &reply,if ordinary_question.is_some() {2000} else {500}) {
                     Ok((_text, footer, entries)) => {
                         parts.extend(entries);
                         for item in &batch.items {
@@ -436,9 +448,9 @@ where
                         if !footer.is_empty() {
                             footers.push(footer);
                         }
-                        if batch.items.len() > 1 {
+                        if batch.items.len() > 1 || ordinary_question.is_some() {
                             for item in batch.items.iter().rev() {
-                                if parts
+                                if attempts.get(&item.id).copied().unwrap_or(0)<2 && parts
                                     .get(&item.id)
                                     .is_some_and(|s| s.contains("证据不足，仍未核实"))
                                 {
@@ -508,6 +520,13 @@ where
                 }
             }
         }
+        if ordinary_question.is_some() && queue.len()>1 {
+            let mut pending=Vec::new();
+            while let Some(batch)=queue.pop_front() {
+                for item in batch.items {if !pending.iter().any(|i:&scope::Item|i.id==item.id){pending.push(item);}}
+            }
+            queue.push_back(Plan{items:pending,limited:false});
+        }
         cache.coverage(plan.items.len(), parts.len())?;
     }
     // Coverage belongs to retrieval, not to successful final-answer delivery.
@@ -536,7 +555,7 @@ where
         .collect::<Vec<_>>()
         .join("\n\n");
     let coverage = format!(
-        "本轮附件检索范围：{} / {} 项，复用本任务10分钟内已完成查询{}项，不称为本次新搜索。{}",
+        "本轮检索范围：{} / {} 项，复用本任务10分钟内已完成查询{}项，不称为本次新搜索。{}",
         parts.len(),
         plan.items.len(),
         reused,
@@ -609,6 +628,95 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn explicit_gap_headings_keep_other_sourced_facts_without_promoting_gap_to_verified() {
+        let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../protocol/fixtures/openrouter-exa-companion-v1.json")).unwrap();
+        let plan=crate::question_web_research_v1::plan(&fixture["question"].as_str().unwrap().replace("某上市公司","上市公司"));
+        let raw=fixture["response"]["choices"][0]["message"]["content"].as_str().unwrap().split("[A5]").next().unwrap();
+        let sources=vec!["https://example.test/filing".to_owned()];
+        for heading in ["**缺口**：","**资料充分，无关键缺口：**","证据不足："] {
+            let mut entries=BTreeMap::new();assert!(plan.evidence_collect_with_limit(&format!("{raw}[A5] {heading} 尚缺净债务比较数据。"),&sources,false,2000,&mut entries).is_some());
+            assert_eq!(entries.len(),5);assert!(entries["A1"].contains("已核实"));assert!(entries["A5"].contains("证据不足，仍未核实"));
+        }
+        assert!(plan.evidence_collect_with_limit(&format!("{raw}[A5] 缺口：该事项尚未查询。"),&sources,false,2000,&mut BTreeMap::new()).is_none());
+        assert!(plan.evidence_collect_with_limit(&format!("{raw}[A5] 缺口：尚缺比较数据。"),&[],false,2000,&mut BTreeMap::new()).is_none());
+    }
+    #[tokio::test]
+    async fn bounded_exa_response_hands_complete_facts_to_original_answer_and_audits_search_cost() {
+        let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../protocol/fixtures/openrouter-exa-companion-v1.json")).unwrap();
+        let mut input=parent("RELAYCORE_CLAUDE","claude-opus-5.5","RELAYCORE_COMPANION",0);
+        input.messages=json!([{"role":"system","content":"private-memory"},{"role":"user","content":fixture["question"]}]);
+        let ledger=Arc::new(Mutex::new(Vec::new()));let audited=ledger.clone();
+        let out=execute_core(input,Zeroizing::new(vec![1]),Some(Zeroizing::new(vec![2])),Arc::new(AtomicBool::new(false)),
+            move |r,done| {audited.lock().unwrap().push((r.model_id.clone(),done.and_then(|v|v.reported_cost_micros)));Ok(())},
+            move |r,key,_| {
+                assert_eq!(r.model_id,relay::RETRIEVAL_MODEL);assert_eq!(&*key,&[2]);
+                let body=chat::transport_body(&r);assert_eq!(body["tools"][0]["parameters"],fixture["parameters"]);
+                assert!(!r.messages.to_string().contains("private-memory"));
+                std::future::ready(chat::decode_non_streaming(fixture["response"].to_string().as_bytes(),1))
+            },
+            |r,key,_| {
+                assert_eq!(r.model_id,"claude-opus-5.5");assert_eq!(r.provider_id,"RELAYCORE_CLAUDE");assert_eq!(&*key,&[1]);
+                assert!(r.grounded_answer);assert_eq!(r.web_search_route,"NONE");
+                let text=r.messages.to_string();assert!(text.contains("自由现金流10亿元"));assert!(text.contains("净债务20亿元"));
+                std::future::ready(Ok(Completed{native_sources:vec![],text:"按合成财报分析。".into(),reasoning:None,usage:Default::default(),reported_cost_micros:None,actual_model_id:Some(r.model_id),web_search_verified:false,elapsed_ms:1}))
+            }).await.unwrap();
+        assert!(out.complete);assert_eq!((out.planned,out.covered),(5,5));assert_eq!(out.reply.actual_model_id.as_deref(),Some("claude-opus-5.5"));
+        assert!(!out.reply.native_sources.is_empty());
+        let ledger=ledger.lock().unwrap();assert_eq!(ledger.len(),2);assert_eq!(ledger[1],(relay::RETRIEVAL_MODEL.into(),Some(8500)));
+    }
+    #[test]
+    fn exa_grant_invalidates_native_evidence_cache_without_changing_other_routes() {
+        let input=parent("RELAYCORE_CLAUDE","claude-opus-5.5","RELAYCORE_COMPANION",0);
+        let current=input.messages.as_array().unwrap().iter().rev().find(|m|m["role"]=="user").unwrap();
+        let old=checkpoint::fingerprint(&format!("attachment-fact-evidence-v7:{}:{}:{}:{}",input.provider_id,input.model_id,input.web_search_route,current));
+        assert_ne!(cache_fingerprint(&input),old);
+        let mut native=input.clone();native.web_search_route="NONE".into();
+        let unchanged=checkpoint::fingerprint(&format!("attachment-fact-evidence-v7:{}:{}:{}:{}",native.provider_id,native.model_id,native.web_search_route,current));
+        assert_eq!(cache_fingerprint(&native),unchanged);
+    }
+    #[test]
+    fn plain_multi_question_uses_scoped_research_instead_of_one_summary() {
+        let request=TransportRequest {
+            endpoint:"https://api.relaycore.cn/v1/messages".into(), provider_id:"RELAYCORE_CLAUDE".into(), model_id:"claude-opus-5.5".into(),
+            messages:json!([{"role":"user","content":"某上市公司跌幅23%是否准确？业绩为什么恶化？目前估值是否合理？"}]),
+            idempotency_key:"public-question-regression".into(), max_output_tokens:4096, web_search_route:"RELAYCORE_COMPANION".into(),
+            structured_json:false,disable_thinking:false,grounded_answer:false,explicit_search_query:None,
+        };
+        assert!(required(&request), "plain questions must receive the same scope and supplement gate as attachments");
+    }
+
+    #[tokio::test]
+    async fn plain_research_supplements_gaps_once_and_hands_all_evidence_to_original_model() {
+        for cost in [Some(100),None,Some(10001)] {
+        let mut input=parent("RELAYCORE_CLAUDE","claude-opus-5.5","RELAYCORE_COMPANION",0);
+        input.messages=json!([{"role":"system","content":"private-memory-do-not-forward"},{"role":"user","content":"某上市公司跌幅23%是否准确？业绩为什么恶化？目前估值是否合理？"}]);
+        let calls=Arc::new(Mutex::new(Vec::new()));let seen=calls.clone();
+        let ledger=Arc::new(Mutex::new(Vec::new()));let audited=ledger.clone();
+        let out=execute_core(input,Zeroizing::new(vec![1]),Some(Zeroizing::new(vec![2])),Arc::new(AtomicBool::new(false)),
+            move |r,done|{audited.lock().unwrap().push((r.idempotency_key.clone(),done.is_some()));Ok(())},
+            move |r,_,_| {
+                assert_eq!(r.model_id,relay::RETRIEVAL_MODEL);assert!(!r.messages.to_string().contains("private-memory"));
+                let mut c=seen.lock().unwrap();c.push(r.idempotency_key.clone());let n=c.len();
+                let text=match n {
+                    1=>"[A1] 已核实\n上市公司跌幅实际为20%，口径为收盘。来源：https://example.test/filing\n[A2] 已核实\n上市公司23%为盘中跌幅。来源：https://example.test/filing\n[A3] 未核实\n上市公司利润下降，尚缺成本数据。来源：https://example.test/filing\n[A4] 已检索\n上市公司当前估值需结合市值及现金流。来源：https://example.test/filing\n[A5] 未核实\n上市公司仍缺最新净债务。来源：https://example.test/filing",
+                    2=>"[A3] 已核实\n上市公司成本本期增加10%，日期2026年11月2日，官方财报原文短摘录：成本同比增加。来源：https://example.test/filing\n[A5] 未核实\n上市公司仍缺最新净债务。来源：https://example.test/filing",
+                    3|4=>"[A5] 未核实\n上市公司现金流为负，仍缺最新净债务，无法算可靠估值。来源：https://example.test/filing",
+                    _=>panic!("unverified single item must not loop"),
+                };
+                std::future::ready(Ok(Completed{native_sources:vec![("官方财报".into(),"https://example.test/filing".into())],text:text.into(),reasoning:None,usage:Default::default(),reported_cost_micros:cost,actual_model_id:Some(r.model_id),web_search_verified:true,elapsed_ms:1}))
+            },
+            |r,_,_| {
+                assert_eq!(r.model_id,"claude-opus-5.5");assert_eq!(r.web_search_route,"NONE");
+                let text=r.messages.to_string();if cost==Some(100){assert!(text.contains("成本本期增加10%"));}assert!(text.contains("仍缺最新净债务"));assert!(text.contains("证据不足，仍未核实"));assert!(text.contains("5 / 5"));
+                std::future::ready(Ok(Completed{native_sources:vec![],text:"按实际证据回答，保留缺口。".into(),reasoning:None,usage:Default::default(),reported_cost_micros:None,actual_model_id:Some(r.model_id),web_search_verified:false,elapsed_ms:1}))
+            }).await.unwrap();
+        assert_eq!(out.planned,5);assert_eq!(out.covered,5);assert_eq!(out.complete,cost==Some(100));
+        let c=calls.lock().unwrap();assert_eq!(c.len(),if cost==Some(100){2}else{1});assert_eq!(c.iter().collect::<std::collections::BTreeSet<_>>().len(),if cost==Some(100){2}else{1});
+        let l=ledger.lock().unwrap();assert_eq!(l.len(),if cost==Some(100){4}else{2});for pair in l.chunks(2){assert_eq!(pair[0].0,pair[1].0);assert!(!pair[0].1);assert!(pair[1].1);}
+        }
+    }
+
     #[test] fn image_before_local_pdf_text_is_not_mistaken_for_the_pdf() {
         let mut input=parent("RELAYCORE_CLAUDE","claude-opus-5.5","NONE",0);
         input.messages=json!([{"role":"user","content":[{"type":"text","text":"read"},{"type":"text","text":"附件原件：public.png（image/png）"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}},{"type":"text","text":"本机 PDF 文本层\n### 附件：public.pdf\nPDF-43"}]}]);
@@ -1128,7 +1236,7 @@ mod tests {
         ] {
             let mut request = parent(
                 "OPENROUTER",
-                "google/gemini-3.8-flash",
+                "google/gemini-4-hydrogen",
                 "OPENROUTER_CHAT_COMPLETIONS",
                 0,
             );

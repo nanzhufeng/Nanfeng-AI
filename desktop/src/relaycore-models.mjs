@@ -25,16 +25,16 @@ export const RELAYCORE_MODELS = Object.freeze([
     "cachedInputPerMillion": 0.07
   },
   {
-    "presetId": "RELAYCORE_GPT_6_1_SOL",
+    "presetId": "RELAYCORE_GPT_6_2_SOL",
     "providerId": "RELAYCORE_GPT",
-    "modelId": "gpt-6.1-sol",
-    "modelName": "GPT-6.1 Sol",
+    "modelId": "gpt-6.2-sol",
+    "modelName": "GPT-6.2 Sol",
     "channel": "Pro3",
     "multiplier": "0.25",
     "tier": "DEEP",
-    "inputPerMillion": 0.5,
-    "outputPerMillion": 2.5,
-    "cachedInputPerMillion": 0.025
+    "inputPerMillion": null,
+    "outputPerMillion": null,
+    "cachedInputPerMillion": null
   },
   {
     "presetId": "RELAYCORE_GPT_6_ASTRA",
@@ -73,24 +73,37 @@ export const RELAYCORE_MODELS = Object.freeze([
     "cachedInputPerMillion": 0.056
   }
 ].map(model => Object.freeze(model)));
+const historicalSol = Object.freeze({
+  "presetId": "RELAYCORE_GPT_6_1_SOL",
+  "providerId": "RELAYCORE_GPT",
+  "modelId": "gpt-6.1-sol",
+  "modelName": "GPT-6.1 Sol",
+  "channel": "Pro3",
+  "multiplier": "0.25",
+  "tier": "DEEP",
+  "inputPerMillion": 0.5,
+  "outputPerMillion": 2.5,
+  "cachedInputPerMillion": 0.025
+});
+export const RELAYCORE_KNOWN_MODELS = Object.freeze([...RELAYCORE_MODELS, historicalSol]);
 export const relayCoreModel = presetId => RELAYCORE_MODELS.find(model => model.presetId === presetId);
 export const relayCoreCompactName = model => model.channel === "Gemini" && model.modelName.startsWith("Gemini ") ? model.modelName : `${model.modelName} · ${model.channel}`;
 export const relayCoreUiModelName = model => model.modelName === 'GPT-6 Astra' ? '6 Astra' : model.modelName;
 export const relayCorePickerName = model => `${relayCoreUiModelName(model)} · ${model.multiplier}×`;
 
 export function relayCoreNeedsCompanion(presetId, enabled, hasAttachments = false) {
-  const model = relayCoreModel(presetId) || RELAYCORE_MODELS.find(item => item.modelId === presetId || item.modelId.replace('-5-5','-5.5') === presetId || (item.presetId === 'RELAYCORE_OPUS_5_5' && presetId === 'claude-opus-5-5'));
+  const model = relayCoreModel(presetId) || RELAYCORE_KNOWN_MODELS.find(item => item.modelId === presetId || item.presetId === presetId || item.modelId.replace('-5-5','-5.5') === presetId || (item.presetId === 'RELAYCORE_OPUS_5_5' && presetId === 'claude-opus-5-5'));
   return Boolean(enabled && (['RELAYCORE_CLAUDE', 'RELAYCORE_GEMINI'].includes(model?.providerId) || hasAttachments && model?.providerId === 'RELAYCORE_GPT'));
 }
 export function relayCoreEgressVersion(presetId, enabled, hasAttachments = false) {
-  return relayCoreNeedsCompanion(presetId, enabled, hasAttachments) ? 'normal-chat-luna-search-v1' : 'normal-chat-egress-v1';
+  return relayCoreNeedsCompanion(presetId, enabled, hasAttachments) ? 'normal-chat-luna-exa-search-v2' : 'normal-chat-egress-v1';
 }
 
-export const relayCoreShortModelName = model => ({'GPT-6.1 Sol':'6.1 Sol','GPT-6 Astra':'6 Astra','Gemini 3.8 Flash':'Gemini 3.8','Gemini 3.1 Pro':'Gemini 3.1'}[model.modelName] || model.modelName);
+export const relayCoreShortModelName = model => ({'GPT-6.1 Sol':'6.1 Sol','GPT-6.2 Sol':'6.2 Sol','GPT-6 Astra':'6 Astra','Gemini 3.8 Flash':'Gemini 3.8','Gemini 3.1 Pro':'Gemini 3.1'}[model.modelName] || model.modelName);
 export const relayCoreFooterName = model => `${relayCoreShortModelName(model)} · RC`;
 
 export async function createLunaRetrievalGrant(text, attachmentIds) {
  const bytes=new TextEncoder().encode(JSON.stringify([String(text || '').trim(),[...attachmentIds].sort()]));
  const hash=await crypto.subtle.digest('SHA-256',bytes);
- return {disclosureVersion:'normal-chat-luna-search-v1',providerId:'OPENROUTER',presetId:'GPT_6_LUNA',modelId:'openai/gpt-6-luna',materialFingerprint:[...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('')};
+ return {disclosureVersion:'normal-chat-luna-exa-search-v2',providerId:'OPENROUTER',presetId:'GPT_6_LUNA',modelId:'openai/gpt-6-luna',materialFingerprint:[...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('')};
 }

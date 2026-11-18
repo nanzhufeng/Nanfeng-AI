@@ -869,7 +869,7 @@ class NormalChatOpenRouterExecutor(
             val receiver=if(companionRequired) requireNotNull(searchModel) else resolvedModel
             val receiverPreset=if(companionRequired) RelayCoreWebSearchCompanion.preset else preset
             val receiverAdapter=if(companionRequired) OpenRouterChatAdapter() else adapter
-            val receiverBaseOptions=if(companionRequired) ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL,openRouterNativeSearchOnly=true) else requestOptions
+            val receiverBaseOptions=if(companionRequired) ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL,openRouterExaSearchOnly=true) else requestOptions
             val receiverOptions=if(receiverBaseOptions.webSearchRoute==OfficialWebSearchRoute.RELAYCORE_GPT_RESPONSES) receiverBaseOptions.copy(relayTaskRoutingKey=relayTaskRoutingKey(receiver.providerId,receiver.modelId,physicalSession)) else receiverBaseOptions
             val receiverConfig=requireNotNull(searchConfig)
             fun batchSearch(plan:AttachmentWebSearchPlan.Plan?):RelayCoreWebSearchCompanion.Result {
@@ -881,7 +881,7 @@ class NormalChatOpenRouterExecutor(
                     context.messages.filter {it.role==MessageRole.USER && it.text!=userMessage}.map {it.text}.takeLast(2),authorization,
                     {requireNotNull(frozenSearchCredential).copyOf()},cancellation,
                     {sendAttempts.transition(attempt.attemptId,setOf(NormalChatSendAttemptStatus.SENDING),NormalChatSendAttemptStatus.ACCEPTED,clock.instant());onStreamProgress()},
-                    materialText=bridged.contextText,batchPlan=plan,receiverPreset=receiverPreset,receiverAdapter=if(companionRequired) null else receiverAdapter,receiverOptions=receiverOptions)
+                    materialText=bridged.contextText,batchPlan=plan,receiverPreset=receiverPreset,receiverAdapter=if(companionRequired) null else receiverAdapter,receiverOptions=receiverOptions,ordinaryQuestionResearch=companionRequired && attachments.isEmpty())
                 val reply=(result as? RelayCoreWebSearchCompanion.Result.Ready)?.reply
                 val error=result as? RelayCoreWebSearchCompanion.Result.Failed
                 // Settlement is a physical-call fact even when evidence/terminal validation fails.
@@ -915,7 +915,8 @@ class NormalChatOpenRouterExecutor(
                     if(!lastAuditAppendSucceeded) inventoryFailure=RelayCoreWebSearchCompanion.Result.Failed("LOCAL_ATTEMPT_PERSISTENCE")
                 }
             }
-            val searchPlan=AttachmentWebSearchPlan.build(searchMaterial)
+            val ordinaryQuestionResearch=companionRequired && attachments.isEmpty()
+            val searchPlan=if(ordinaryQuestionResearch) QuestionWebResearch.plan(userMessage) else AttachmentWebSearchPlan.build(searchMaterial)
             if(!companionRequired && inventoryFailure==null && inventoryText!=null && searchPlan.items.isEmpty()) {
                 // Private/no-public-fact media still uses enabled search, without inventing
                 // public claims or treating an empty scope as a failed retrieval.
@@ -948,7 +949,7 @@ class NormalChatOpenRouterExecutor(
                     createdAt=clock.instant(),conversationId=conversationId.value,attemptId=attempt.attemptId,providerId=executionProviderId,
                     modelId=resolvedModel.modelId,tokenizerId=resolvedModel.tokenizerId,budget=budget,
                     selectedSources=listOf(ContextSelectionSource("联网检索服务",IndependentSearchServiceGrant.SERVICE_ID,IndependentSearchServiceGrant.LABEL,0),ContextSelectionSource("联网核验范围","attachment-search-coverage-v2","$covered/$planned 项查询执行完成；事实仍待核实",0)),participationAuditAvailable=true))},cache=AttemptIndependentSearchCache(sendAttempts,attempt.attemptId,AttemptAttachmentSearchCache.fingerprint("${authorization?.draftFingerprint}:${IndependentSearchServiceGrant.SERVICE_ID}:${IndependentSearchServiceGrant.ENGINE_ID}:${AttemptIndependentSearchCache.PLAN_VERSION}:${searchPlan.queryText()}"),clock,accountingFacts))
-            else if(searchPlan.items.isNotEmpty()) AttachmentWebSearchCoordinator.run(searchPlan,{cancellation?.isCancelled()==true},{batch,_ ->batchSearch(batch)},cache=cache,batchSize=AttachmentWebSearchCoordinator.batchSize(receiverOptions.webSearchRoute)) else if(attachmentRetrievalRequired) RelayCoreWebSearchCompanion.Result.Failed("WEB_SEARCH_QUERY_EMPTY") else batchSearch(null)
+            else if(searchPlan.items.isNotEmpty()) AttachmentWebSearchCoordinator.run(searchPlan,{cancellation?.isCancelled()==true},{batch,_ ->batchSearch(batch)},cache=if(ordinaryQuestionResearch) AttachmentSearchCheckpointCache.None else cache,batchSize=if(ordinaryQuestionResearch) 32 else AttachmentWebSearchCoordinator.batchSize(receiverOptions.webSearchRoute),supplementSingleUnverified=ordinaryQuestionResearch) else if(attachmentRetrievalRequired || ordinaryQuestionResearch) RelayCoreWebSearchCompanion.Result.Failed("WEB_SEARCH_QUERY_EMPTY") else batchSearch(null)
             val reply=(result as? RelayCoreWebSearchCompanion.Result.Ready)?.reply
             val failed=result as? RelayCoreWebSearchCompanion.Result.Failed
             if (failed != null) {

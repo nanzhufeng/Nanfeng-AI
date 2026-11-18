@@ -58,7 +58,7 @@
 |---|---|---|---|
 | 深度 | `claude-opus-5.5` | `Opus 5.5 · 0.35×` | `Opus 5.5 · RC` |
 | 日常 | `claude-sonnet-5-5` | `Sonnet 5.5 · 0.35×` | `Sonnet 5.5 · RC` |
-| 深度 | `gpt-6.1-sol` | `GPT-6.1 Sol · 0.25×` | `6.1 Sol · RC` |
+| 深度 | `gpt-6.2-sol` | `GPT-6.2 Sol · 0.25×` | `6.2 Sol · RC` |
 | 深度 | `gpt-6-astra` | `6 Astra · 0.25×` | `6 Astra · RC` |
 | 日常 | `gemini-3.8-flash` | `Gemini 3.8 Flash · 0.28×` | `Gemini 3.8 · RC` |
 | 深度 | `gemini-3.1-pro` | `Gemini 3.1 Pro · 0.28×` | `Gemini 3.1 · RC` |
@@ -66,6 +66,7 @@
 - 模型设置的平台入口固定为五个：OpenRouter → RelayCore → DeepSeek → 智谱 → Qwen，一行等宽、统一紧凑比例。RelayCore 是第二个；内部 Claude／GPT／Gemini 三个配置保存独立 Key，三个内部 Provider ID 不能被当作七个平台入口。
 - 平台设置入口及配置身份允许显示 RelayCore；模型列表行不再重复平台名。列表与内屏输入框选框主名称均为模型＋倍率，Android 外屏选框采用下述紧凑命名，页脚按 RC 简写平台，详情与通知保留冻结的实际归因。
 - 2026-10-11 附件失败修复：模型广场的同一 `Claude-Kiro正价` 0.35组同时列出 `claude-opus-5-5` 与 `claude-opus-5.5`，基础价／最终价一致。旧连字符ID在现有Key上重复504；点号ID经同一Key的Messages SSE重复附件、联网协作与长材料验证。当前双端目录／profile／连接测试／发送采用 `claude-opus-5.5`；仍为Opus5.5／原Key／原正价组，不换Provider、版本或倍率。不按失败动态切API ID、不自动重发。历史Attempt／已落盘账单保留原ID；显式旧失败重试只对这一个已验证同组别名规范化，其他Provider／版本不放宽。API返回原值保留，价格owner兼容两个历史拼写，CNY规则不变。旧20261009／20261010 fixture保留，当前为20261011 fixture。
+- 2026-11-18 使用现有 GPT Key 读取 `/v1/models`，确认目录包含 `gpt-6.2-sol`。界面 0.25× 表示现有 Pro3 分组系数。新模型的分组实际费率与推理未验，缺少可信金额时将费用保留为未知。
 - 当前路由与 Key 分组必须匹配：`RELAYCORE_CLAUDE` 对应 Claude-Kiro正价；`RELAYCORE_GPT` 对应 Codex | Pro3；`RELAYCORE_GEMINI` 对应 Gemini。Key 名称不是分组证据；网站若修改绑定，App 配置必须同步核实。不同分组不能共享本机 Key 记录或偷偷切换。
 - 三把网站 Key 的推荐名称为 `南枫AI-Claude-Kiro正价`、`南枫AI-GPT-Pro3`、`南枫AI-Gemini`。Claude Key 已按用户确认切到 Claude-Kiro正价；未来若改分组，必须同步核实应用配置，不能把其他分组冒称普通 Kiro。
 - 六个候选保留手动 RelayCore 二级菜单；普通聊天 Auto 已按 [模型选择与 Auto 合同](P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md) 纳入文本候选，不加入标题／自动整理／定时监控。联网、工具、图片等未获当前 Relay 协议证据的能力不宣称已支持；普通文本及本机已解析文本沿用 OpenAI 兼容接口，显式要求联网时拒绝离线代替。
@@ -84,7 +85,7 @@
 
 ## 当前联网协作与身份
 
-- RC普通文字Sol/Astra保留自身Responses搜索及来源回传；其余四款普通文字、六款联网附件统一使用OpenRouter Luna检索。本次具体路由、原生来源、预算及失败语义唯一正文见[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md#当前按渠道和材料冻结搜索路由)。所选RC模型仍是最终回答接收方；三个RC凭据分组保持独立。
+- RC普通文字Sol/Astra保留自身Responses搜索及来源回传；其余四款普通文字、六款联网附件统一使用OpenRouter Luna协作Exa Fast限量检索。本次具体路由、结构化来源、预算及失败语义唯一正文见[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md#当前按渠道和材料冻结搜索路由)。所选RC模型仍是最终回答接收方；三个RC凭据分组保持独立。功能审阅沿原入口说明该选择和限量理由，不新增常驻按键。
 - 模型菜单联网小字按各平台当前renderer表达状态，Desktop辅助路线可保留`Luna · OpenRouter 检索`；正常与重试Composer不再常驻接收方、材料清单或费用重复说明，不新增同类提示或按键。准确接收方／材料仍由既有授权owner冻结并校验；删除文案不扩大权限。精确授权及历史兼容唯一正文见[P3J](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md#当前luna辅助接收方授权)。功能审阅复用原入口，保留该按场景路由，理由是正常自身联网不受助手覆盖、复杂附件的检索与回答身份清楚。
 - RC普通回答协议保持Claude Messages SSE、GPT/Gemini既有Chat Completions；Gemini仅检索后回答撤去legacy max_tokens。接口能力与实际可用性不同，404、空正文和缺实际返回身份如实保留，不静默换型号或协议。
 
@@ -127,3 +128,7 @@
 ## Sonnet响应身份别名（2026-10-22）
 
 同一已配置Claude服务的正式`/v1/models`目录同时发布`claude-sonnet-5-5`与`claude-sonnet-5.5`；本轮真实四附件请求前者，返回后者，正文及终态正常。仅为该Provider增加这对精确响应身份等价，规范到原请求ID`claude-sonnet-5-5`。不改wire请求、预设、渠道、倍率、原始返回值和历史账本，不扩大到其他Provider、其他Claude版本或Opus/Sonnet之间。原身份误报由既有真实回执离线回放校验，不重复付费。证据见[真实附件验收](verification/2026-10-21-real-attachment-roundtrip/REPORT.md)。
+
+- 普通文字问题的协作检索现与附件共用C12逐项覆盖/有界补查owner，不能退回单次泛化摘要；Luna/OpenRouter与原选回答模型身份及授权均保持。具体范围、限额和证据边界唯一见C12“普通问题的协作检索覆盖”。
+
+普通问题协作检索的成本边界：完整事项一次合批，最多一次合并缺证补查、总计最多2个物理检索请求；首轮Provider实际USD费用未知或超过10000微美元时不自动补查，保留已得证据与未核实缺口。完整问题在每批请求正文只出现一次，附件既有分批不受此普通问题策略改变。此门只能阻止追加请求，不宣称第一笔原生检索费用有人民币硬上限；不以Provider忽略的max_uses/context_size充当预算保证。

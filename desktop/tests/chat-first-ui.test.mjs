@@ -528,7 +528,7 @@ test('empty new-chat canvas keeps the Android Auto Daily Deep picker available b
   assert.ok(!root.match(/data-action="toggle-p6g-model-picker"[^>]*disabled/));
 
   const daily = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true, p6gSelection: { pickerTier: 'DAILY' } });
-  for (const token of ['DeepSeek V4.1 Flash', 'Claude Sonnet 5.5', 'Claude Haiku 5.5', 'GPT-6 Luna', 'GLM-5.3 Flash', 'Qwen3.7-Plus', 'Gemini 3.8 Flash']) assert.ok(daily.includes(token), token);
+  for (const token of ['DeepSeek V4.1 Flash', 'Claude Sonnet 5.5', 'Claude Haiku 5.5', 'GPT-6 Luna', 'GLM-5.3 Flash', 'Qwen3.7-Plus', 'Gemini 4 Hydrogen']) assert.ok(daily.includes(token), token);
   for (const token of ['选择具体模型', 'OpenRouter · 未联网', '智谱 · 未联网', '千问 · 未联网']) assert.ok(daily.includes(token), token);
   for (const removed of ['高效处理日常工作。', '适合快速问答与高频文本任务。', '能力与成本更均衡。', '智谱官方直连的快速文本任务。', '日常问答与轻量多媒体任务。', '快速处理文字、图片和文件任务。', '<small>OPENROUTER</small>', '<small>DEEPSEEK</small>', '<small>ZHIPU</small>', '<small>QWEN</small>', '本地确定性 fixture']) assert.ok(!daily.includes(removed), removed);
   assert.ok(css.includes('.composer-model-sheet-header > strong {'));

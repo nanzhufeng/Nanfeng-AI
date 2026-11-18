@@ -125,6 +125,8 @@ data class MemorySummaryReplacement(
 )
 
 interface MemoryRepository {
+    fun saveAutomaticSummary(intent: MemoryIntent, fingerprint: String): MemoryMutationResult =
+        MemoryMutationResult.Rejected(MemoryRejectionCode.INVALID_ACTION)
     fun replaceSummary(request: MemorySummaryReplacement, fingerprint: String): MemoryMutationResult =
         MemoryMutationResult.Rejected(MemoryRejectionCode.INVALID_ACTION)
     fun mutate(intent: MemoryIntent, fingerprint: String): MemoryMutationResult
@@ -192,6 +194,17 @@ class MemoryDomain(private val clock: Clock) {
 }
 
 class ManageMemoryUseCase(private val domain: MemoryDomain, private val repository: MemoryRepository) {
+    /** Dedicated source identity prevents automatic extraction from replacing hand-written memory. */
+    fun saveAutomaticSummary(conversationId: ConversationId, title: String, body: String): MemoryMutationResult {
+        val source = "auto-history-v1:${conversationId.value}"
+        val intent = MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.CREATE,
+            MemoryId(UUID.nameUUIDFromBytes(source.toByteArray(Charsets.UTF_8)).toString()),
+            title, body, MemoryScope(MemoryScopeKind.GLOBAL),
+            sourceStableId = source,
+            sourceSummary = "开启历史资料库后自动提取；来源对话保留，手动修改后停止自动覆盖")
+        domain.validate(intent)?.let { return MemoryMutationResult.Rejected(it) }
+        return repository.saveAutomaticSummary(intent, fingerprint(intent))
+    }
     fun execute(intent: MemoryIntent): MemoryMutationResult {
         domain.validate(intent)?.let { return MemoryMutationResult.Rejected(it) }
         return repository.mutate(intent, fingerprint(intent))

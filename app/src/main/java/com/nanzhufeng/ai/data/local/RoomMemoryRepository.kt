@@ -21,6 +21,24 @@ class RoomMemoryRepository(private val database: NanfengAiDatabase, private val 
 
     override fun conflict(id: MemoryConflictId): MemoryConflict? = database.memoryDao().conflict(id.value)?.toDomain()
 
+    override fun saveAutomaticSummary(intent: MemoryIntent, fingerprint: String): MemoryMutationResult = database.inMemoryTransaction {
+        domain.validate(intent)?.let { return@inMemoryTransaction MemoryMutationResult.Rejected(it) }
+        require(intent.sourceStableId.startsWith("auto-history-v1:"))
+        val dao = database.memoryDao()
+        val current = dao.loadSnapshot(requireNotNull(intent.memoryId))
+        if (current != null) {
+            // Re-check inside the same transaction as the update. Editing, deleting, pausing,
+            // or restoring a section transfers ownership to the user permanently.
+            if (current.memory.status != MemoryStatus.ACTIVE || current.revisions.any {
+                it.sourceStableId != intent.sourceStableId || it.status != MemoryStatus.ACTIVE
+            } || current.memory.contentHash == domain.contentHash(requireNotNull(intent.title), requireNotNull(intent.body))) {
+                return@inMemoryTransaction MemoryMutationResult.Duplicate(current)
+            }
+            return@inMemoryTransaction update(dao, intent.copy(action = MemoryIntentAction.UPDATE), fingerprint)
+        }
+        create(dao, intent, fingerprint, automatic = true)
+    }
+
     override fun mutate(intent: MemoryIntent, fingerprint: String): MemoryMutationResult = database.inMemoryTransaction {
         val dao = database.memoryDao()
         val previous = dao.intent(intent.id.value)
@@ -68,7 +86,7 @@ class RoomMemoryRepository(private val database: NanfengAiDatabase, private val 
         MemoryMutationResult.Applied(listOf(requireNotNull(dao.loadSnapshot(item.id))))
     }
 
-    private fun create(dao: MemoryDao, intent: MemoryIntent, fingerprint: String): MemoryMutationResult {
+    private fun create(dao: MemoryDao, intent: MemoryIntent, fingerprint: String, automatic: Boolean = false): MemoryMutationResult {
         val scope = requireNotNull(intent.scope)
         if (!scopeExists(scope)) return MemoryMutationResult.Rejected(MemoryRejectionCode.INVALID_SCOPE_REFERENCE)
         val title = domain.normalizedTitle(requireNotNull(intent.title)); val body = domain.normalizedBody(requireNotNull(intent.body))
@@ -77,7 +95,7 @@ class RoomMemoryRepository(private val database: NanfengAiDatabase, private val 
             dao.insertIntent(MemoryIntentEntity(intent.id.value, existing.id, intent.action.name, fingerprint, null, now().toEpochMilli()))
             return MemoryMutationResult.Duplicate(requireNotNull(dao.loadSnapshot(MemoryId(existing.id))))
         }
-        dao.findLiveByConcept(scope.stableKey(), conceptHash)?.let { existing ->
+        dao.findLiveByConcept(scope.stableKey(), conceptHash)?.takeUnless { automatic }?.let { existing ->
             val conflict = MemoryConflict(MemoryConflictId.new(), intent.id, MemoryId(existing.id), title, body, scope, intent.source, intent.sourceStableId, intent.sourceSummary, contentHash, MemoryConflictStatus.PENDING, now())
             dao.insertConflict(conflict.toEntity())
             dao.insertIntent(MemoryIntentEntity(intent.id.value, null, intent.action.name, fingerprint, conflict.id.value, conflict.createdAt.toEpochMilli()))

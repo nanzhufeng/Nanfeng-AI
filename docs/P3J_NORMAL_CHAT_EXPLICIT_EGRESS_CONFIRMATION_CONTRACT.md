@@ -204,9 +204,9 @@ attempt identity、新费用确认和新的未勾选确认框。
 
 ## 当前Luna辅助接收方授权
 
-Android复用v3的精确auxiliaryRecipientModelIds，将当前Luna预设、Provider/API ID与原回答模型、文字及附件身份／hash同时纳入发送指纹；后台Intent完整传递该映射。旧Sol辅助映射或旧独立服务授权不满足本次Luna校验，新发送不继承旧搜索接收方。
+Android当前发送授权为`normal-chat-egress-v4`，在共享发送版本中明确包含Luna协作Exa接收方语义；精确auxiliaryRecipientModelIds将当前Luna预设、Provider/API ID与原回答模型、文字及附件身份／hash同时纳入发送指纹，后台Intent完整传递该版本及映射。旧v3/native、Sol辅助映射或旧独立服务授权不能放行新Exa路径；历史Attempt及账本仍保留原授权版本，只读兼容不扩大外发。正常发送与显式重试生成当前材料授权，不新增重复确认。
 
-Mac的Lunareceipt版本为`normal-chat-luna-search-v1`，包含`OPENROUTER / GPT_6_LUNA / openai/gpt-6-luna`和`SHA256(JSON([trim后的本次文字,排序后的不可变附件ID]))`。正常发送在读Key／建立连接前核验；显式重试绑定原文字及原附件，不使用后来编辑的草稿。无receipt、旧版本、模型或材料变化均拒绝，不能靠读取兼容扩大外发。普通自身联网沿用原发送语义，不增设弹窗或常驻按键。来源、失败与计量唯一正文见[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)。
+Mac的Luna／Exa receipt版本为`normal-chat-luna-exa-search-v2`，包含`OPENROUTER / GPT_6_LUNA / openai/gpt-6-luna`和`SHA256(JSON([trim后的本次文字,排序后的不可变附件ID]))`。外层发送与独立retrievalRecipient均核验当前版本，旧`normal-chat-luna-search-v1`不能放行Exa。正常发送在读Key／建立连接前核验；显式重试绑定原文字及原附件，不使用后来编辑的草稿。无receipt、旧版本、模型或材料变化均拒绝，不能靠读取兼容扩大外发。普通自身联网沿用原发送语义，不增设弹窗或常驻按键。来源、失败与计量唯一正文见[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)。
 
 ## 历史附件独立搜索服务授权（只读）
 

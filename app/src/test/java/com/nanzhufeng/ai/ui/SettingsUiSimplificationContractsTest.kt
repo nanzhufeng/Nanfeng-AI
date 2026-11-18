@@ -187,7 +187,7 @@ class SettingsUiSimplificationContractsTest {
         assertTrue(personalization.contains("允许 南枫AI 根据你的聊天、文件和已关联的应用为你提供个性化体验。"))
         assertTrue(personalization.contains("当前风格会用于每次普通对话；只改变表达方式，不改变模型、联网、记忆或资料库功能。"))
         assertTrue(personalization.contains("历史资料库"))
-        assertTrue(personalization.contains("低频整理有价值的历史对话，并在后续对话优先调用少量相关资料。"))
+        assertTrue(personalization.contains("将单条历史对话的有限文字交给 DeepSeek Flash"))
         assertTrue(personalization.contains("title = \"历史资料库\""))
         assertTrue(personalization.contains("checked = settings.historyLibraryEnabled"))
         assertTrue(personalization.contains("onCheckedChange = { enabled -> onUpdateSwitch"))

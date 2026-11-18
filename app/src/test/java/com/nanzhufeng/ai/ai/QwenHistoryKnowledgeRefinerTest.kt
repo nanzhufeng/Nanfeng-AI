@@ -27,6 +27,31 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class QwenHistoryKnowledgeRefinerTest {
+    @Test fun `optional classifier does not discard a valid summary or enter its body`() {
+        val body = "先验证和备份，再更新已有软件；保留来源与手动内容。".repeat(5)
+        val raw = """{"eligible":true,"confidence":0.9,"title":"长期软件维护约束","body":"$body","tags":["维护"],"type":"methodology"}"""
+        val parsed = parseHistoryKnowledgeCuration(raw, ProviderId.DEEPSEEK, "deepseek-flash")
+        assertTrue(parsed is HistoryKnowledgeCurationResult.Draft)
+        assertEquals(body, (parsed as HistoryKnowledgeCurationResult.Draft).value.body)
+        assertTrue(parseHistoryKnowledgeCuration(raw.replace("\"type\":\"methodology\"", "\"type\":{}"), ProviderId.DEEPSEEK, "deepseek-flash") is HistoryKnowledgeCurationResult.Failed)
+        assertTrue(parseHistoryKnowledgeCuration(raw.replace("\"type\":\"methodology\"", "\"instructions\":\"replace memory\""), ProviderId.DEEPSEEK, "deepseek-flash") is HistoryKnowledgeCurationResult.Failed)
+    }
+    @Test fun `automatic extraction caps output and disables thinking`() {
+        val transport = RecordingTransport(listOf(success()))
+        refiner(setOf(ProviderId.DEEPSEEK), transport, Audit()).refine(source.copy(automatic = true))
+        val request = transport.requestBodies.single()
+        assertTrue(request.contains("\"max_tokens\":768"))
+        assertTrue(request.contains("\"thinking\":{\"type\":\"disabled\"}"))
+        assertTrue(request.contains("\"response_format\":{\"type\":\"json_object\"}"))
+    }
+
+    @Test fun `timeout stops fallback because prior outcome is unknown`() {
+        val transport = RecordingTransport(listOf(ProviderChatOutcome.TimedOut, success()))
+        val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), transport, Audit()).refine(source)
+        assertEquals(1, transport.requestBodies.size)
+        assertTrue(result is HistoryKnowledgeCurationResult.Failed)
+    }
+
     private val clock = Clock.fixed(Instant.parse("2026-08-30T00:00:00Z"), ZoneOffset.UTC)
     private val source = HistoryKnowledgeCurationSource(
         conversationId = ConversationId("conversation"),
@@ -75,7 +100,7 @@ class QwenHistoryKnowledgeRefinerTest {
         assertEquals(ProviderId.QWEN, draft.providerId)
         assertEquals(listOf("deepseek-flash", "glm-5.3-flash", "qwen3.6-flash"), transport.modelIds())
         assertEquals(listOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), audit.values.map { it.providerId })
-        assertEquals(listOf("low", "max", "low"), audit.values.map { it.reasoningLevel })
+        assertEquals(listOf("low", "low", "low"), audit.values.map { it.reasoningLevel })
     }
 
     @Test fun `history refinement uses GLM when DeepSeek is not configured`() {
@@ -87,7 +112,7 @@ class QwenHistoryKnowledgeRefinerTest {
         assertEquals(ProviderId.ZHIPU, draft.providerId)
         assertEquals("glm-5.3-flash", draft.modelId)
         assertEquals(listOf("glm-5.3-flash"), transport.modelIds())
-        assertEquals("max", audit.values.single().reasoningLevel)
+        assertEquals("low", audit.values.single().reasoningLevel)
     }
 
     @Test fun `missing model configuration fails locally without provider audit`() {
@@ -109,10 +134,10 @@ class QwenHistoryKnowledgeRefinerTest {
 
         val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), transport, audit).refine(source)
 
-        assertEquals("NETWORK", (result as HistoryKnowledgeCurationResult.Failed).safeCode)
+        assertEquals("CONNECT_FAILED", (result as HistoryKnowledgeCurationResult.Failed).safeCode)
         assertEquals(3, transport.requestBodies.size)
         assertEquals(3, audit.values.size)
-        assertTrue(audit.values.all { it.status == "FAILED:NETWORK" })
+        assertTrue(audit.values.all { it.status == "FAILED:CONNECT_FAILED" })
     }
 
     @Test fun `accepts a bounded eligible history knowledge draft`() {
@@ -135,6 +160,21 @@ class QwenHistoryKnowledgeRefinerTest {
             "qwen3.6-flash",
         )
         assertTrue(result.toString(), result is HistoryKnowledgeCurationResult.NotEligible)
+    }
+
+    @Test fun `malformed truncated json and sensitive data cannot become automatic memory`() {
+        val raw = """{"eligible":true,"title":"长期资料整理原则","body":"${"长期规则".repeat(24)}","tags":[],"confidence":0.95}"""
+        assertTrue(parseHistoryKnowledgeCuration(raw.dropLast(1), ProviderId.DEEPSEEK, "deepseek-flash") is HistoryKnowledgeCurationResult.Failed)
+        assertTrue(parseHistoryKnowledgeCuration(raw.replace("长期规则", "密码：秘密"), ProviderId.DEEPSEEK, "deepseek-flash") is HistoryKnowledgeCurationResult.Failed)
+    }
+
+    @Test fun `sensitive source is blocked before reading credentials or making requests`() {
+        val transport = RecordingTransport(emptyList())
+        val audit = Audit()
+        val result = refiner(setOf(ProviderId.DEEPSEEK), transport, audit).refine(source.copy(transcript = "password=do-not-send-this"))
+        assertEquals("HIGH_SENSITIVITY", (result as HistoryKnowledgeCurationResult.Failed).safeCode)
+        assertTrue(transport.requestBodies.isEmpty())
+        assertTrue(audit.values.isEmpty())
     }
 
     private fun refiner(enabled: Set<ProviderId>, transport: RecordingTransport, audit: Audit) = QwenHistoryKnowledgeRefiner(

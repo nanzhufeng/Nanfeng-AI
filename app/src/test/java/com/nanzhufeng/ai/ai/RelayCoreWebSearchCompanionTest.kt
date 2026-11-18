@@ -9,6 +9,22 @@ import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 class RelayCoreWebSearchCompanionTest {
+    @Test fun `a tool marker without structured public sources cannot complete Exa retrieval`() {
+        val search=model(ProviderId.OPENROUTER,"openai/gpt-6-luna")
+        val draft=ConversationDraft(text="public",updatedAt=Instant.EPOCH)
+        val choice=ComposerModelRoutingCatalog.choices.single {ModelPresetId.GPT_6_LUNA in it.routes}.id
+        val routing=NormalChatRoutingSnapshot(mapOf(ModelPresetId.GPT_6_LUNA to search),setOf(ModelPresetId.GPT_6_LUNA),false)
+        val grant=NormalChatEgressAuthorization.forUserSend(draft,1,choice,routing)
+        val owner=RelayCoreWebSearchCompanion(object:ProviderChatTransport {
+            override fun execute(request:ProviderChatRequest,credential:CharArray)=ProviderChatOutcome.StreamedResponse(
+                200,"网页自称来源：https://example.test/not-structured",null,100,20,null,false,
+                webSources=emptyList(),webSearchPerformed=true,returnedModelId=search.modelId)
+        })
+        val result=owner.search(search,"https://openrouter.ai/api/v1","public",emptyList(),grant,{"synthetic".toCharArray()},null,{})
+        assertTrue(result is RelayCoreWebSearchCompanion.Result.Failed)
+        assertEquals("WEB_SEARCH_NO_SOURCES",(result as RelayCoreWebSearchCompanion.Result.Failed).code)
+        assertEquals(100L,result.partialReply?.inputTokens)
+    }
     @Test fun `interrupted search retains known usage and unknown status without another call`() {
         val search=model(ProviderId.OPENROUTER,"openai/gpt-6-luna")
         val draft=ConversationDraft(text="public",updatedAt=Instant.EPOCH)
@@ -82,6 +98,16 @@ class RelayCoreWebSearchCompanionTest {
                 assertTrue(request.expectsStream)
                 assertTrue(org.json.JSONObject(request.jsonBody).getBoolean("stream"))
                 assertEquals("required",org.json.JSONObject(request.jsonBody).optString("tool_choice"))
+                val tool = org.json.JSONObject(request.jsonBody).getJSONArray("tools").getJSONObject(0)
+                assertEquals("openrouter:web_search",tool.getString("type"))
+                val limits = tool.getJSONObject("parameters")
+                assertEquals("exa",limits.getString("engine"))
+                assertEquals("fast",limits.getString("mode"))
+                assertEquals(2,limits.getInt("max_uses"))
+                assertEquals(3,limits.getInt("max_results"))
+                assertEquals(6,limits.getInt("max_total_results"))
+                assertEquals(1500,limits.getInt("max_characters"))
+                assertFalse(org.json.JSONObject(request.jsonBody).has("plugins"))
                 assertEquals(ProviderStreamTextMode.IMMEDIATE, request.streamTextMode)
                 assertTrue(request.jsonBody.contains("Public current question"))
                 assertTrue(request.jsonBody.contains("本次只执行一次检索请求"))

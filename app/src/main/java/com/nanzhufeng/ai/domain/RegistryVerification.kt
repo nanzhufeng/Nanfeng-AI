@@ -119,18 +119,20 @@ class OpenRouterRegistrySnapshotVerifier {
         val astra = standardGpt(listOf("gpt-6-astra"))
         val grok41Fast = candidates.firstOrNull { it.id == "x-ai/grok-4.1-fast" }
         val grok46 = candidates.firstOrNull { it.id == "x-ai/grok-4.6" }
-        val gemini = candidates.firstOrNull { it.id == "google/gemini-3.8-flash" } ?: return null
+        val gemini = candidates.firstOrNull { it.id == "google/gemini-3.8-flash" }
         val kimiK3 = candidates.firstOrNull { it.id == "moonshotai/kimi-k3" }
         val current = listOf(
             ModelPresetId.CLAUDE_OPUS_5_5 to "anthropic/claude-opus-5.5",
             ModelPresetId.CLAUDE_SONNET_5_5 to "anthropic/claude-sonnet-5.5",
             ModelPresetId.CLAUDE_HAIKU_5_5 to "anthropic/claude-haiku-5.5",
             ModelPresetId.GPT_6_1_SOL to "openai/gpt-6.1-sol",
+            ModelPresetId.GPT_6_2_SOL to "openai/gpt-6.2-sol",
             ModelPresetId.GPT_6_1_TERRA to "openai/gpt-6.1-terra",
             ModelPresetId.GPT_6_LUNA to "openai/gpt-6-luna",
             ModelPresetId.MERCURY_3 to "inception/mercury-3",
-        ModelPresetId.MUSE_WONDER to "meta/muse-wonder",
-        ModelPresetId.GEMINI_4_ARGON to "google/gemini-4-argon",
+            ModelPresetId.MUSE_WONDER to "meta/muse-wonder",
+            ModelPresetId.GEMINI_4_ARGON to "google/gemini-4-argon",
+            ModelPresetId.GEMINI_4_HYDROGEN to "google/gemini-4-hydrogen",
         ).mapNotNull { (preset, id) -> candidates.firstOrNull { it.id == id }?.let { ModelPresetMapping(preset, it.id) } }
         if (current.isEmpty() && (opus == null || sol == null || terra == null)) return null
         val mappings = buildList {
@@ -146,7 +148,7 @@ class OpenRouterRegistrySnapshotVerifier {
             astra?.let { add(ModelPresetMapping(ModelPresetId.GPT_6_ASTRA, it.id)) }
             grok41Fast?.let { add(ModelPresetMapping(ModelPresetId.GROK_4_1_FAST, it.id)) }
             grok46?.let { add(ModelPresetMapping(ModelPresetId.GROK_4_6_HIGH, it.id)) }
-            add(ModelPresetMapping(ModelPresetId.GEMINI_3_8_FLASH, gemini.id))
+            gemini?.let { add(ModelPresetMapping(ModelPresetId.GEMINI_3_8_FLASH, it.id)) }
             kimiK3?.let { add(ModelPresetMapping(ModelPresetId.KIMI_K3, it.id)) }
         }
         return Mapping(mappings, usesFallback = false)

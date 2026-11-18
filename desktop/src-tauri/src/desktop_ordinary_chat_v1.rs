@@ -602,8 +602,10 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
             if request.provider_id == "ZHIPU"
                 && matches!(request.model_id.as_str(), "glm-5.3" | "glm-5.3-flash")
             {
-                object.insert("thinking".into(), json!({"type":"enabled"}));
-                object.insert("reasoning_effort".into(), json!(if request.web_search_route == "ZHIPU_CHAT_COMPLETIONS" && request.explicit_search_query.is_some() && !request.grounded_answer {"low"} else {"max"}));
+                object.insert("thinking".into(), json!({"type":if request.disable_thinking {"disabled"} else {"enabled"}}));
+                if !request.disable_thinking {
+                    object.insert("reasoning_effort".into(), json!(if request.web_search_route == "ZHIPU_CHAT_COMPLETIONS" && request.explicit_search_query.is_some() && !request.grounded_answer {"low"} else {"max"}));
+                }
             }
             if request.provider_id == "OPENROUTER"
                 && matches!(
@@ -623,15 +625,15 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
                     object.insert("reasoning".into(), json!({"effort": effort}));
                 }
             }
-            if matches!(request.model_id.as_str(), "anthropic/claude-opus-5.5" | "anthropic/claude-sonnet-5.5" | "anthropic/claude-haiku-5.5" | "openai/gpt-6.1-sol" | "openai/gpt-6.1-terra" | "openai/gpt-6-luna") { object.remove("temperature"); }
+            if matches!(request.model_id.as_str(), "anthropic/claude-opus-5.5" | "anthropic/claude-sonnet-5.5" | "anthropic/claude-haiku-5.5" | "openai/gpt-6.1-sol" | "openai/gpt-6.2-sol" | "openai/gpt-6.1-terra" | "openai/gpt-6-luna") { object.remove("temperature"); }
             match request.web_search_route.as_str() {
                 "OPENROUTER_LUNA_SEARCH" => {
-                    object.insert("tools".into(),json!([{"type":"openrouter:web_search","parameters":{"engine":"native"}}]));
+                    object.insert("tools".into(),json!([{"type":"openrouter:web_search","parameters":{"engine":"exa","mode":"fast","max_uses":2,"max_results":3,"max_total_results":6,"max_characters":1500}}]));
                     object.insert("tool_choice".into(),json!("required"));
                     object.insert("provider".into(),json!({"only":["OpenAI"],"allow_fallbacks":false}));
                 }
                 "OPENROUTER_SERVER_TOOL" => {
-                    if request.provider_id=="OPENROUTER" && matches!(request.model_id.as_str(), "google/gemini-3.8-flash" | "google/gemini-4-argon" | "anthropic/claude-haiku-5.5") {
+                    if request.provider_id=="OPENROUTER" && matches!(request.model_id.as_str(), "google/gemini-3.8-flash" | "google/gemini-4-hydrogen" | "google/gemini-4-argon" | "anthropic/claude-haiku-5.5") {
                         // The optional server tool can skip historical questions. Start native
                         // grounding at request entry without changing model, key or recipient.
                         if !request.grounded_answer {object.insert("plugins".into(),json!([{"id":"web","engine":if request.model_id=="anthropic/claude-haiku-5.5" {"exa"} else {"native"},"max_results":5}]));}
@@ -662,7 +664,7 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
             body
         }
     };
-    if request.web_search_route == "RELAYCORE_GPT_RESPONSES" && matches!(request.model_id.as_str(), "gpt-6.1-sol" | "gpt-6-astra") {
+    if request.web_search_route == "RELAYCORE_GPT_RESPONSES" && matches!(request.model_id.as_str(), "gpt-6.1-sol" | "gpt-6.2-sol" | "gpt-6-astra") {
         let complex = relay_search_complex_question(&request.messages);
         body["tools"][0]["search_context_size"] = json!(if complex { "medium" } else { "low" });
         body["reasoning"] = json!({"effort": if complex { "medium" } else { "low" }});
@@ -704,7 +706,7 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
     body
 }
 
-pub(crate) const OPENROUTER_LIVE_SEARCH_INSTRUCTION: &str = "本轮已启用实时网页搜索。以联网开关为准，必须实际执行搜索，不按问题关键词判断是否联网。若本请求已附服务端实际搜索资料则据此作答；否则在回答前调用已提供的搜索工具。只查询与问题或图片相关的最小公开关键词，不搜索私人信息。引用实际返回来源；不得把模型记忆或自行编写的网址当作搜索结果。工具失败或实际结果为空时如实说明。";
+pub(crate) const OPENROUTER_LIVE_SEARCH_INSTRUCTION: &str = "本轮已启用实时网页搜索。以联网开关为准，必须实际执行搜索，不按问题关键词判断是否联网。若本请求已附服务端实际搜索资料则据此作答；否则在回答前调用已提供的搜索工具。只查询与问题或图片相关的最小公开关键词，不搜索私人信息。引用实际返回来源；不得把模型记忆或自行编写的网址当作搜索结果。工具失败或实际结果为空时如实说明。覆盖用户全部子问题与结论依赖的必要实时输入；先核对前提和时间口径，再按缺口继续搜索，优先原始来源及对应数据。不能只找到事件报道就忽略作判断所需的价格、规格、财务或其他关键输入。区分已读取原页、检索摘要和推断，只有实际访问成功才称读过原文；确实无法取得的关键数据如实列为缺口。";
 
 fn muse_responses_search(request: &TransportRequest) -> bool {
     request.provider_id=="OPENROUTER" && request.model_id=="meta/muse-wonder"
@@ -2117,7 +2119,7 @@ mod tests {
     }
     #[test]
     fn relay_sol_and_astra_share_bounded_native_search_policy() {
-        for model in ["gpt-6.1-sol", "gpt-6-astra"] {
+        for model in ["gpt-6.1-sol", "gpt-6.2-sol", "gpt-6-astra"] {
             for (question, effort) in [("查询Python最近发布版本", "low"), ("请深入分析这项技术的长期风险", "medium")] {
                 let mut input = request("https://api.relaycore.cn/v1/responses".into());
                 input.provider_id = "RELAYCORE_GPT".into(); input.model_id = model.into();
@@ -2134,7 +2136,7 @@ mod tests {
 
     #[test]
     fn relay_gpt_native_search_streams_with_terminal_sources_and_no_json_fallback() {
-        for model in ["gpt-6.1-sol", "gpt-6-astra"] {
+        for model in ["gpt-6.1-sol", "gpt-6.2-sol", "gpt-6-astra"] {
             let terminal = json!({"type":"response.completed","response":{"status":"completed","model":model,"output":[{"type":"web_search_call","status":"completed"},{"type":"message","content":[{"type":"output_text","text":"answer","annotations":[{"type":"url_citation","url":"https://docs.python.org/3/library/asyncio.html","title":"Python"}]}]}],"usage":{"input_tokens":20,"output_tokens":5,"cost":0.99}}});
             let raw = format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {{\"type\":\"response.output_text.delta\",\"delta\":\"answer\"}}\n\ndata: {terminal}\n\n");
             let mut input = request(mock_server_with_stream(Box::leak(raw.into_bytes().into_boxed_slice()), true));
@@ -2192,7 +2194,7 @@ mod tests {
     }
     #[test]
     fn gemini_toggle_selects_native_grounding_for_all_message_shapes_only_when_enabled() {
-        for model_id in ["google/gemini-3.8-flash", "google/gemini-4-argon"] {
+        for model_id in ["google/gemini-3.8-flash", "google/gemini-4-hydrogen", "google/gemini-4-argon"] {
         for messages in [json!([{"role":"user","content":"力帆与理想有什么关系"}]),json!([{"role":"user","content":[{"type":"text","text":"first.md fact"},{"type":"text","text":"second.json fact"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AQID"}}]}])] {
             for route in ["NONE","OPENROUTER_SERVER_TOOL"] {for grounded in [false,true] {
                 let mut input=request("https://openrouter.ai/api/v1/chat/completions".into());input.provider_id="OPENROUTER".into();input.model_id=model_id.into();input.web_search_route=route.into();input.grounded_answer=grounded;input.messages=messages.clone();
@@ -2340,7 +2342,7 @@ mod tests {
             let wire=if route=="RELAYCORE_COMPANION" {transport_body(&crate::relaycore_web_search_v1::retrieval_request(&input).unwrap())} else {transport_body(&input)};
             for item in &plan.items {assert!(wire.to_string().contains(&item.query),"{} lost {}",preset.id,item.id);}
             if route=="RELAYCORE_GPT_RESPONSES" {assert_eq!(wire["tool_choice"],"required");}
-            if route=="RELAYCORE_COMPANION" {assert_eq!(wire["tool_choice"],"required");assert_eq!(wire["tools"][0]["parameters"]["engine"],"native");assert_eq!(wire["provider"]["only"],json!(["OpenAI"]));assert_eq!(wire["provider"]["allow_fallbacks"],false);}
+            if route=="RELAYCORE_COMPANION" {assert_eq!(wire["tool_choice"],"required");assert_eq!(wire["tools"][0]["parameters"]["engine"],"exa");assert_eq!(wire["tools"][0]["parameters"]["max_uses"],2);assert_eq!(wire["provider"]["only"],json!(["OpenAI"]));assert_eq!(wire["provider"]["allow_fallbacks"],false);}
             if route=="DEEPSEEK_MESSAGES" {assert_eq!(wire["tools"][0]["max_uses"],12);}
             checked+=1;
         }
@@ -2780,7 +2782,7 @@ mod tests {
     fn october_models_send_exact_ids_and_requested_efforts_for_plain_and_web() {
         let mut fixture = request("https://provider.invalid/chat/completions".into());
         fixture.provider_id = "OPENROUTER".into();
-        for (model, effort) in [("anthropic/claude-opus-5.5", "medium"), ("anthropic/claude-sonnet-5.5", "high"), ("openai/gpt-6.1-sol", "high")] {
+        for (model, effort) in [("anthropic/claude-opus-5.5", "medium"), ("anthropic/claude-sonnet-5.5", "high"), ("openai/gpt-6.1-sol", "high"), ("openai/gpt-6.2-sol", "high")] {
             fixture.model_id = model.into();
             for route in ["NONE", "OPENROUTER_SERVER_TOOL"] {
                 fixture.web_search_route = route.into();

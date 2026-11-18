@@ -266,7 +266,8 @@ class P2ModelServiceContractsTest {
             "CLAUDE_OPUS_5" to ModelPresetId.CLAUDE_OPUS_5_5,
             "CLAUDE_SONNET_5" to ModelPresetId.CLAUDE_SONNET_5_5,
             "CLAUDE_HAIKU_4_5" to ModelPresetId.CLAUDE_HAIKU_5_5,
-            "GPT_5_6_SOL" to ModelPresetId.GPT_6_1_SOL,
+            "GPT_5_6_SOL" to ModelPresetId.GPT_6_2_SOL,
+            "GPT_6_1_SOL" to ModelPresetId.GPT_6_2_SOL,
             "GPT_5_6_TERRA" to ModelPresetId.GPT_6_LUNA,
             "GPT_5_6_LUNA" to ModelPresetId.GPT_6_LUNA,
         )) {
@@ -274,26 +275,31 @@ class P2ModelServiceContractsTest {
             assertEquals(current, AndroidModelServiceSettingsRepository(context).load(ProviderId.OPENROUTER).presetId)
         }
         assertEquals(ModelPresetId.GPT_6_LUNA, ComposerModelRoutingCatalog.choice("logical:daily:gpt-terra").routes.single())
+        context.getSharedPreferences("model_service_settings_v1", Context.MODE_PRIVATE)
+            .edit().putString("RELAYCORE_GPT.preset", "RELAYCORE_GPT_6_1_SOL").commit()
+        assertEquals(ModelPresetId.RELAYCORE_GPT_6_2_SOL, AndroidModelServiceSettingsRepository(context).load(ProviderId.RELAYCORE_GPT).presetId)
+        assertEquals(ModelPresetId.RELAYCORE_GPT_6_2_SOL, ComposerModelRoutingCatalog.choice("logical:relaycore:RELAYCORE_GPT_6_1_SOL").routes.single())
+        assertEquals(ModelPresetId.GPT_6_2_SOL, ComposerModelRoutingCatalog.choice("logical:deep:gpt-sol").routes.single())
     }
 
     @Test
-    fun `settings repository upgrades persisted Gemini 3_7 selection to Gemini 3_8`() {
+    fun `settings repository migrates old OpenRouter Gemini selections while preserving RelayCore`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        context.getSharedPreferences("model_service_settings_v1", Context.MODE_PRIVATE)
-            .edit()
-            .putString("OPENROUTER.preset", "GEMINI_3_7_FLASH")
-            .commit()
-
-        val restored = AndroidModelServiceSettingsRepository(context).load(ProviderId.OPENROUTER)
-
-        assertEquals(ModelPresetId.GEMINI_3_8_FLASH, restored.presetId)
+        val preferences = context.getSharedPreferences("model_service_settings_v1", Context.MODE_PRIVATE)
+        for (old in listOf("GEMINI_3_7_FLASH", "GEMINI_3_8_FLASH")) {
+            preferences.edit().putString("OPENROUTER.preset", old).commit()
+            val repository = AndroidModelServiceSettingsRepository(context)
+            assertEquals(ModelPresetId.GEMINI_4_HYDROGEN, repository.load(ProviderId.OPENROUTER).presetId)
+            assertEquals(ModelPresetId.RELAYCORE_GEMINI_3_8_FLASH, repository.load(ProviderId.RELAYCORE_GEMINI).presetId)
+        }
+        assertEquals(ModelPresetId.GEMINI_4_HYDROGEN, ComposerModelRoutingCatalog.choice("logical:daily:gemini-flash").routes.single())
     }
 
     @Test
     fun `catalog contains the approved logical provider models`() {
         assertEquals(
-            listOf("Gemini 3.8 Flash", "Qwen3.7-Plus", "Qwen3.8-Max", "Qwen3.6 Flash", "DeepSeek V4 Pro", "DeepSeek V4.1 Flash", "GLM-5.3", "GLM-5.3 Flash"),
-            NanfengModelServiceCatalog.presets.filter { it.id in setOf(ModelPresetId.GEMINI_3_8_FLASH, ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH, ModelPresetId.DEEPSEEK_V4_PRO, ModelPresetId.DEEPSEEK_V4_FLASH, ModelPresetId.GLM_5_3, ModelPresetId.GLM_5_3_FLASH) }.map { it.displayName },
+            listOf("Gemini 4 Hydrogen", "Qwen3.7-Plus", "Qwen3.8-Max", "Qwen3.6 Flash", "DeepSeek V4 Pro", "DeepSeek V4.1 Flash", "GLM-5.3", "GLM-5.3 Flash"),
+            NanfengModelServiceCatalog.presets.filter { it.id in setOf(ModelPresetId.GEMINI_4_HYDROGEN, ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH, ModelPresetId.DEEPSEEK_V4_PRO, ModelPresetId.DEEPSEEK_V4_FLASH, ModelPresetId.GLM_5_3, ModelPresetId.GLM_5_3_FLASH) }.map { it.displayName },
         )
     }
 

@@ -1,0 +1,28 @@
+{
+  "version": "1.0.39",
+  "android_version_code": 103,
+  "android_non_debuggable": true,
+  "android_same_release_signer": true,
+  "android_signer_sha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+  "mac_same_leaf_certificate": true,
+  "mac_signature_verified": true,
+  "mac_dmg_valid": true,
+  "mac_notarized": false,
+  "mac_installed": true,
+  "phone_installed": true,
+  "supersedes_first_candidate": true,
+  "files": [
+    {
+      "name": "Nanfeng-AI-Android-1.0.39.apk",
+      "build_output": "app/build/outputs/apk/release/\u5357\u67abAI.apk",
+      "sha256": "8cb9b0c4610aa3b6214d963d51b525003cd816f983a7a9a986feacf7c95847b2",
+      "bytes": 28721870
+    },
+    {
+      "name": "Nanfeng-AI-macOS-1.0.39.dmg",
+      "build_output": "desktop/src-tauri/target/release/bundle/dmg/Nanfeng-AI-macOS-1.0.39.dmg",
+      "sha256": "e8aa127b19ec03100e9a7aba8ff828e1466798519e82bc2f57f3c15a5d6954ef",
+      "bytes": 17598283
+    }
+  ]
+}

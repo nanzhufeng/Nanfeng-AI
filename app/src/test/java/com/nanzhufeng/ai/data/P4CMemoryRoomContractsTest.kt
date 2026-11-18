@@ -22,6 +22,23 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P4CMemoryRoomContractsTest {
+    @Test fun `automatic history summaries refresh after reopen and never overwrite manual edits or deleted sections`() {
+        val source = ConversationId("automatic-history-test")
+        useCase.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.CREATE, MemoryId("manual"), "手写", "手动保留内容", MemoryScope(MemoryScopeKind.GLOBAL)))
+        assertTrue(useCase.saveAutomaticSummary(source, "项目长期规则", "版本一：长期保留本地资料") is MemoryMutationResult.Applied)
+        val reopened = ManageMemoryUseCase(MemoryDomain(clock), RoomMemoryRepository(database, clock))
+        assertTrue(reopened.saveAutomaticSummary(source, "项目长期规则", "版本二：先本地备份再更新") is MemoryMutationResult.Applied)
+        val automatic = repository.list(null, null, "版本二").single()
+        assertEquals(2, automatic.revisions.size)
+        assertEquals("手动保留内容", repository.findById(MemoryId("manual"))!!.memory.body)
+        reopened.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.UPDATE, automatic.memory.id, "我改过", "人工修订优先", MemoryScope(MemoryScopeKind.GLOBAL)))
+        reopened.saveAutomaticSummary(source, "项目长期规则", "自动版本三")
+        assertEquals("人工修订优先", repository.findById(automatic.memory.id)!!.memory.body)
+        reopened.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.DELETE, automatic.memory.id))
+        reopened.saveAutomaticSummary(source, "项目长期规则", "自动版本四")
+        assertEquals(MemoryStatus.DELETED, repository.findById(automatic.memory.id)!!.memory.status)
+    }
+
     private val clock = Clock.fixed(Instant.parse("2026-08-13T12:30:00Z"), ZoneOffset.UTC)
     private lateinit var database: NanfengAiDatabase
     private lateinit var repository: RoomMemoryRepository

@@ -1,0 +1,31 @@
+{
+  "state": "INSTALLED",
+  "version": "1.0.39",
+  "versionCode": 103,
+  "previous_version": "1.0.38",
+  "same_original_signature": true,
+  "non_debuggable": true,
+  "apk_sha256": "8cb9b0c4610aa3b6214d963d51b525003cd816f983a7a9a986feacf7c95847b2",
+  "firstInstallTime": "2026-08-20 15:15:31",
+  "firstInstallTime_unchanged": true,
+  "package_uid_unchanged": true,
+  "data_directory_unchanged": true,
+  "diagnostic_data": {
+    "chat": {
+      "unchanged": true,
+      "sha256": "909316ef214341322005ab5f4ac67384091e58d7826f08b4d07bbf0bf4e1e77e",
+      "bytes": 22972
+    },
+    "work": {
+      "unchanged": true,
+      "sha256": "843572a40357a1d48348565e63640403c6a1fb36dd6165440473dfda42a16b91",
+      "bytes": 131
+    }
+  },
+  "exact_remote_temp_cleaned": true,
+  "installedAt": "2026-11-02T21:07:46.217262+08:00",
+  "no_instrumentation_or_ui_automation": true,
+  "launch_verified": true,
+  "business_ui_acceptance": "NOT_RUN",
+  "resumed_activity_matches": true
+}

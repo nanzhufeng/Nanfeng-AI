@@ -78,7 +78,7 @@ pub fn record(app:&super::AreaAppHandle, projection:&super::DesktopOrdinaryChatA
         newly_running=!value.tasks.contains_key(&format!("{}:{}",app.area().wire(),projection.assistant_message_id)) && matches!(projection.state.as_str(),"PENDING"|"RUNNING");
         value.update(Task {key:format!("{}:{}",app.area().wire(),projection.assistant_message_id),data_area:app.area().wire().into(),workspace_id:projection.workspace_id.clone(),conversation_id:projection.conversation_id.clone(),model_label:projection.model_display_name.clone().map(|name| {
             if projection.provider_id.as_deref().is_some_and(|id|id.starts_with("RELAYCORE_")) {
-                let short=name.split(" · ").next().unwrap_or(&name).replace("GPT-6 Astra","6 Astra").replace("GPT-6.1 Sol","6.1 Sol");format!("{short} · RC")
+                let short=name.split(" · ").next().unwrap_or(&name).replace("GPT-6 Astra","6 Astra").replace("GPT-6.1 Sol","6.1 Sol").replace("GPT-6.2 Sol","6.2 Sol");format!("{short} · RC")
             } else {name}
         }).unwrap_or_else(||"模型连接中".into()),state:projection.state.clone(),saved_characters:0,started_at:now,updated_at:now});
     }

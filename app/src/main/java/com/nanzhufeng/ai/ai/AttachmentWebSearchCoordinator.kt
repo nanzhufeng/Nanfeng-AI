@@ -10,14 +10,21 @@ internal object AttachmentWebSearchCoordinator {
     const val MAX_CALLS = 48
     const val MAX_DURATION_MILLIS = 600_000L
     fun run(plan:AttachmentWebSearchPlan.Plan, cancelled:()->Boolean, execute:(AttachmentWebSearchPlan.Plan,Int)->RelayCoreWebSearchCompanion.Result,
-            elapsedMillis:()->Long = run {val start=System.nanoTime(); { (System.nanoTime()-start)/1_000_000 } },cache:AttachmentSearchCheckpointCache=AttachmentSearchCheckpointCache.None,batchSize:Int=BATCH_SIZE):RelayCoreWebSearchCompanion.Result {
+            elapsedMillis:()->Long = run {val start=System.nanoTime(); { (System.nanoTime()-start)/1_000_000 } },cache:AttachmentSearchCheckpointCache=AttachmentSearchCheckpointCache.None,batchSize:Int=BATCH_SIZE,supplementSingleUnverified:Boolean=false):RelayCoreWebSearchCompanion.Result {
         val parts=linkedMapOf<String,String>();val sources=mutableListOf<ProviderWebSource>();var calls=0;var stop:String?=null
         val failedItems=mutableSetOf<String>()
+        var followupAffordable=false
         var template:ChatAdapterDecodedResult.Text?=null;var label=RelayCoreWebSearchCompanion.label
         fun invoke(items:List<AttachmentWebSearchPlan.Item>):RelayCoreWebSearchCompanion.Result {
             if(cancelled()) return RelayCoreWebSearchCompanion.Result.Failed("USER_CANCELLED")
-            if(calls>=MAX_CALLS || elapsedMillis()>=MAX_DURATION_MILLIS) return RelayCoreWebSearchCompanion.Result.Failed("WEB_SEARCH_BUDGET_EXHAUSTED")
-            return execute(AttachmentWebSearchPlan.Plan(items),++calls)
+            if((supplementSingleUnverified && calls>0 && !followupAffordable) || calls >= (if(supplementSingleUnverified) 2 else MAX_CALLS) || elapsedMillis()>=MAX_DURATION_MILLIS) return RelayCoreWebSearchCompanion.Result.Failed("WEB_SEARCH_BUDGET_EXHAUSTED")
+            val result=execute(AttachmentWebSearchPlan.Plan(items),++calls)
+            val cost=when(result) {
+                is RelayCoreWebSearchCompanion.Result.Ready -> result.reply.reportedProviderCost
+                is RelayCoreWebSearchCompanion.Result.Failed -> result.partialReply?.reportedProviderCost
+            }
+            followupAffordable=cost?.currencyCode=="USD" && cost.totalMicros<=10_000L
+            return result
         }
         fun retain(result:RelayCoreWebSearchCompanion.Result.Ready,items:List<AttachmentWebSearchPlan.Item>) {
             template=result.reply;label=result.sourceLabel;sources+=result.reply.webSources
@@ -40,20 +47,20 @@ internal object AttachmentWebSearchCoordinator {
             if(result is RelayCoreWebSearchCompanion.Result.Ready) retain(result,batch)
             else if(result is RelayCoreWebSearchCompanion.Result.Failed && result.code!="WEB_SEARCH_BUDGET_EXHAUSTED") failedItems+=batch.map {it.id}
             val retry=when(result) {
-                is RelayCoreWebSearchCompanion.Result.Ready -> if(batch.size>1) batch.filter {parts[it.id]?.contains("证据不足，仍未核实")==true} else emptyList()
+                is RelayCoreWebSearchCompanion.Result.Ready -> if(batch.size>1 || supplementSingleUnverified) batch.filter {parts[it.id]?.contains("证据不足，仍未核实")==true} else emptyList()
                 is RelayCoreWebSearchCompanion.Result.Failed -> if(!result.unknown && result.code in setOf("WEB_SEARCH_SCOPE_MISMATCH","WEB_SEARCH_NO_SOURCES","RESPONSE_FORMAT")) batch else emptyList()
             }
             if(result is RelayCoreWebSearchCompanion.Result.Failed && retry.isEmpty()) {if(!result.unknown && result.code in setOf("WEB_SEARCH_SCOPE_MISMATCH","WEB_SEARCH_NO_SOURCES","RESPONSE_FORMAT")) continue else {stop=result.code;break}}
             // A known completed but missing/insufficient result gets one targeted query, never an UNKNOWN resend.
-            for(item in retry) {
-                val targeted=invoke(listOf(item))
-                if(targeted is RelayCoreWebSearchCompanion.Result.Ready) retain(targeted,listOf(item))
+            for(targets in retry.chunked(if(supplementSingleUnverified) batchSize else 1)) {
+                val targeted=invoke(targets)
+                if(targeted is RelayCoreWebSearchCompanion.Result.Ready) retain(targeted,targets)
                 else {
                     val failed=targeted as RelayCoreWebSearchCompanion.Result.Failed
                     if(failed.stopsFollowup) return failed
                     // A failed supplement cannot erase a prior, actually searched
                     // unverified result. UNKNOWN still stops the task below.
-                    if(item.id !in parts && failed.code!="WEB_SEARCH_BUDGET_EXHAUSTED") failedItems+=item.id
+                    if(failed.code!="WEB_SEARCH_BUDGET_EXHAUSTED") failedItems+=targets.filter {it.id !in parts}.map {it.id}
                     if(failed.unknown || failed.code !in setOf("WEB_SEARCH_SCOPE_MISMATCH","WEB_SEARCH_NO_SOURCES","RESPONSE_FORMAT")) {stop=failed.code;break}
                 }
             }

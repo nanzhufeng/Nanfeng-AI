@@ -58,10 +58,9 @@ class AndroidModelServiceSettingsRepository(context: Context) : ModelServiceSett
             "FLAGSHIP", "CLAUDE_OPUS_4_1" -> ModelPresetId.CLAUDE_FABLE_5
             "BALANCED", "CLAUDE_SONNET_4", "CLAUDE_SONNET_3_7" -> ModelPresetId.CLAUDE_SONNET_5_5
             "FAST", "CLAUDE_HAIKU_3_5" -> ModelPresetId.CLAUDE_HAIKU_5_5
-            "GPT_5_1", "GPT_5" -> ModelPresetId.GPT_6_1_SOL
+            "GPT_5_1", "GPT_5" -> ModelPresetId.GPT_6_2_SOL
             "GPT_5_MINI" -> ModelPresetId.GPT_6_LUNA
             "GPT_5_NANO" -> ModelPresetId.GPT_6_LUNA
-            "GEMINI_3_7_FLASH" -> ModelPresetId.GEMINI_3_8_FLASH
             else -> runCatching { NanfengModelServiceCatalog.currentPreset(ModelPresetId.valueOf(saved)) }.getOrNull()
         }
 

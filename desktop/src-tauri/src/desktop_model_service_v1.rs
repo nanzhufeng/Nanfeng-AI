@@ -361,7 +361,7 @@ pub const PROVIDERS: [ProviderDescriptor; 7] = [
         default_preset_id: "QWEN_3_7_PLUS",
     },
     ProviderDescriptor { id: "RELAYCORE_CLAUDE", display_name: "RelayCore Claude · Kiro正价", endpoint: "https://api.relaycore.cn/v1", default_preset_id: "RELAYCORE_SONNET_5_5" },
-    ProviderDescriptor { id: "RELAYCORE_GPT", display_name: "RelayCore GPT · Pro3", endpoint: "https://api.relaycore.cn/v1", default_preset_id: "RELAYCORE_GPT_6_1_SOL" },
+    ProviderDescriptor { id: "RELAYCORE_GPT", display_name: "RelayCore GPT · Pro3", endpoint: "https://api.relaycore.cn/v1", default_preset_id: "RELAYCORE_GPT_6_2_SOL" },
     ProviderDescriptor { id: "RELAYCORE_GEMINI", display_name: "RelayCore Gemini", endpoint: "https://api.relaycore.cn/v1", default_preset_id: "RELAYCORE_GEMINI_3_8_FLASH" },
 ];
 
@@ -389,7 +389,7 @@ impl Serialize for PresetDescriptor {
     }
 }
 
-pub const PRESETS: [PresetDescriptor; 32] = [
+pub const PRESETS: [PresetDescriptor; 35] = [
     PresetDescriptor {
         id: "CLAUDE_OPUS_5_5",
         provider_id: "OPENROUTER",
@@ -418,13 +418,22 @@ pub const PRESETS: [PresetDescriptor; 32] = [
         chat_selectable: true,
     },
     PresetDescriptor {
+        id: "GPT_6_2_SOL",
+        provider_id: "OPENROUTER",
+        model_id: "openai/gpt-6.2-sol",
+        display_name: "GPT-6.2 Sol",
+        description: "适合专业复杂任务和深度分析。",
+        family: "OpenAI · OpenRouter",
+        chat_selectable: true,
+    },
+    PresetDescriptor {
         id: "GPT_6_1_SOL",
         provider_id: "OPENROUTER",
         model_id: "openai/gpt-6.1-sol",
         display_name: "GPT-6.1 Sol",
         description: "适合专业复杂任务和深度分析。",
         family: "OpenAI · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "GPT_6_1_TERRA",
@@ -543,13 +552,22 @@ pub const PRESETS: [PresetDescriptor; 32] = [
         chat_selectable: false,
     },
     PresetDescriptor {
+        id: "GEMINI_4_HYDROGEN",
+        provider_id: "OPENROUTER",
+        model_id: "google/gemini-4-hydrogen",
+        display_name: "Gemini 4 Hydrogen",
+        description: "快速处理文字、图片和文件任务。",
+        family: "Google · OpenRouter",
+        chat_selectable: true,
+    },
+    PresetDescriptor {
         id: "GEMINI_3_8_FLASH",
         provider_id: "OPENROUTER",
         model_id: "google/gemini-3.8-flash",
         display_name: "Gemini 3.8 Flash",
-        description: "快速处理文字、图片和文件任务。",
+        description: "已由 Gemini 4 Hydrogen 替换；保留仅为识别历史记录。",
         family: "Google · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "KIMI_K3",
@@ -616,7 +634,8 @@ pub const PRESETS: [PresetDescriptor; 32] = [
     },
     PresetDescriptor { id: "RELAYCORE_OPUS_5_5", provider_id: "RELAYCORE_CLAUDE", model_id: "claude-opus-5.5", display_name: "Opus 5.5 · Kiro正价", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
     PresetDescriptor { id: "RELAYCORE_SONNET_5_5", provider_id: "RELAYCORE_CLAUDE", model_id: "claude-sonnet-5-5", display_name: "Sonnet 5.5 · Kiro正价", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
-    PresetDescriptor { id: "RELAYCORE_GPT_6_1_SOL", provider_id: "RELAYCORE_GPT", model_id: "gpt-6.1-sol", display_name: "GPT-6.1 Sol · Pro3", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
+    PresetDescriptor { id: "RELAYCORE_GPT_6_2_SOL", provider_id: "RELAYCORE_GPT", model_id: "gpt-6.2-sol", display_name: "GPT-6.2 Sol · Pro3", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
+    PresetDescriptor { id: "RELAYCORE_GPT_6_1_SOL", provider_id: "RELAYCORE_GPT", model_id: "gpt-6.1-sol", display_name: "GPT-6.1 Sol · Pro3", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: false },
     PresetDescriptor { id: "RELAYCORE_GPT_6_ASTRA", provider_id: "RELAYCORE_GPT", model_id: "gpt-6-astra", display_name: "GPT-6 Astra · Pro3", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
     PresetDescriptor { id: "RELAYCORE_GEMINI_3_8_FLASH", provider_id: "RELAYCORE_GEMINI", model_id: "gemini-3.8-flash", display_name: "Gemini 3.8 Flash · Gemini", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
     PresetDescriptor { id: "RELAYCORE_GEMINI_3_1_PRO", provider_id: "RELAYCORE_GEMINI", model_id: "gemini-3.1-pro", display_name: "Gemini 3.1 Pro · Gemini", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
@@ -690,7 +709,7 @@ pub fn chat_presets() -> Vec<PresetDescriptor> {
 pub fn default_reasoning_effort(model_id: &str) -> Option<&'static str> {
     match model_id {
         "anthropic/claude-opus-5.5" => Some("medium"),
-        "anthropic/claude-sonnet-5.5" | "openai/gpt-6.1-sol" => Some("high"),
+        "anthropic/claude-sonnet-5.5" | "openai/gpt-6.1-sol" | "openai/gpt-6.2-sol" => Some("high"),
         _ => None,
     }
 }
@@ -700,15 +719,17 @@ pub fn current_preset_id(value: &str) -> &str {
         "CLAUDE_OPUS_5" => "CLAUDE_OPUS_5_5",
         "CLAUDE_SONNET_5" => "CLAUDE_SONNET_5_5",
         "CLAUDE_HAIKU_4_5" => "CLAUDE_HAIKU_5_5",
-        "GPT_5_6_SOL" => "GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_1_SOL" | "gpt-6.1-sol" => "RELAYCORE_GPT_6_2_SOL",
+        "GPT_5_6_SOL" | "GPT_6_1_SOL" | "openai/gpt-6.1-sol" => "GPT_6_2_SOL",
         "GPT_5_6_TERRA" => "GPT_6_LUNA",
         "GPT_5_6_LUNA" => "GPT_6_LUNA",
         "anthropic/claude-opus-5" | "claude-opus-5" => "CLAUDE_OPUS_5_5",
         "anthropic/claude-sonnet-5" | "claude-sonnet-5" => "CLAUDE_SONNET_5_5",
         "anthropic/claude-haiku-4.5" | "claude-haiku-4.5" => "CLAUDE_HAIKU_5_5",
-        "openai/gpt-5.6-sol" | "gpt-5.6-sol" => "GPT_6_1_SOL",
+        "openai/gpt-5.6-sol" | "gpt-5.6-sol" => "GPT_6_2_SOL",
         "openai/gpt-5.6-terra" | "gpt-5.6-terra" => "GPT_6_LUNA",
         "openai/gpt-5.6-luna" | "gpt-5.6-luna" => "GPT_6_LUNA",
+        "GEMINI_3_7_FLASH" | "GEMINI_3_8_FLASH" | "google/gemini-3.7-flash" | "google/gemini-3.8-flash" => "GEMINI_4_HYDROGEN",
         _ => value,
     }
 }
@@ -748,16 +769,20 @@ fn october_catalog_migrates_old_selections_and_excludes_them_from_new_choices() 
         ("CLAUDE_OPUS_5", "CLAUDE_OPUS_5_5", "anthropic/claude-opus-5.5"),
         ("CLAUDE_SONNET_5", "CLAUDE_SONNET_5_5", "anthropic/claude-sonnet-5.5"),
         ("CLAUDE_HAIKU_4_5", "CLAUDE_HAIKU_5_5", "anthropic/claude-haiku-5.5"),
-        ("GPT_5_6_SOL", "GPT_6_1_SOL", "openai/gpt-6.1-sol"),
+        ("GPT_5_6_SOL", "GPT_6_2_SOL", "openai/gpt-6.2-sol"),
+        ("GPT_6_1_SOL", "GPT_6_2_SOL", "openai/gpt-6.2-sol"),
         ("GPT_5_6_TERRA", "GPT_6_LUNA", "openai/gpt-6-luna"),
         ("GPT_5_6_LUNA", "GPT_6_LUNA", "openai/gpt-6-luna"),
+        ("GEMINI_3_7_FLASH", "GEMINI_4_HYDROGEN", "google/gemini-4-hydrogen"),
+        ("GEMINI_3_8_FLASH", "GEMINI_4_HYDROGEN", "google/gemini-4-hydrogen"),
     ] {
         assert_eq!(current_preset_id(old), new);
         assert_eq!(preset("OPENROUTER", old).unwrap().model_id, model);
         assert!(!presets_for("OPENROUTER").unwrap().iter().any(|p| p.id == old));
     }
     assert_eq!(current_preset_id("gpt-5.6-terra"), "GPT_6_LUNA");
-    assert_eq!(current_preset_id("openai/gpt-5.6-sol"), "GPT_6_1_SOL");
+    assert_eq!(current_preset_id("openai/gpt-5.6-sol"), "GPT_6_2_SOL");
+    assert_eq!(preset("RELAYCORE_GPT", "RELAYCORE_GPT_6_1_SOL").unwrap().model_id, "gpt-6.2-sol");
 }
 
 pub fn validate_configuration(provider_id: &str, preset_id: &str) -> Result<(), String> {
@@ -847,7 +872,7 @@ mod tests {
 
     #[test]
     fn relay_catalogue_matches_observed_exact_models_and_keeps_separate_credentials() {
-        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../protocol/fixtures/relaycore-models-20261011.json")).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../protocol/fixtures/relaycore-models-20261118.json")).unwrap();
         let models = fixture["models"].as_array().unwrap();
         assert_eq!(models.len(), 6);
         for model in models {
